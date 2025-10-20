@@ -261,7 +261,7 @@ export default function AnnouncementsScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: false }
         )}
       >
         {/* Kampanyalar */}
