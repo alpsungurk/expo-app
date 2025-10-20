@@ -208,7 +208,7 @@ export default function QRScanScreen() {
       <Modal
         visible={showManualModal}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowManualModal(false)}
       >
         <View style={styles.modalOverlay}>
