@@ -224,7 +224,7 @@ export default function OrderStatusScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="Sipariş Durumu" />
+        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Sipariş bilgileri yükleniyor...</Text>
@@ -238,7 +238,7 @@ export default function OrderStatusScreen() {
   if (!order) {
     return (
       <SafeAreaView style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="Sipariş Durumu" />
+        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={60} color="#EF4444" />
@@ -259,7 +259,7 @@ export default function OrderStatusScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="Sipariş Durumu" />
+      <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <ScrollView 
         style={styles.scrollView}

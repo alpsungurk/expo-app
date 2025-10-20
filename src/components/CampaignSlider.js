@@ -130,90 +130,74 @@ export default function CampaignSlider() {
           ]}
           activeOpacity={0.9}
         >
-          <View style={[
-            styles.gradient,
-            {
-              minHeight: isLargeScreen ? 200 : isMediumScreen ? 160 : 140
-            }
-          ]}>
-            {/* Background Image */}
-            {item.resim_path && (
-              <Image
-                source={{ uri: item.resim_path }}
-                style={styles.backgroundImage}
-                resizeMode="cover"
-              />
-            )}
-
-            <LinearGradient
-              colors={getGradientColors()}
-              style={[
-                styles.gradientOverlay,
-                {
-                  minHeight: isLargeScreen ? 200 : isMediumScreen ? 160 : 140
-                }
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.cardContent}>
-                <View style={styles.headerRow}>
-                  <View style={[
-                    styles.iconContainer,
-                    {
-                      width: isLargeScreen ? 70 : isMediumScreen ? 55 : 50,
-                      height: isLargeScreen ? 70 : isMediumScreen ? 55 : 50,
-                      borderRadius: isLargeScreen ? 35 : isMediumScreen ? 27 : 25,
-                    }
-                  ]}>
-                    <Ionicons
-                      name={getIcon()}
-                      size={isLargeScreen ? 36 : isMediumScreen ? 28 : 26}
-                      color="white"
-                    />
-                  </View>
-
-                  <View style={[
-                    styles.badge,
-                    {
-                      paddingHorizontal: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                      paddingVertical: isLargeScreen ? 8 : isMediumScreen ? 7 : 6,
-                      borderRadius: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                    }
-                  ]}>
-                    <Text style={[
-                      styles.badgeText,
-                      { fontSize: isLargeScreen ? 14 : isMediumScreen ? 13 : 12 }
-                    ]}>
-                      {getBadgeText()}
-                    </Text>
-                  </View>
+          <LinearGradient
+            colors={getGradientColors()}
+            style={[
+              styles.gradient,
+              {
+                minHeight: isLargeScreen ? 200 : isMediumScreen ? 160 : 140
+              }
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.cardContent}>
+              <View style={styles.headerRow}>
+                <View style={[
+                  styles.iconContainer,
+                  {
+                    width: isLargeScreen ? 70 : isMediumScreen ? 55 : 50,
+                    height: isLargeScreen ? 70 : isMediumScreen ? 55 : 50,
+                    borderRadius: isLargeScreen ? 35 : isMediumScreen ? 27 : 25,
+                  }
+                ]}>
+                  <Ionicons
+                    name={getIcon()}
+                    size={isLargeScreen ? 36 : isMediumScreen ? 28 : 26}
+                    color="white"
+                  />
                 </View>
 
-                <View style={styles.textContainer}>
+                <View style={[
+                  styles.badge,
+                  {
+                    paddingHorizontal: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+                    paddingVertical: isLargeScreen ? 8 : isMediumScreen ? 7 : 6,
+                    borderRadius: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+                  }
+                ]}>
                   <Text style={[
-                    styles.title,
-                    {
-                      fontSize: isLargeScreen ? 26 : isMediumScreen ? 22 : 20,
-                      marginBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
-                      lineHeight: isLargeScreen ? 30 : isMediumScreen ? 26 : 22,
-                    }
-                  ]} numberOfLines={2}>
-                    {getTitle()}
-                  </Text>
-                  <Text style={[
-                    styles.description,
-                    {
-                      fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
-                      lineHeight: isLargeScreen ? 24 : isMediumScreen ? 22 : 20,
-                    }
-                  ]} numberOfLines={3}>
-                    {getDescription()}
+                    styles.badgeText,
+                    { fontSize: isLargeScreen ? 14 : isMediumScreen ? 13 : 12 }
+                  ]}>
+                    {getBadgeText()}
                   </Text>
                 </View>
               </View>
-            </LinearGradient>
-          </View>
+
+              <View style={styles.textContainer}>
+                <Text style={[
+                  styles.title,
+                  {
+                    fontSize: isLargeScreen ? 26 : isMediumScreen ? 22 : 20,
+                    marginBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+                    lineHeight: isLargeScreen ? 30 : isMediumScreen ? 26 : 22,
+                  }
+                ]} numberOfLines={2}>
+                  {getTitle()}
+                </Text>
+                <Text style={[
+                  styles.description,
+                  {
+                    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
+                    lineHeight: isLargeScreen ? 24 : isMediumScreen ? 22 : 20,
+                  }
+                ]} numberOfLines={3}>
+                  {getDescription()}
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     );
@@ -453,20 +437,6 @@ const styles = StyleSheet.create({
   gradient: {
     padding: isLargeScreen ? 30 : isMediumScreen ? 24 : 20,
     width: '100%',
-    position: 'relative',
-  },
-  backgroundImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
-  },
-  gradientOverlay: {
-    padding: isLargeScreen ? 30 : isMediumScreen ? 24 : 20,
-    width: '100%',
-    borderRadius: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
   },
   cardContent: {
     flex: 1,
