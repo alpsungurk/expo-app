@@ -52,6 +52,7 @@ export default function ProductDetailScreen() {
           ozellestirme_degerleri (*)
         `)
         .eq('urun_id', product.id)
+        .eq('aktif', true)
         .order('sira_no');
 
       if (error) throw error;
