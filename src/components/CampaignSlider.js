@@ -259,7 +259,7 @@ export default function CampaignSlider() {
       {/* Sidebar Modal */}
       <Modal
         visible={sidebarVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setSidebarVisible(false)}
       >
