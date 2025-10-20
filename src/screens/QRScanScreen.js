@@ -10,7 +10,7 @@ import {
   TextInput,
   Modal 
 } from 'react-native';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../store/cartStore';
 import { useNavigation } from '@react-navigation/native';
@@ -24,7 +24,7 @@ const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 
 export default function QRScanScreen() {
-  const [hasPermission, setHasPermission] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
@@ -32,15 +32,6 @@ export default function QRScanScreen() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const { setTableInfo, tableNumber } = useCartStore();
   const navigation = useNavigation();
-
-  useEffect(() => {
-    getCameraPermissions();
-  }, []);
-
-  const getCameraPermissions = async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasPermission(status === 'granted');
-  };
 
   const handleBarCodeScanned = async ({ type, data }) => {
     if (scanned) return;
@@ -123,7 +114,7 @@ export default function QRScanScreen() {
     }
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <SafeAreaView style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
@@ -137,7 +128,7 @@ export default function QRScanScreen() {
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <SafeAreaView style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
@@ -148,7 +139,7 @@ export default function QRScanScreen() {
           <Text style={styles.permissionDescription}>
             QR kod taramak için kamera iznine ihtiyacımız var
           </Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={getCameraPermissions}>
+          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
             <Text style={styles.permissionButtonText}>İzin Ver</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.manualButton} onPress={handleManualTableEntry}>
@@ -166,12 +157,12 @@ export default function QRScanScreen() {
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <View style={styles.cameraContainer}>
-        <Camera
+        <CameraView
           style={styles.camera}
-          type={Camera.Constants.Type.back}
-          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
-          barCodeScannerSettings={{
-            barCodeTypes: ['qr'],
+          facing="back"
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr'],
           }}
         >
           <View style={styles.overlay}>
@@ -182,7 +173,7 @@ export default function QRScanScreen() {
               <View style={[styles.corner, styles.bottomRight]} />
             </View>
           </View>
-        </Camera>
+        </CameraView>
       </View>
 
       <View style={styles.footer}>
