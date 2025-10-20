@@ -47,6 +47,7 @@ export default function HomeScreen() {
     setProducts, 
     setCampaigns, 
     setAnnouncements,
+    setYeniOneriler,
     isLoading,
     setLoading 
   } = useAppStore();
@@ -196,7 +197,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TableHeader onQRScan={handleQRScan} onSidebarPress={() => setSidebarVisible(true)} pageName="Ana Menü" />
+      <TableHeader onQRScan={handleQRScan} onSidebarPress={() => setSidebarVisible(true)} />
       
       <Animated.ScrollView 
         style={[styles.scrollView, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}

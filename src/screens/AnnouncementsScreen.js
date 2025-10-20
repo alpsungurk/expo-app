@@ -245,7 +245,7 @@ export default function AnnouncementsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="Duyurular" />
+      <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <Animated.ScrollView
         style={[

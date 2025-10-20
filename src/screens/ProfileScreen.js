@@ -37,7 +37,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="Profil" />
+      <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <ScrollView 
         style={styles.scrollView}
