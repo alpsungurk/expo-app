@@ -204,7 +204,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: false }
         )}
       >
         <Animated.View style={[
@@ -247,7 +247,7 @@ export default function HomeScreen() {
             ]}
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { x: categoryScrollX } } }],
-              { useNativeDriver: true }
+              { useNativeDriver: false }
             )}
           >
             <CategoryCard
@@ -327,7 +327,7 @@ export default function HomeScreen() {
       {/* Sidebar Modal */}
       <Modal
         visible={sidebarVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setSidebarVisible(false)}
       >
