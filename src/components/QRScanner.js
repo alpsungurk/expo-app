@@ -78,7 +78,7 @@ export default function QRScanner({ visible, onClose, onTableFound }) {
 
   if (hasPermission === null) {
     return (
-      <Modal visible={visible} animationType="slide">
+      <Modal visible={visible} animationType="fade">
         <View style={styles.container}>
           <Text>Kamera izni isteniyor...</Text>
         </View>
@@ -88,7 +88,7 @@ export default function QRScanner({ visible, onClose, onTableFound }) {
 
   if (hasPermission === false) {
     return (
-      <Modal visible={visible} animationType="slide">
+      <Modal visible={visible} animationType="fade">
         <View style={styles.container}>
           <Text style={styles.message}>Kamera erişimi gerekli</Text>
           <TouchableOpacity style={styles.button} onPress={getCameraPermissions}>
@@ -100,7 +100,7 @@ export default function QRScanner({ visible, onClose, onTableFound }) {
   }
 
   return (
-    <Modal visible={visible} animationType="slide">
+    <Modal visible={visible} animationType="fade">
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
