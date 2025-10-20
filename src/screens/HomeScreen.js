@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  ScrollView, 
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
   TouchableOpacity,
   SafeAreaView,
   FlatList,
   Alert,
   Dimensions,
   Animated,
-  Easing,
   Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +19,6 @@ import { useAppStore } from '../store/appStore';
 import { useCartStore } from '../store/cartStore';
 import TableHeader from '../components/TableHeader';
 import CampaignSlider from '../components/CampaignSlider';
-import CategoryCard from '../components/CategoryCard';
 import ProductCard from '../components/ProductCard';
 
 const { width, height } = Dimensions.get('window');
@@ -33,30 +31,30 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  
+
   // Animation refs
   const scrollY = useRef(new Animated.Value(0)).current;
   const categoryScrollX = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  
-  const { 
-    categories, 
-    products, 
-    setCategories, 
-    setProducts, 
-    setCampaigns, 
+
+  const {
+    categories,
+    products,
+    setCategories,
+    setProducts,
+    setCampaigns,
     setAnnouncements,
     setYeniOneriler,
     isLoading,
-    setLoading 
+    setLoading
   } = useAppStore();
-  
+
   const { tableNumber, addItem } = useCartStore();
 
   useEffect(() => {
     loadData();
-    
+
     // Staggered animation entrance
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -75,7 +73,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (selectedCategory) {
-      const filtered = products.filter(product => 
+      const filtered = products.filter(product =>
         product.kategori_id === selectedCategory.id && product.aktif
       );
       setFilteredProducts(filtered);
@@ -83,6 +81,22 @@ export default function HomeScreen() {
       setFilteredProducts(products.filter(product => product.aktif));
     }
   }, [selectedCategory, products]);
+
+  const handleCategorySelect = (category) => {
+    // Haptic feedback for better UX
+    const isCurrentlySelected = selectedCategory?.id === category.id;
+
+    if (isCurrentlySelected) {
+      setSelectedCategory(null);
+    } else {
+      setSelectedCategory(category);
+      // Animate category selection
+      Animated.spring(categoryScrollX, {
+        toValue: category.id * 80, // Approximate width per category
+        useNativeDriver: false,
+      }).start();
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -123,14 +137,15 @@ export default function HomeScreen() {
 
       if (announcementsError) throw announcementsError;
 
+      // Yeni önerileri yükle
       const { data: suggestionsData, error: suggestionsError } = await supabase
         .from(TABLES.YENI_ONERILER)
-          .select('*')
-         .eq('aktif', true)
-         .order('id', { ascending: true });
+        .select('*')
+        .eq('aktif', true)
+        .order('id', { ascending: true });
 
-        if (suggestionsError) throw suggestionsError;
-      
+      if (suggestionsError) throw suggestionsError;
+
       setCategories(categoriesData || []);
       setProducts(productsData || []);
       setCampaigns(campaignsData || []);
@@ -153,22 +168,6 @@ export default function HomeScreen() {
     navigation.navigate('Sipariş Ver');
   };
 
-  const handleCategorySelect = (category) => {
-    // Haptic feedback for better UX
-    const isCurrentlySelected = selectedCategory?.id === category.id;
-    
-    if (isCurrentlySelected) {
-      setSelectedCategory(null);
-    } else {
-      setSelectedCategory(category);
-      // Animate category selection
-      Animated.spring(categoryScrollX, {
-        toValue: category.id * 80, // Approximate width per category
-        useNativeDriver: false,
-      }).start();
-    }
-  };
-
   const handleProductPress = (product) => {
     navigation.navigate('ProductDetail', { product });
   };
@@ -182,24 +181,31 @@ export default function HomeScreen() {
       );
       return;
     }
-    
+
     addItem(product);
     Alert.alert('Başarılı', `${product.ad} sepete eklendi!`);
   };
 
-  const renderProduct = ({ item }) => (
-    <ProductCard
-      product={item}
-      onPress={handleProductPress}
-      onAddToCart={handleAddToCart}
-    />
-  );
+  const numCols = isLargeScreen ? 3 : 2;
+
+  const renderProduct = ({ item, index }) => {
+    const isLastSingle = (filteredProducts.length % numCols !== 0) && (index === filteredProducts.length - 1);
+    return (
+      <View style={isLastSingle ? { flexBasis: '100%' } : { flex: 1 }}>
+        <ProductCard
+          product={item}
+          onPress={handleProductPress}
+          onAddToCart={handleAddToCart}
+        />
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <TableHeader onQRScan={handleQRScan} onSidebarPress={() => setSidebarVisible(true)} />
-      
-      <Animated.ScrollView 
+
+      <Animated.ScrollView
         style={[styles.scrollView, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
@@ -221,7 +227,7 @@ export default function HomeScreen() {
         ]}>
           <CampaignSlider />
         </Animated.View>
-        
+
         {/* Kategoriler */}
         <Animated.View style={[
           styles.section,
@@ -236,46 +242,53 @@ export default function HomeScreen() {
           }
         ]}>
           <Text style={styles.sectionTitle}>Kategoriler</Text>
-          <Animated.ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.categoriesContainer,
-              {
-                justifyContent: 'space-around',
-              },
-            ]}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { x: categoryScrollX } } }],
-              { useNativeDriver: true }
-            )}
+            contentContainerStyle={styles.categoriesRow}
           >
-            <CategoryCard
-              category={{ ad: 'Tümü', id: null, icon: '🌀' }}
+            <TouchableOpacity
               onPress={() => setSelectedCategory(null)}
-              isSelected={!selectedCategory}
-            />
-            {categories.map((category, index) => (
-              <Animated.View
-                key={category.id}
-                style={{
-                  transform: [{
-                    scale: categoryScrollX.interpolate({
-                      inputRange: [index * 80 - 40, index * 80, index * 80 + 40],
-                      outputRange: [0.9, 1.1, 0.9],
-                      extrapolate: 'clamp',
-                    })
-                  }]
-                }}
-              >
-                <CategoryCard
-                  category={category}
-                  onPress={handleCategorySelect}
-                  isSelected={selectedCategory?.id === category.id}
-                />
-              </Animated.View>
-            ))}
-          </Animated.ScrollView>
+              style={[
+                styles.chip,
+                !selectedCategory && styles.chipActive,
+              ]}
+            >
+              <View style={styles.chipContent}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    !selectedCategory && styles.chipTextActive,
+                    styles.chipLabel,
+                  ]}
+                >
+                  Tümü
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {categories.map((category) => {
+              const active = selectedCategory?.id === category.id;
+              return (
+                <TouchableOpacity
+                  key={category.id}
+                  onPress={() => handleCategorySelect(category)}
+                  style={[styles.chip, active && styles.chipActive]}
+                >
+                  <View style={styles.chipContent}>
+                    {category.icon ? (
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                        {category.icon}
+                      </Text>
+                    ) : null}
+                    <Text style={[styles.chipText, active && styles.chipTextActive, styles.chipLabel]}>
+                      {category.ad}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </Animated.View>
 
         {/* Ürünler */}
@@ -299,7 +312,7 @@ export default function HomeScreen() {
               {filteredProducts.length} ürün
             </Text>
           </View>
-          
+
           {isLoading ? (
             <Animated.View style={[
               styles.loadingContainer,
@@ -319,6 +332,11 @@ export default function HomeScreen() {
               scrollEnabled={false}
               contentContainerStyle={styles.productsContainer}
               showsVerticalScrollIndicator={false}
+              numColumns={numCols}
+              columnWrapperStyle={{
+                gap: isSmallScreen ? 10 : 12,
+                paddingHorizontal: isSmallScreen ? 8 : 12,
+              }}
             />
           )}
         </Animated.View>
@@ -488,11 +506,47 @@ const styles = StyleSheet.create({
     paddingVertical: isSmallScreen ? 4 : 6,
     borderRadius: 20,
   },
+  categoriesRow: {
+    paddingVertical: isSmallScreen ? 8 : 12,
+    paddingHorizontal: isSmallScreen ? 6 : 10,
+    gap: isSmallScreen ? 8 : 12,
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   categoriesContainer: {
     paddingVertical: isSmallScreen ? 8 : 12,
     gap: isSmallScreen ? 8 : 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: 'white',
+    paddingHorizontal: isSmallScreen ? 14 : 16,
+    paddingVertical: isSmallScreen ? 8 : 10,
+    borderRadius: 999,
+  },
+  chipContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chipActive: {
+    backgroundColor: '#8B4513',
+    borderColor: '#8B4513',
+  },
+  chipText: {
+    color: '#6B7280',
+    fontSize: isSmallScreen ? 13 : 14,
+    fontWeight: '600',
+  },
+  chipLabel: {
+    marginLeft: 2,
+  },
+  chipTextActive: {
+    color: 'white',
   },
   productsContainer: {
     paddingBottom: isSmallScreen ? 20 : 30,

@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppStore } from '../store/appStore';
+import { supabase } from '../config/supabase';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -91,6 +92,24 @@ export default function CampaignSlider() {
       return ['#8B4513', '#A0522D'];
     };
 
+    const STORAGE_BUCKET = 'images'; // bucket name provided by user
+    const getImageUri = () => {
+      // Try common keys for image fields
+      const raw = (
+        item.resim_path ||
+        item.image_url ||
+        item.resimUrl ||
+        item.banner_url ||
+        item.gorsel_url ||
+        item.image
+      );
+      if (!raw) return null;
+      if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
+      // Build public URL via Supabase Storage for path-only values
+      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(raw);
+      return data?.publicUrl || null;
+    };
+
     const getIcon = () => {
       if (isCampaign) return "gift";
       if (isAnnouncement) return "megaphone";
@@ -130,8 +149,9 @@ export default function CampaignSlider() {
           ]}
           activeOpacity={0.9}
         >
+          {/* If there is an image, render it and apply a subtle dark gradient overlay */}
           <LinearGradient
-            colors={getGradientColors()}
+            colors={getImageUri() ? ['rgba(0,0,0,0.20)','rgba(0,0,0,0.55)'] : getGradientColors()}
             style={[
               styles.gradient,
               {
@@ -141,6 +161,13 @@ export default function CampaignSlider() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
+            {getImageUri() ? (
+              <Image
+                source={{ uri: getImageUri() }}
+                style={styles.bgImage}
+                resizeMode="cover"
+              />
+            ) : null}
             <View style={styles.cardContent}>
               <View style={styles.headerRow}>
                 <View style={[
@@ -212,13 +239,6 @@ export default function CampaignSlider() {
             Kampanyalar & Duyurular
           </Text>
         </View>
-
-        <TouchableOpacity
-          style={styles.sidebarButton}
-          onPress={() => setSidebarVisible(true)}
-        >
-          <Ionicons name="menu" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -437,6 +457,15 @@ const styles = StyleSheet.create({
   gradient: {
     padding: isLargeScreen ? 30 : isMediumScreen ? 24 : 20,
     width: '100%',
+  },
+  bgImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
   },
   cardContent: {
     flex: 1,
