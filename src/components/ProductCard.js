@@ -186,6 +186,8 @@ export default function ProductCard({ product, onPress, onAddToCart }) {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    minWidth: 0,
     backgroundColor: 'white',
     borderRadius: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
     marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
