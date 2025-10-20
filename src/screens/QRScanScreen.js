@@ -126,7 +126,7 @@ export default function QRScanScreen() {
   if (hasPermission === null) {
     return (
       <SafeAreaView style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="QR Tarama" />
+        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Kamera izni isteniyor...</Text>
@@ -140,7 +140,7 @@ export default function QRScanScreen() {
   if (hasPermission === false) {
     return (
       <SafeAreaView style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="QR Tarama" />
+        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.permissionContainer}>
           <Ionicons name="camera-outline" size={80} color="#9CA3AF" />
@@ -163,7 +163,7 @@ export default function QRScanScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="QR Tarama" />
+      <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <View style={styles.cameraContainer}>
         <Camera
