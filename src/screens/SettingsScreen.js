@@ -106,7 +106,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="Ayarlar" />
+      <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <ScrollView
         style={styles.scrollView}

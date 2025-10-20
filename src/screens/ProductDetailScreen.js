@@ -168,14 +168,21 @@ export default function ProductDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.sidebarButton}
+          onPress={() => setSidebarVisible(true)}
+        >
+          <Ionicons name="menu" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
+        </TouchableOpacity>
+
+        <Text style={styles.headerTitle}>Ürün Detayı</Text>
+
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ürün Detayı</Text>
-        <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -188,13 +195,13 @@ export default function ProductDetailScreen() {
               <Ionicons name="cafe" size={80} color="#8B4513" />
             </View>
           )}
-
+          
           {product.populer && (
             <View style={styles.popularBadge}>
               <Text style={styles.popularText}>Popüler</Text>
             </View>
           )}
-
+          
           {product.yeni_urun && (
             <View style={styles.newBadge}>
               <Text style={styles.newText}>Yeni</Text>
@@ -205,7 +212,7 @@ export default function ProductDetailScreen() {
         {/* Ürün Bilgileri */}
         <View style={styles.content}>
           <Text style={styles.title}>{product.ad}</Text>
-
+          
           {product.aciklama && (
             <Text style={styles.description}>{product.aciklama}</Text>
           )}
@@ -295,10 +302,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     backgroundColor: '#8B4513',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  sidebarButton: {
+    width: isLargeScreen ? 44 : isMediumScreen ? 40 : 36,
+    height: isLargeScreen ? 44 : isMediumScreen ? 40 : 36,
+    borderRadius: isLargeScreen ? 22 : isMediumScreen ? 20 : 18,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -308,8 +315,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
   },
-  placeholder: {
+  backButton: {
     width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,

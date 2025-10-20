@@ -8,7 +8,7 @@ const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 
-export default function TableHeader({ onQRScan, onSidebarPress, pageName }) {
+export default function TableHeader({ onQRScan, onSidebarPress }) {
   const { tableNumber, qrToken } = useCartStore();
 
   return (
@@ -23,9 +23,6 @@ export default function TableHeader({ onQRScan, onSidebarPress, pageName }) {
 
         <View style={styles.shopInfo}>
           <Text style={styles.shopName}>☕ Kahve Dükkanı</Text>
-          {pageName && (
-            <Text style={styles.pageName}>{pageName}</Text>
-          )}
           {tableNumber ? (
             <Text style={styles.tableInfo}>Masa {tableNumber}</Text>
           ) : (
@@ -76,13 +73,6 @@ const styles = StyleSheet.create({
     color: 'white',
     marginBottom: 4,
     textAlign: 'center',
-  },
-  pageName: {
-    fontSize: isLargeScreen ? 12 : isMediumScreen ? 11 : 10,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '500',
-    textAlign: 'center',
-    marginBottom: 2,
   },
   tableInfo: {
     fontSize: isLargeScreen ? 16 : isMediumScreen ? 15 : 14,

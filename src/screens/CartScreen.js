@@ -226,7 +226,7 @@ export default function CartScreen() {
   if (items.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="Sepetim" />
+        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.emptyContainer}>
           <Ionicons name="cart-outline" size={80} color="#D1D5DB" />
@@ -249,7 +249,7 @@ export default function CartScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TableHeader onSidebarPress={() => setSidebarVisible(true)} pageName="Sepetim" />
+      <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
