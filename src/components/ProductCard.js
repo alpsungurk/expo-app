@@ -129,7 +129,7 @@ export default function ProductCard({ product, onPress, onAddToCart }) {
               marginBottom: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
               lineHeight: isLargeScreen ? 22 : isMediumScreen ? 20 : 18,
             }
-          ]} numberOfLines={2}>
+          ]} numberOfLines={2} ellipsizeMode="tail">
             {product.ad}
           </Text>
 
@@ -141,7 +141,7 @@ export default function ProductCard({ product, onPress, onAddToCart }) {
                 lineHeight: isLargeScreen ? 22 : isMediumScreen ? 20 : 16,
                 marginBottom: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
               }
-            ]} numberOfLines={2}>
+            ]} numberOfLines={2} ellipsizeMode="tail">
               {product.aciklama}
             </Text>
           )}
@@ -248,9 +248,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
+    fontFamily: 'System',
     color: '#1F2937',
   },
   description: {
+    fontFamily: 'System',
     color: '#6B7280',
   },
   footer: {
@@ -263,6 +265,7 @@ const styles = StyleSheet.create({
   },
   price: {
     fontWeight: 'bold',
+    fontFamily: 'System',
     color: '#8B4513',
     marginBottom: 2,
   },

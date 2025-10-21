@@ -16,7 +16,7 @@ import { useCartStore } from '../store/cartStore';
 import { useNavigation } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
 import TableHeader from '../components/TableHeader';
-import Sidebar from '../components/Sidebar';
+import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -123,7 +123,7 @@ export default function QRScanScreen() {
           <Text style={styles.loadingText}>Kamera izni isteniyor...</Text>
         </View>
 
-        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </SafeAreaView>
     );
   }
@@ -147,7 +147,7 @@ export default function QRScanScreen() {
           </TouchableOpacity>
         </View>
 
-        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </SafeAreaView>
     );
   }
@@ -246,7 +246,7 @@ export default function QRScanScreen() {
         </View>
       </Modal>
 
-      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
   );
 }

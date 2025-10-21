@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartStore } from '../store/cartStore';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -35,6 +36,7 @@ function CartStack() {
 
 export default function AppNavigator() {
   const { getTotalItems } = useCartStore();
+  const insets = useSafeAreaInsets();
 
   return (
     <NavigationContainer>
@@ -60,9 +62,9 @@ export default function AppNavigator() {
           tabBarActiveTintColor: '#8B4513',
           tabBarInactiveTintColor: '#9CA3AF',
           tabBarStyle: {
-            paddingBottom: 8,
+            paddingBottom: Math.max(insets.bottom, 8),
             paddingTop: 8,
-            height: 60,
+            height: 60 + Math.max(insets.bottom, 0),
             borderTopWidth: 1,
             borderTopColor: '#E5E7EB',
             backgroundColor: '#FFFFFF',
@@ -92,6 +94,7 @@ export default function AppNavigator() {
               color: 'white',
               fontSize: 12,
               fontWeight: 'bold',
+              fontFamily: 'System',
             },
           }}
         />
@@ -103,15 +106,15 @@ export default function AppNavigator() {
           }}
         />
         <Tab.Screen 
-          name="Duyurular" 
-          component={AnnouncementsScreen}
+          name="Siparişlerim" 
+          component={OrderStatusScreen}
           options={{
             tabBarBadge: undefined,
           }}
         />
-        <Tab.Screen 
-          name="Siparişlerim" 
-          component={OrderStatusScreen}
+            <Tab.Screen 
+          name="Duyurular" 
+          component={AnnouncementsScreen}
           options={{
             tabBarBadge: undefined,
           }}
