@@ -19,10 +19,20 @@ const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
+const isTablet = width >= 1024;
+
+// Responsive değerler
+const getResponsiveValue = (small, medium, large, tablet = large) => {
+  if (isTablet) return tablet;
+  if (isLargeScreen) return large;
+  if (isMediumScreen) return medium;
+  return small;
+};
 
 // Daha küçük bar için - responsive breakpoints
 const getBarWidth = () => {
-  if (isLargeScreen) return width * 0.5; // Tablet daha küçük bar - %50
+  if (isTablet) return width * 0.4; // Tablet daha küçük bar - %40
+  if (isLargeScreen) return width * 0.5; // Large phones - %50
   if (isMediumScreen) return width * 0.7; // Medium phones - %70
   return width * 0.8; // Small phones - %80
 };
@@ -37,9 +47,9 @@ const BAR_MARGIN = getBarMargin();
 
 export default function CampaignSlider() {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [sidebarVisible, setSidebarVisible] = useState(false);
   const scrollViewRef = useRef(null);
-  const { campaigns, announcements, getActiveCampaigns, getActiveAnnouncements, yeniOneriler, getActiveYeniOneriler } = useAppStore();
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const { campaigns, announcements, getActiveCampaigns, getActiveAnnouncements, yeniOneriler, getActiveYeniOneriler, activeOrder } = useAppStore();
 
   const activeCampaigns = getActiveCampaigns();
   const activeAnnouncements = getActiveAnnouncements();
@@ -51,6 +61,8 @@ export default function CampaignSlider() {
     ...activeAnnouncements.map(announcement => ({ ...announcement, type: 'announcement' })),
     ...activeYeniOneriler.map(o => ({ ...o, type: 'suggestion' }))
   ].sort((a, b) => (b.oncelik || 0) - (a.oncelik || 0));
+
+  // Debug bilgileri kaldırıldı
 
   useEffect(() => {
     if (allItems.length > 1) {
@@ -69,6 +81,30 @@ export default function CampaignSlider() {
     }
   }, [allItems.length]);
 
+  // Sipariş durumu animasyonu
+  useEffect(() => {
+    if (activeOrder && activeOrder.durum === 'hazirlaniyor') {
+      const pulseAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseAnimation.start();
+      return () => pulseAnimation.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [activeOrder]);
+
   const handleScroll = (event) => {
     const contentOffsetX = event.nativeEvent.contentOffset.x;
     const index = Math.round(contentOffsetX / width);
@@ -83,6 +119,8 @@ export default function CampaignSlider() {
     const isCampaign = item.type === 'campaign';
     const isAnnouncement = item.type === 'announcement';
     const isSuggestion = item.type === 'suggestion';
+    
+    // Debug kaldırıldı
 
     // Her öğe için farklı renk paleti
     const getGradientColors = () => {
@@ -95,7 +133,7 @@ export default function CampaignSlider() {
     const STORAGE_BUCKET = 'images'; // bucket name provided by user
     const getImageUri = () => {
       // Try common keys for image fields
-      const raw = (
+      let raw = (
         item.resim_path ||
         item.image_url ||
         item.resimUrl ||
@@ -103,6 +141,12 @@ export default function CampaignSlider() {
         item.gorsel_url ||
         item.image
       );
+      
+      // Eğer yeni öneri için resim yoksa, ürünün resmini kullan
+      if (!raw && isSuggestion && item.urunler?.resim_path) {
+        raw = item.urunler.resim_path;
+      }
+      
       if (!raw) return null;
       if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
       // Build public URL via Supabase Storage for path-only values
@@ -127,26 +171,27 @@ export default function CampaignSlider() {
     const getTitle = () => {
       if (isCampaign) return item.ad;
       if (isAnnouncement) return item.baslik;
-      if (isSuggestion) return item.baslik;
+      if (isSuggestion) {
+        // Sadece yeni önerinin kendi başlığını kullan
+        return item.baslik;
+      }
       return item.ad || item.baslik;
     };
 
     const getDescription = () => {
       if (isCampaign) return item.aciklama;
       if (isAnnouncement) return item.icerik;
-      if (isSuggestion) return item.aciklama;
+      if (isSuggestion) {
+        // Sadece yeni önerinin kendi açıklamasını kullan
+        return item.aciklama;
+      }
       return item.aciklama || item.icerik;
     };
 
     return (
       <View key={`${item.type}-${item.id}`} style={styles.slideContainer}>
         <TouchableOpacity
-          style={[
-            styles.card,
-            {
-              width: isLargeScreen ? width * 0.9 : isMediumScreen ? width * 0.85 : width * 0.8 // Büyük ekranlarda daha büyük kartlar
-            }
-          ]}
+          style={styles.card}
           activeOpacity={0.9}
         >
           {/* If there is an image, render it and apply a subtle dark gradient overlay */}
@@ -155,7 +200,7 @@ export default function CampaignSlider() {
             style={[
               styles.gradient,
               {
-                minHeight: isLargeScreen ? 200 : isMediumScreen ? 160 : 140
+                minHeight: getResponsiveValue(140, 160, 200, 220)
               }
             ]}
             start={{ x: 0, y: 0 }}
@@ -173,14 +218,14 @@ export default function CampaignSlider() {
                 <View style={[
                   styles.iconContainer,
                   {
-                    width: isLargeScreen ? 70 : isMediumScreen ? 55 : 50,
-                    height: isLargeScreen ? 70 : isMediumScreen ? 55 : 50,
-                    borderRadius: isLargeScreen ? 35 : isMediumScreen ? 27 : 25,
+                    width: getResponsiveValue(50, 55, 70, 75),
+                    height: getResponsiveValue(50, 55, 70, 75),
+                    borderRadius: getResponsiveValue(25, 27, 35, 37),
                   }
                 ]}>
                   <Ionicons
                     name={getIcon()}
-                    size={isLargeScreen ? 36 : isMediumScreen ? 28 : 26}
+                    size={getResponsiveValue(26, 28, 36, 38)}
                     color="white"
                   />
                 </View>
@@ -188,14 +233,14 @@ export default function CampaignSlider() {
                 <View style={[
                   styles.badge,
                   {
-                    paddingHorizontal: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                    paddingVertical: isLargeScreen ? 8 : isMediumScreen ? 7 : 6,
-                    borderRadius: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+                    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
+                    paddingVertical: getResponsiveValue(6, 7, 8, 10),
+                    borderRadius: getResponsiveValue(12, 14, 16, 18),
                   }
                 ]}>
                   <Text style={[
                     styles.badgeText,
-                    { fontSize: isLargeScreen ? 14 : isMediumScreen ? 13 : 12 }
+                    { fontSize: getResponsiveValue(12, 13, 14, 16) }
                   ]}>
                     {getBadgeText()}
                   </Text>
@@ -203,25 +248,25 @@ export default function CampaignSlider() {
               </View>
 
               <View style={styles.textContainer}>
-                <Text style={[
-                  styles.title,
-                  {
-                    fontSize: isLargeScreen ? 26 : isMediumScreen ? 22 : 20,
-                    marginBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
-                    lineHeight: isLargeScreen ? 30 : isMediumScreen ? 26 : 22,
-                  }
-                ]} numberOfLines={2}>
-                  {getTitle()}
-                </Text>
-                <Text style={[
-                  styles.description,
-                  {
-                    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
-                    lineHeight: isLargeScreen ? 24 : isMediumScreen ? 22 : 20,
-                  }
-                ]} numberOfLines={3}>
-                  {getDescription()}
-                </Text>
+                 <Text style={[
+                   styles.title,
+                   {
+                     fontSize: getResponsiveValue(18, 20, 24, 26),
+                     marginBottom: getResponsiveValue(6, 8, 10, 12),
+                     lineHeight: getResponsiveValue(20, 24, 28, 30),
+                   }
+                 ]} numberOfLines={3}>
+                   {getTitle()}
+                 </Text>
+                 <Text style={[
+                   styles.description,
+                   {
+                     fontSize: getResponsiveValue(12, 14, 16, 18),
+                     lineHeight: getResponsiveValue(18, 20, 22, 24),
+                   }
+                 ]} numberOfLines={4}>
+                   {getDescription()}
+                 </Text>
               </View>
             </View>
           </LinearGradient>
@@ -232,14 +277,62 @@ export default function CampaignSlider() {
 
   return (
     <View style={styles.container}>
-      {/* Küçük, ortalanmış bar */}
-      <View style={styles.headerBar}>
-        <View style={styles.barContent}>
-          <Text style={[styles.headerTitle, { fontSize: isLargeScreen ? 18 : isMediumScreen ? 17 : 15 }]}>
-            Kampanyalar & Duyurular
-          </Text>
+      {/* Sipariş Durumu Göstergesi */}
+      {activeOrder && (
+        <View style={styles.orderStatusContainer}>
+          <Animated.View 
+            style={[
+              styles.orderStatusCard,
+              { 
+                backgroundColor: activeOrder.durum === 'hazir' ? '#DCFCE7' : '#FEF3C7',
+                transform: [{ scale: activeOrder.durum === 'hazirlaniyor' ? pulseAnim : 1 }]
+              }
+            ]}
+          >
+            <View style={styles.orderStatusContent}>
+              <Animated.View 
+                style={[
+                  styles.orderStatusIcon,
+                  { 
+                    backgroundColor: activeOrder.durum === 'hazir' ? '#10B981' : '#F59E0B',
+                    transform: [{ rotate: activeOrder.durum === 'hazirlaniyor' ? pulseAnim.interpolate({
+                      inputRange: [1, 1.2],
+                      outputRange: ['0deg', '360deg']
+                    }) : '0deg' }]
+                  }
+                ]}
+              >
+                <Ionicons 
+                  name={activeOrder.durum === 'hazir' ? 'checkmark' : 'cafe'} 
+                  size={getResponsiveValue(16, 18, 20, 22)} 
+                  color="white" 
+                />
+              </Animated.View>
+              
+              <View style={styles.orderStatusTextContainer}>
+                <Text style={[
+                  styles.orderStatusTitle,
+                  { 
+                    color: activeOrder.durum === 'hazir' ? '#166534' : '#8B4513',
+                    fontSize: getResponsiveValue(14, 16, 18, 20)
+                  }
+                ]}>
+                  {activeOrder.durum === 'hazir' ? 'Siparişiniz Hazır!' : 'Siparişiniz Hazırlanıyor'}
+                </Text>
+                <Text style={[
+                  styles.orderStatusSubtitle,
+                  { 
+                    color: activeOrder.durum === 'hazir' ? '#166534' : '#8B4513',
+                    fontSize: getResponsiveValue(11, 12, 13, 14)
+                  }
+                ]}>
+                  {activeOrder.durum === 'hazir' ? 'Masanıza getirilecek' : 'Lütfen bekleyin...'}
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
         </View>
-      </View>
+      )}
 
       <ScrollView
         ref={scrollViewRef}
@@ -251,191 +344,113 @@ export default function CampaignSlider() {
         contentContainerStyle={styles.scrollContent}
         snapToInterval={width}
         decelerationRate="fast"
-        style={styles.scrollView}
+        style={[styles.scrollView, { height: getResponsiveValue(160, 180, 220, 240) }]}
       >
         {allItems.map((item, index) => renderItem(item, index))}
       </ScrollView>
 
-      {/* Sidebar Modal */}
-      <Modal
-        visible={sidebarVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setSidebarVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setSidebarVisible(false)}
-        >
-          <View style={[
-            styles.sidebar,
-            {
-              width: isLargeScreen ? width * 0.7 : isMediumScreen ? width * 0.8 : width * 0.9 // Daha geniş sidebar
-            }
-          ]}>
+      {allItems.length > 1 && (
+        <View style={styles.dotsContainer}>
+          {allItems.map((_, index) => (
             <TouchableOpacity
+              key={index}
               style={[
-                styles.closeButton,
-                {
-                  width: isLargeScreen ? 45 : isMediumScreen ? 42 : 40,
-                  height: isLargeScreen ? 45 : isMediumScreen ? 42 : 40,
-                  borderRadius: isLargeScreen ? 22 : isMediumScreen ? 21 : 20,
-                }
+                styles.dot,
+                index === currentIndex && styles.activeDot
               ]}
-              onPress={() => setSidebarVisible(false)}
-            >
-              <Ionicons name="close" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-            </TouchableOpacity>
-
-            <Text style={[
-              styles.sidebarTitle,
-              { fontSize: isLargeScreen ? 26 : isMediumScreen ? 24 : 22 }
-            ]}>Menü</Text>
-
-            <TouchableOpacity style={[
-              styles.sidebarItem,
-              {
-                paddingVertical: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
-                marginBottom: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-                borderRadius: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-              }
-            ]}>
-              <Ionicons name="home" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-              <Text style={[
-                styles.sidebarItemText,
-                {
-                  fontSize: isLargeScreen ? 17 : isMediumScreen ? 16 : 15,
-                  marginLeft: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                }
-              ]}>Ana Sayfa</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[
-              styles.sidebarItem,
-              {
-                paddingVertical: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
-                marginBottom: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-                borderRadius: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-              }
-            ]}>
-              <Ionicons name="gift" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-              <Text style={[
-                styles.sidebarItemText,
-                {
-                  fontSize: isLargeScreen ? 17 : isMediumScreen ? 16 : 15,
-                  marginLeft: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                }
-              ]}>Kampanyalar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[
-              styles.sidebarItem,
-              {
-                paddingVertical: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
-                marginBottom: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-                borderRadius: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-              }
-            ]}>
-              <Ionicons name="megaphone" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-              <Text style={[
-                styles.sidebarItemText,
-                {
-                  fontSize: isLargeScreen ? 17 : isMediumScreen ? 16 : 15,
-                  marginLeft: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                }
-              ]}>Duyurular</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[
-              styles.sidebarItem,
-              {
-                paddingVertical: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
-                marginBottom: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-                borderRadius: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-              }
-            ]}>
-              <Ionicons name="settings" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-              <Text style={[
-                styles.sidebarItemText,
-                {
-                  fontSize: isLargeScreen ? 17 : isMediumScreen ? 16 : 15,
-                  marginLeft: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-                }
-              ]}>Ayarlar</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+              onPress={() => {
+                setCurrentIndex(index);
+                scrollViewRef.current?.scrollTo({
+                  x: index * width,
+                  animated: true,
+                });
+              }}
+              activeOpacity={0.7}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    marginTop: getResponsiveValue(12, 16, 20, 24),
+    marginBottom: getResponsiveValue(16, 20, 24, 28),
   },
-  // Responsive header bar
-  headerBar: {
+  // Sipariş Durumu Göstergesi
+  orderStatusContainer: {
+    marginHorizontal: getResponsiveValue(16, 20, 24, 28),
+    marginBottom: getResponsiveValue(12, 16, 20, 24),
+  },
+  orderStatusCard: {
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    padding: getResponsiveValue(16, 18, 20, 22),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 69, 19, 0.1)',
+  },
+  orderStatusContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
-    borderRadius: isLargeScreen ? 30 : isMediumScreen ? 25 : 20,
-    paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
-    paddingVertical: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
-    marginHorizontal: isLargeScreen ? 40 : isMediumScreen ? 30 : 20,
-    marginBottom: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 69, 19, 0.2)',
   },
-  sidebarButton: {
-    width: isLargeScreen ? 44 : isMediumScreen ? 40 : 36,
-    height: isLargeScreen ? 44 : isMediumScreen ? 40 : 36,
-    borderRadius: isLargeScreen ? 22 : isMediumScreen ? 20 : 18,
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
+  orderStatusIcon: {
+    width: getResponsiveValue(40, 44, 48, 52),
+    height: getResponsiveValue(40, 44, 48, 52),
+    borderRadius: getResponsiveValue(20, 22, 24, 26),
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#8B4513',
+    marginRight: getResponsiveValue(12, 14, 16, 18),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  barContent: {
+  orderStatusTextContainer: {
     flex: 1,
-    alignItems: 'center',
   },
-  headerTitle: {
+  orderStatusTitle: {
     fontWeight: 'bold',
-    color: '#8B4513',
-    textAlign: 'center',
-    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
+    fontFamily: 'System',
+    marginBottom: getResponsiveValue(2, 3, 4, 5),
+  },
+  orderStatusSubtitle: {
+    fontWeight: '500',
+    fontFamily: 'System',
+    opacity: 0.8,
   },
   dotsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: getResponsiveValue(12, 16, 20, 24),
+    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
   },
   dot: {
-    width: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-    height: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-    borderRadius: isLargeScreen ? 5 : isMediumScreen ? 4 : 3,
-    backgroundColor: 'rgba(139, 69, 19, 0.3)',
-    marginHorizontal: isLargeScreen ? 4 : isMediumScreen ? 3 : 2,
+    width: getResponsiveValue(8, 10, 12, 14),
+    height: getResponsiveValue(8, 10, 12, 14),
+    borderRadius: getResponsiveValue(4, 5, 6, 7),
+    backgroundColor: '#D1D5DB', // Gri renk
+    marginHorizontal: getResponsiveValue(4, 5, 6, 8),
   },
   activeDot: {
-    backgroundColor: '#8B4513',
-    transform: [{ scaleX: isLargeScreen ? 2 : isMediumScreen ? 1.8 : 1.5 }],
+    backgroundColor: '#a76908', // Yeşil renk
+    transform: [{ scale: getResponsiveValue(1.2, 1.3, 1.4, 1.5) }],
   },
   moreDots: {
-    fontSize: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
+    fontSize: getResponsiveValue(10, 12, 14, 16),
     color: '#8B4513',
     fontWeight: '600',
     marginLeft: 4,
   },
   scrollView: {
-    height: isLargeScreen ? 220 : isMediumScreen ? 180 : 160,
+    // height artık inline olarak veriliyor
   },
   scrollContent: {
     alignItems: 'center',
@@ -444,19 +459,26 @@ const styles = StyleSheet.create({
     width: width,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
   },
   card: {
-    borderRadius: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    width: width - getResponsiveValue(32, 40, 48, 56), // Padding'i çıkar
+    borderRadius: getResponsiveValue(16, 20, 24, 28),
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
-    elevation: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
+    shadowOffset: { 
+      width: 0, 
+      height: getResponsiveValue(2, 3, 4, 5) 
+    },
+    shadowOpacity: getResponsiveValue(0.1, 0.12, 0.15, 0.18),
+    shadowRadius: getResponsiveValue(8, 10, 12, 14),
+    elevation: getResponsiveValue(6, 8, 10, 12),
   },
   gradient: {
-    padding: isLargeScreen ? 30 : isMediumScreen ? 24 : 20,
+    padding: getResponsiveValue(20, 24, 30, 35),
     width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
   },
   bgImage: {
     position: 'absolute',
@@ -466,6 +488,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: '100%',
+    resizeMode: 'cover',
+    borderRadius: getResponsiveValue(16, 20, 24, 28),
+    opacity: 0.6,
   },
   cardContent: {
     flex: 1,
@@ -476,79 +501,64 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 14,
+    marginBottom: getResponsiveValue(14, 16, 20, 24),
   },
   iconContainer: {
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: getResponsiveValue(1, 1, 2, 2),
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   textContainer: {
     flex: 1,
-    marginBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    marginBottom: getResponsiveValue(8, 10, 12, 14),
+    justifyContent: 'flex-end',
   },
   title: {
     fontWeight: 'bold',
+    fontFamily: 'System',
     color: 'white',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { 
+      width: 0, 
+      height: getResponsiveValue(1, 1, 2, 2) 
+    },
+    textShadowRadius: getResponsiveValue(2, 3, 4, 5),
   },
   description: {
+    fontFamily: 'System',
     color: 'rgba(255,255,255,0.9)',
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { 
+      width: 0, 
+      height: getResponsiveValue(0.5, 1, 1, 1.5) 
+    },
+    textShadowRadius: getResponsiveValue(1, 2, 3, 4),
   },
   badge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignSelf: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { 
+      width: 0, 
+      height: getResponsiveValue(1, 2, 2, 3) 
+    },
+    shadowOpacity: getResponsiveValue(0.2, 0.25, 0.3, 0.35),
+    shadowRadius: getResponsiveValue(3, 4, 5, 6),
+    elevation: getResponsiveValue(3, 4, 5, 6),
+    borderWidth: getResponsiveValue(1, 1, 1, 2),
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   badgeText: {
-    fontWeight: '600',
-    color: 'white',
-  },
-  // Responsive sidebar
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-start',
-  },
-  sidebar: {
-    width: isLargeScreen ? width * 0.6 : isMediumScreen ? width * 0.7 : width * 0.8,
-    height: '100%',
-    backgroundColor: 'white',
-    padding: isLargeScreen ? 35 : isMediumScreen ? 30 : 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  closeButton: {
-    alignSelf: 'flex-end',
-    width: isLargeScreen ? 50 : isMediumScreen ? 45 : 40,
-    height: isLargeScreen ? 50 : isMediumScreen ? 45 : 40,
-    borderRadius: isLargeScreen ? 25 : isMediumScreen ? 22 : 20,
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: isLargeScreen ? 30 : isMediumScreen ? 25 : 22,
-  },
-  sidebarTitle: {
-    fontSize: isLargeScreen ? 30 : isMediumScreen ? 26 : 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: isLargeScreen ? 40 : isMediumScreen ? 35 : 30,
-    textAlign: 'center',
-  },
-  sidebarItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-    paddingHorizontal: isLargeScreen ? 25 : isMediumScreen ? 22 : 20,
-    marginBottom: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-    borderRadius: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-    backgroundColor: 'rgba(139, 69, 19, 0.05)',
-  },
-  sidebarItemText: {
-    fontSize: isLargeScreen ? 19 : isMediumScreen ? 17 : 16,
+    fontWeight: '700',
+    fontFamily: 'System',
     color: '#8B4513',
-    fontWeight: '600',
-    marginLeft: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: { 
+      width: 0, 
+      height: getResponsiveValue(0.5, 1, 1, 1.5) 
+    },
+    textShadowRadius: getResponsiveValue(1, 2, 2, 3),
   },
 });

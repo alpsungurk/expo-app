@@ -23,5 +23,6 @@ export const TABLES = {
   DUYURULAR: 'duyurular',
   URUN_OZELLESTIRME: 'urun_ozellestirme',
   OZELLESTIRME_DEGERLERI: 'ozellestirme_degerleri',
-  YENI_ONERILER:'yeni_oneriler'
+  YENI_ONERILER:'yeni_oneriler',
+  SISTEM_AYARLARI: 'sistem_ayarlari'
 };

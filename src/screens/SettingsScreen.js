@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../components/Card';
 import TableHeader from '../components/TableHeader';
-import Sidebar from '../components/Sidebar';
+import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -150,7 +150,7 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
   );
 }

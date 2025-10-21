@@ -5,11 +5,13 @@ const initialState = {
   isLoading: false,
   currentOrder: null,
   orderStatus: null,
+  activeOrder: null, // Aktif sipariş durumu
   campaigns: [],
   announcements: [],
   yeniOneriler: [],
   categories: [],
   products: [],
+  sistemAyarlari: [],
 };
 
 // Action types
@@ -17,12 +19,13 @@ const APP_ACTIONS = {
   SET_LOADING: 'SET_LOADING',
   SET_CURRENT_ORDER: 'SET_CURRENT_ORDER',
   SET_ORDER_STATUS: 'SET_ORDER_STATUS',
+  SET_ACTIVE_ORDER: 'SET_ACTIVE_ORDER',
   SET_CAMPAIGNS: 'SET_CAMPAIGNS',
   SET_ANNOUNCEMENTS: 'SET_ANNOUNCEMENTS',
   SET_YENI_ONERILER: 'SET_YENI_ONERILER',
   SET_CATEGORIES: 'SET_CATEGORIES',
-  SET_PRODUCTS: 'SET_PRODUCTS'
-
+  SET_PRODUCTS: 'SET_PRODUCTS',
+  SET_SISTEM_AYARLARI: 'SET_SISTEM_AYARLARI'
 };
 
 // Reducer
@@ -34,6 +37,8 @@ const appReducer = (state, action) => {
       return { ...state, currentOrder: action.payload };
     case APP_ACTIONS.SET_ORDER_STATUS:
       return { ...state, orderStatus: action.payload };
+    case APP_ACTIONS.SET_ACTIVE_ORDER:
+      return { ...state, activeOrder: action.payload };
     case APP_ACTIONS.SET_CAMPAIGNS:
       return { ...state, campaigns: action.payload };
     case APP_ACTIONS.SET_ANNOUNCEMENTS:
@@ -44,6 +49,8 @@ const appReducer = (state, action) => {
       return { ...state, products: action.payload };
     case APP_ACTIONS.SET_YENI_ONERILER:
       return { ...state, yeniOneriler: action.payload };
+    case APP_ACTIONS.SET_SISTEM_AYARLARI:
+      return { ...state, sistemAyarlari: action.payload };
     default:
       return state;
   }
@@ -68,6 +75,10 @@ export const AppProvider = ({ children }) => {
     dispatch({ type: APP_ACTIONS.SET_ORDER_STATUS, payload: status });
   };
 
+  const setActiveOrder = (order) => {
+    dispatch({ type: APP_ACTIONS.SET_ACTIVE_ORDER, payload: order });
+  };
+
   const setCampaigns = (campaigns) => {
     dispatch({ type: APP_ACTIONS.SET_CAMPAIGNS, payload: campaigns });
   };
@@ -87,6 +98,10 @@ export const AppProvider = ({ children }) => {
   const setYeniOneriler = (yeniOneriler) => {
     dispatch({ type: APP_ACTIONS.SET_YENI_ONERILER, payload: yeniOneriler });
   };
+
+  const setSistemAyarlari = (sistemAyarlari) => {
+    dispatch({ type: APP_ACTIONS.SET_SISTEM_AYARLARI, payload: sistemAyarlari });
+  };
   
 
   const getActiveCampaigns = () => {
@@ -98,11 +113,6 @@ export const AppProvider = ({ children }) => {
       const endDate = campaign.bitis_tarihi ? new Date(campaign.bitis_tarihi) : null;
 
       return startDate <= now && (!endDate || endDate >= now);
-    });
-
-    console.log('Kampanya filtreleme:', {
-      toplam: state.campaigns.length,
-      aktif: filtered.length
     });
 
     return filtered.sort((a, b) => a.id - b.id);
@@ -128,24 +138,12 @@ export const AppProvider = ({ children }) => {
 
       const shouldShow = isCurrentlyActive || isOngoing || isHistorical;
 
-      if (!shouldShow) {
-        console.log('Filtre dışı duyuru:', {
-          id: announcement.id,
-          baslik: announcement.baslik,
-          startDate: announcement.baslangic_tarihi,
-          endDate: announcement.bitis_tarihi,
-          now: now.toISOString(),
-          neden: isCurrentlyActive ? 'aktif' : isOngoing ? 'sürekli' : isHistorical ? 'tarihsel' : 'diğer'
-        });
-      }
+      // Debug kaldırıldı
 
       return shouldShow;
     });
 
-    console.log('Duyuru filtreleme:', {
-      toplam: state.announcements.length,
-      aktif: filtered.length
-    });
+    // Debug kaldırıldı
 
     return filtered.sort((a, b) => {
       // Önce oncelik'e göre sırala (yüksek oncelik önce gelsin)
@@ -158,19 +156,21 @@ export const AppProvider = ({ children }) => {
   };
   
    const getActiveYeniOneriler = () => {
-       const now = new Date();
-       return state.yeniOneriler.filter(o =>
-         o.aktif &&
-         new Date(o.baslangic_tarihi) <= now &&
-        (!o.bitis_tarihi || new Date(o.bitis_tarihi) >= now)
-       ).sort((a, b) => a.id - b.id);
+       // Geçici olarak sadece aktif olanları göster (tarih filtrelemesi kaldırıldı)
+       return state.yeniOneriler.filter(o => o.aktif).sort((a, b) => a.id - b.id);
      };
+
+  const getSistemAyarı = (anahtar) => {
+    const ayar = state.sistemAyarlari.find(a => a.anahtar === anahtar);
+    return ayar ? ayar.deger : null;
+  };
 
   const value = {
     ...state,
     setLoading,
     setCurrentOrder,
     setOrderStatus,
+    setActiveOrder,
     setCampaigns,
     setAnnouncements,
     setCategories,
@@ -179,7 +179,8 @@ export const AppProvider = ({ children }) => {
     setYeniOneriler,
     getActiveAnnouncements,
     getActiveYeniOneriler,
-
+    setSistemAyarlari,
+    getSistemAyarı,
   };
 
   return (

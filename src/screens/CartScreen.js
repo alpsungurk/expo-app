@@ -17,7 +17,7 @@ import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
 import { useAppStore } from '../store/appStore';
 import TableHeader from '../components/TableHeader';
-import Sidebar from '../components/Sidebar';
+import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -242,7 +242,7 @@ export default function CartScreen() {
           </TouchableOpacity>
         </View>
 
-        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </SafeAreaView>
     );
   }
@@ -290,7 +290,7 @@ export default function CartScreen() {
         </TouchableOpacity>
       </View>
 
-      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
   );
 }

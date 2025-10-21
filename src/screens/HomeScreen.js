@@ -9,8 +9,7 @@ import {
   FlatList,
   Alert,
   Dimensions,
-  Animated,
-  Modal
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,11 +19,22 @@ import { useCartStore } from '../store/cartStore';
 import TableHeader from '../components/TableHeader';
 import CampaignSlider from '../components/CampaignSlider';
 import ProductCard from '../components/ProductCard';
+import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
+
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
+const isTablet = width >= 1024;
+
+// Responsive değerler
+const getResponsiveValue = (small, medium, large, tablet = large) => {
+  if (isTablet) return tablet;
+  if (isLargeScreen) return large;
+  if (isMediumScreen) return medium;
+  return small;
+};
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -46,11 +56,13 @@ export default function HomeScreen() {
     setCampaigns,
     setAnnouncements,
     setYeniOneriler,
+    setSistemAyarlari,
     isLoading,
     setLoading
   } = useAppStore();
 
   const { tableNumber, addItem } = useCartStore();
+  const { activeOrder, setActiveOrder } = useAppStore();
 
   useEffect(() => {
     loadData();
@@ -137,20 +149,38 @@ export default function HomeScreen() {
 
       if (announcementsError) throw announcementsError;
 
-      // Yeni önerileri yükle
+      // Yeni önerileri yükle (ürün bilgileri ile birlikte)
       const { data: suggestionsData, error: suggestionsError } = await supabase
         .from(TABLES.YENI_ONERILER)
-        .select('*')
+        .select(`
+          *,
+          urunler:urun_id (
+            id,
+            ad,
+            fiyat,
+            resim_path,
+            aciklama
+          )
+        `)
         .eq('aktif', true)
         .order('id', { ascending: true });
 
       if (suggestionsError) throw suggestionsError;
+
+      // Sistem ayarlarını yükle
+      const { data: sistemAyarlariData, error: sistemAyarlariError } = await supabase
+        .from(TABLES.SISTEM_AYARLARI)
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (sistemAyarlariError) throw sistemAyarlariError;
 
       setCategories(categoriesData || []);
       setProducts(productsData || []);
       setCampaigns(campaignsData || []);
       setAnnouncements(announcementsData || []);
       setYeniOneriler(suggestionsData || []);
+      setSistemAyarlari(sistemAyarlariData || []);
     } catch (error) {
       console.error('Veri yükleme hatası:', error);
       Alert.alert('Hata', 'Veriler yüklenirken bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.');
@@ -159,6 +189,7 @@ export default function HomeScreen() {
       setCampaigns([]);
       setAnnouncements([]);
       setYeniOneriler([]);
+      setSistemAyarlari([]);
     } finally {
       setLoading(false);
     }
@@ -186,12 +217,27 @@ export default function HomeScreen() {
     Alert.alert('Başarılı', `${product.ad} sepete eklendi!`);
   };
 
-  const numCols = isLargeScreen ? 3 : 2;
+  // Test fonksiyonları
+  const setTestOrder = (status) => {
+    if (status === null) {
+      setActiveOrder(null);
+    } else {
+      setActiveOrder({
+        id: 1,
+        siparis_no: 'TEST-001',
+        durum: status,
+        olusturma_tarihi: new Date().toISOString(),
+        qr_token: 'test-table'
+      });
+    }
+  };
+
+  const numCols = getResponsiveValue(2, 2, 3, 4);
 
   const renderProduct = ({ item, index }) => {
-    const isLastSingle = (filteredProducts.length % numCols !== 0) && (index === filteredProducts.length - 1);
+    // Tek ürün kaldığında grid'i kaplamasın, normal boyutta kalsın
     return (
-      <View style={isLastSingle ? { flexBasis: '100%' } : { flex: 1 }}>
+      <View style={{ flex: 1, maxWidth: `${100 / numCols}%` }}>
         <ProductCard
           product={item}
           onPress={handleProductPress}
@@ -204,6 +250,30 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <TableHeader onQRScan={handleQRScan} onSidebarPress={() => setSidebarVisible(true)} />
+
+      {/* Test Butonları - Geliştirme için */}
+      <View style={styles.testButtonsContainer}>
+        <TouchableOpacity 
+          style={[styles.testButton, { backgroundColor: '#FEF3C7' }]}
+          onPress={() => setTestOrder('hazirlaniyor')}
+        >
+          <Text style={[styles.testButtonText, { color: '#8B4513' }]}>Hazırlanıyor</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.testButton, { backgroundColor: '#DCFCE7' }]}
+          onPress={() => setTestOrder('hazir')}
+        >
+          <Text style={[styles.testButtonText, { color: '#166534' }]}>Hazırlandı</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.testButton, { backgroundColor: '#F3F4F6' }]}
+          onPress={() => setTestOrder(null)}
+        >
+          <Text style={[styles.testButtonText, { color: '#6B7280' }]}>Sipariş Yok</Text>
+        </TouchableOpacity>
+      </View>
 
       <Animated.ScrollView
         style={[styles.scrollView, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}
@@ -241,7 +311,6 @@ export default function HomeScreen() {
             }]
           }
         ]}>
-          <Text style={styles.sectionTitle}>Kategoriler</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -321,142 +390,36 @@ export default function HomeScreen() {
                 transform: [{ scale: scaleAnim }]
               }
             ]}>
-              <Ionicons name="cafe" size={isSmallScreen ? 40 : 50} color="#8B4513" />
+              <Ionicons name="cafe" size={getResponsiveValue(40, 45, 50, 55)} color="#8B4513" />
               <Text style={styles.loadingText}>Ürünler yükleniyor...</Text>
             </Animated.View>
           ) : (
-            <FlatList
-              data={filteredProducts}
-              renderItem={renderProduct}
-              keyExtractor={(item) => item.id.toString()}
-              scrollEnabled={false}
-              contentContainerStyle={styles.productsContainer}
-              showsVerticalScrollIndicator={false}
-              numColumns={numCols}
-              columnWrapperStyle={{
-                gap: isSmallScreen ? 10 : 12,
-                paddingHorizontal: isSmallScreen ? 8 : 12,
-              }}
-            />
+            <View style={styles.productsGrid}>
+              {filteredProducts.map((item, index) => (
+                <View 
+                  key={item.id} 
+                  style={[
+                    styles.productWrapper,
+                    { 
+                      width: `${100 / numCols}%`,
+                      paddingHorizontal: getResponsiveValue(4, 6, 8, 10),
+                      paddingBottom: getResponsiveValue(12, 16, 20, 24),
+                    }
+                  ]}
+                >
+                  <ProductCard
+                    product={item}
+                    onPress={handleProductPress}
+                    onAddToCart={handleAddToCart}
+                  />
+                </View>
+              ))}
+            </View>
           )}
         </Animated.View>
       </Animated.ScrollView>
 
-      {/* Sidebar Modal */}
-      <Modal
-        visible={sidebarVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setSidebarVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setSidebarVisible(false)}
-        >
-          <View style={[
-            styles.sidebar,
-            {
-              width: isLargeScreen ? width * 0.7 : isMediumScreen ? width * 0.8 : width * 0.9
-            }
-          ]}>
-            <TouchableOpacity
-              style={[
-                styles.closeButton,
-                {
-                  width: isLargeScreen ? 45 : isMediumScreen ? 42 : 40,
-                  height: isLargeScreen ? 45 : isMediumScreen ? 42 : 40,
-                  borderRadius: isLargeScreen ? 22 : isMediumScreen ? 21 : 20,
-                }
-              ]}
-              onPress={() => setSidebarVisible(false)}
-            >
-              <Ionicons name="close" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-            </TouchableOpacity>
-
-            <Text style={[
-              styles.sidebarTitle,
-              { fontSize: isLargeScreen ? 30 : isMediumScreen ? 26 : 24 }
-            ]}>Menü</Text>
-
-            <TouchableOpacity style={[
-              styles.sidebarItem,
-              {
-                paddingVertical: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-                paddingHorizontal: isLargeScreen ? 25 : isMediumScreen ? 22 : 20,
-                marginBottom: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-                borderRadius: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-              }
-            ]}>
-              <Ionicons name="home" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-              <Text style={[
-                styles.sidebarItemText,
-                {
-                  fontSize: isLargeScreen ? 19 : isMediumScreen ? 17 : 16,
-                  marginLeft: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-                }
-              ]}>Ana Sayfa</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[
-              styles.sidebarItem,
-              {
-                paddingVertical: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-                paddingHorizontal: isLargeScreen ? 25 : isMediumScreen ? 22 : 20,
-                marginBottom: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-                borderRadius: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-              }
-            ]}>
-              <Ionicons name="gift" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-              <Text style={[
-                styles.sidebarItemText,
-                {
-                  fontSize: isLargeScreen ? 19 : isMediumScreen ? 17 : 16,
-                  marginLeft: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-                }
-              ]}>Kampanyalar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[
-              styles.sidebarItem,
-              {
-                paddingVertical: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-                paddingHorizontal: isLargeScreen ? 25 : isMediumScreen ? 22 : 20,
-                marginBottom: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-                borderRadius: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-              }
-            ]}>
-              <Ionicons name="megaphone" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-              <Text style={[
-                styles.sidebarItemText,
-                {
-                  fontSize: isLargeScreen ? 19 : isMediumScreen ? 17 : 16,
-                  marginLeft: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-                }
-              ]}>Duyurular</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[
-              styles.sidebarItem,
-              {
-                paddingVertical: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-                paddingHorizontal: isLargeScreen ? 25 : isMediumScreen ? 22 : 20,
-                marginBottom: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-                borderRadius: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-              }
-            ]}>
-              <Ionicons name="settings" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-              <Text style={[
-                styles.sidebarItemText,
-                {
-                  fontSize: isLargeScreen ? 19 : isMediumScreen ? 17 : 16,
-                  marginLeft: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-                }
-              ]}>Ayarlar</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -470,53 +433,76 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   campaignContainer: {
-    marginBottom: isSmallScreen ? 12 : 16,
+    marginBottom: getResponsiveValue(12, 16, 20, 24),
   },
   section: {
-    marginBottom: isSmallScreen ? 16 : 20,
-    paddingHorizontal: isSmallScreen ? 12 : 16,
+    marginBottom: getResponsiveValue(24, 28, 32, 36),
+    paddingHorizontal: getResponsiveValue(12, 16, 20, 24),
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: isSmallScreen ? 8 : 12,
-    marginBottom: isSmallScreen ? 12 : 16,
+    paddingHorizontal: getResponsiveValue(8, 12, 16, 20),
+    marginBottom: getResponsiveValue(12, 16, 20, 24),
     backgroundColor: 'white',
-    borderRadius: 12,
-    paddingVertical: isSmallScreen ? 12 : 16,
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    paddingVertical: getResponsiveValue(12, 16, 20, 24),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
+  // Test Butonları Stilleri
+  testButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
+    paddingVertical: getResponsiveValue(8, 10, 12, 14),
+    gap: getResponsiveValue(8, 10, 12, 14),
+  },
+  testButton: {
+    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
+    paddingVertical: getResponsiveValue(6, 8, 10, 12),
+    borderRadius: getResponsiveValue(8, 10, 12, 14),
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  testButtonText: {
+    fontSize: getResponsiveValue(12, 13, 14, 16),
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
   sectionTitle: {
-    fontSize: isSmallScreen ? 18 : isLargeScreen ? 22 : 20,
+    fontSize: getResponsiveValue(18, 20, 22, 24),
     fontWeight: '700',
+    fontFamily: 'System',
     color: '#1F2937',
     letterSpacing: 0.5,
   },
   productCount: {
-    fontSize: isSmallScreen ? 12 : 14,
+    fontSize: getResponsiveValue(12, 14, 16, 18),
     color: '#8B4513',
     fontWeight: '600',
+    fontFamily: 'System',
     backgroundColor: '#FEF3C7',
-    paddingHorizontal: isSmallScreen ? 8 : 12,
-    paddingVertical: isSmallScreen ? 4 : 6,
+    paddingHorizontal: getResponsiveValue(8, 12, 16, 20),
+    paddingVertical: getResponsiveValue(4, 6, 8, 10),
     borderRadius: 20,
   },
   categoriesRow: {
-    paddingVertical: isSmallScreen ? 8 : 12,
-    paddingHorizontal: isSmallScreen ? 6 : 10,
-    gap: isSmallScreen ? 8 : 12,
+    paddingVertical: getResponsiveValue(8, 12, 16, 20),
+    paddingHorizontal: getResponsiveValue(6, 10, 14, 18),
+    gap: getResponsiveValue(8, 12, 16, 20),
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   categoriesContainer: {
-    paddingVertical: isSmallScreen ? 8 : 12,
-    gap: isSmallScreen ? 8 : 12,
+    paddingVertical: getResponsiveValue(8, 12, 16, 20),
+    gap: getResponsiveValue(8, 12, 16, 20),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -524,8 +510,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: 'white',
-    paddingHorizontal: isSmallScreen ? 14 : 16,
-    paddingVertical: isSmallScreen ? 8 : 10,
+    paddingHorizontal: getResponsiveValue(14, 16, 18, 20),
+    paddingVertical: getResponsiveValue(8, 10, 12, 14),
     borderRadius: 999,
   },
   chipContent: {
@@ -539,7 +525,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     color: '#6B7280',
-    fontSize: isSmallScreen ? 13 : 14,
+    fontSize: getResponsiveValue(13, 14, 16, 18),
     fontWeight: '600',
   },
   chipLabel: {
@@ -549,70 +535,30 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   productsContainer: {
-    paddingBottom: isSmallScreen ? 20 : 30,
-    gap: isSmallScreen ? 12 : 16,
+    paddingBottom: getResponsiveValue(20, 30, 40, 50),
+    gap: getResponsiveValue(12, 16, 20, 24),
   },
   loadingContainer: {
-    padding: isSmallScreen ? 40 : 60,
+    padding: getResponsiveValue(40, 60, 80, 100),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'white',
-    borderRadius: 16,
-    marginHorizontal: isSmallScreen ? 8 : 12,
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    marginHorizontal: getResponsiveValue(8, 12, 16, 20),
   },
   loadingText: {
-    fontSize: isSmallScreen ? 14 : 16,
+    fontSize: getResponsiveValue(14, 16, 18, 20),
     color: '#6B7280',
-    marginTop: 12,
+    marginTop: getResponsiveValue(12, 16, 20, 24),
     fontWeight: '500',
   },
-  // Sidebar styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-start',
-  },
-  sidebar: {
-    width: isLargeScreen ? width * 0.6 : isMediumScreen ? width * 0.7 : width * 0.8,
-    height: '100%',
-    backgroundColor: 'white',
-    padding: isLargeScreen ? 35 : isMediumScreen ? 30 : 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  closeButton: {
-    alignSelf: 'flex-end',
-    width: isLargeScreen ? 50 : isMediumScreen ? 45 : 40,
-    height: isLargeScreen ? 50 : isMediumScreen ? 45 : 40,
-    borderRadius: isLargeScreen ? 25 : isMediumScreen ? 22 : 20,
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: isLargeScreen ? 30 : isMediumScreen ? 25 : 22,
-  },
-  sidebarTitle: {
-    fontSize: isLargeScreen ? 30 : isMediumScreen ? 26 : 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: isLargeScreen ? 40 : isMediumScreen ? 35 : 30,
-    textAlign: 'center',
-  },
-  sidebarItem: {
+  // Grid Stilleri
+  productsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
-    paddingHorizontal: isLargeScreen ? 25 : isMediumScreen ? 22 : 20,
-    marginBottom: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-    borderRadius: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
-    backgroundColor: 'rgba(139, 69, 19, 0.05)',
+    flexWrap: 'wrap',
+    paddingHorizontal: getResponsiveValue(8, 12, 16, 20),
   },
-  sidebarItemText: {
-    fontSize: isLargeScreen ? 19 : isMediumScreen ? 17 : 16,
-    color: '#8B4513',
-    fontWeight: '600',
-    marginLeft: isLargeScreen ? 20 : isMediumScreen ? 18 : 15,
+  productWrapper: {
+    // width will be set dynamically based on numCols
   },
 });

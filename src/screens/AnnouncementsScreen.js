@@ -9,14 +9,15 @@ import {
   Alert,
   SafeAreaView,
   Animated,
-  Dimensions
+  Dimensions,
+  Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase, TABLES } from '../config/supabase';
 import TableHeader from '../components/TableHeader';
-import Sidebar from '../components/Sidebar';
+import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -66,7 +67,6 @@ export default function AnnouncementsScreen() {
       const now = new Date();
       const nowISOString = now.toISOString();
 
-      console.log('Şu anki tarih:', nowISOString);
 
       // Kampanyaları yükle (sadece aktif olanlar - tarih filtrelemesi client tarafında yapılacak)
       const { data: campaignsData, error: campaignsError } = await supabase
@@ -93,13 +93,7 @@ export default function AnnouncementsScreen() {
         .select('*')
         .order('id', { ascending: true });
 
-      console.log('Tüm duyurular:', allAnnouncements?.map(a => ({
-        id: a.id,
-        baslik: a.baslik,
-        aktif: a.aktif,
-        startDate: a.baslangic_tarihi,
-        endDate: a.bitis_tarihi
-      })));
+     
 
       // Yeni önerileri yükle (sadece aktif olanlar - tarih filtrelemesi client tarafında yapılacak)
       const { data: suggestionsData, error: suggestionsError } = await supabase
@@ -110,11 +104,7 @@ export default function AnnouncementsScreen() {
 
       if (suggestionsError) throw suggestionsError;
 
-      console.log('Veritabanından gelen ham veri:', {
-        campaigns: campaignsData?.length || 0,
-        announcements: announcementsData?.length || 0,
-        suggestions: suggestionsData?.length || 0
-      });
+     
 
       setCampaigns(campaignsData || []);
       setAnnouncements(announcementsData || []);
@@ -153,36 +143,33 @@ export default function AnnouncementsScreen() {
 
   const renderCampaign = (campaign) => (
     <TouchableOpacity key={campaign.id} style={styles.campaignCard} activeOpacity={0.8}>
-      <LinearGradient
-        colors={['#8B4513', '#A0522D']}
-        style={styles.campaignGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <View style={styles.campaignContent}>
-          <View style={styles.campaignHeader}>
-            <View style={styles.campaignIcon}>
-              <Ionicons name="gift" size={24} color="white" />
-            </View>
-            <View style={styles.campaignBadge}>
-              <Text style={styles.campaignBadgeText}>Kampanya</Text>
-            </View>
-          </View>
-          
+      <View style={styles.campaignImageContainer}>
+        <View style={styles.campaignImagePlaceholder}>
+          <Ionicons name="gift" size={isSmallScreen ? 24 : isMediumScreen ? 28 : 32} color="white" />
+        </View>
+      </View>
+
+      {/* Sağ taraf - İçerik */}
+      <View style={styles.campaignContentContainer}>
+        <View style={styles.campaignHeader}>
           <Text style={styles.campaignTitle}>{campaign.ad}</Text>
-          <Text style={styles.campaignDescription}>{campaign.aciklama}</Text>
-          
-          <View style={styles.campaignFooter}>
-            <View style={styles.campaignDate}>
-              <Ionicons name="calendar" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.campaignDateText}>
-                {formatDate(campaign.baslangic_tarihi)}
-                {campaign.bitis_tarihi ? ` - ${formatDate(campaign.bitis_tarihi)}` : ' (Devam Ediyor)'}
-              </Text>
-            </View>
+          <View style={styles.campaignBadge}>
+            <Text style={styles.campaignBadgeText}>Kampanya</Text>
           </View>
         </View>
-      </LinearGradient>
+        
+        <Text style={styles.campaignDescription}>{campaign.aciklama}</Text>
+        
+        <View style={styles.campaignFooter}>
+          <View style={styles.campaignDate}>
+            <Ionicons name="calendar" size={12} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.campaignDateText}>
+              {formatDate(campaign.baslangic_tarihi)}
+              {campaign.bitis_tarihi ? ` - ${formatDate(campaign.bitis_tarihi)}` : ' (Devam Ediyor)'}
+            </Text>
+          </View>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 
@@ -213,27 +200,63 @@ export default function AnnouncementsScreen() {
       badgeTextColor = '#8B4513';
     }
 
+    // Resim URL'sini kontrol et
+    const getImageUri = () => {
+      const STORAGE_BUCKET = 'images';
+      let raw = (
+        announcement.resim_path ||
+        announcement.image_url ||
+        announcement.resimUrl ||
+        announcement.banner_url ||
+        announcement.gorsel_url ||
+        announcement.image
+      );
+      
+      if (!raw) return null;
+      if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
+      // Build public URL via Supabase Storage for path-only values
+      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(raw);
+      return data?.publicUrl || null;
+    };
+
+    const imageUri = getImageUri();
+
     return (
       <View key={announcement.id} style={styles.announcementCard}>
-        <View style={styles.announcementHeader}>
-          <View style={styles.announcementIcon}>
-            <Ionicons name="megaphone" size={20} color="#8B4513" />
-          </View>
-          <View style={[styles.announcementBadge, {backgroundColor: badgeColor}]}>
-            <Text style={[styles.announcementBadgeText, {color: badgeTextColor}]}>{badgeText}</Text>
-          </View>
+        {/* Sol taraf - Fotoğraf */}
+        <View style={styles.announcementImageContainer}>
+          {imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.announcementImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.announcementImagePlaceholder}>
+              <Ionicons name="megaphone" size={isSmallScreen ? 24 : isMediumScreen ? 28 : 32} color="#8B4513" />
+            </View>
+          )}
         </View>
 
-        <Text style={styles.announcementTitle}>{announcement.baslik}</Text>
-        <Text style={styles.announcementContent}>{announcement.icerik}</Text>
+        {/* Sağ taraf - İçerik */}
+        <View style={styles.announcementContentContainer}>
+          <View style={styles.announcementHeader}>
+            <Text style={styles.announcementTitle}>{announcement.baslik}</Text>
+            <View style={[styles.announcementBadge, {backgroundColor: badgeColor}]}>
+              <Text style={[styles.announcementBadgeText, {color: badgeTextColor}]}>{badgeText}</Text>
+            </View>
+          </View>
+          
+          <Text style={styles.announcementContent}>{announcement.icerik}</Text>
 
-        <View style={styles.announcementFooter}>
-          <View style={styles.announcementDate}>
-            <Ionicons name="time" size={14} color="#9CA3AF" />
-            <Text style={styles.announcementDateText}>
-              {formatDate(announcement.baslangic_tarihi)}
-              {announcement.bitis_tarihi ? ` - ${formatDate(announcement.bitis_tarihi)}` : ' (Devam Ediyor)'}
-            </Text>
+          <View style={styles.announcementFooter}>
+            <View style={styles.announcementDate}>
+              <Ionicons name="time" size={12} color="#9CA3AF" />
+              <Text style={styles.announcementDateText}>
+                {formatDate(announcement.baslangic_tarihi)}
+                {announcement.bitis_tarihi ? ` - ${formatDate(announcement.bitis_tarihi)}` : ' (Devam Ediyor)'}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -298,7 +321,7 @@ export default function AnnouncementsScreen() {
         )}
       </Animated.ScrollView>
 
-      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -313,6 +336,7 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: isSmallScreen ? 20 : 24,
+    marginTop: isSmallScreen ? 16 : 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -322,6 +346,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    marginBottom: isSmallScreen ? 16 : 20,
   },
   sectionTitle: {
     fontSize: isSmallScreen ? 16 : 18,
@@ -331,34 +356,40 @@ const styles = StyleSheet.create({
   },
   campaignCard: {
     marginHorizontal: isSmallScreen ? 16 : 20,
-    marginBottom: isSmallScreen ? 12 : 16,
-    borderRadius: isSmallScreen ? 12 : 16,
+    marginBottom: isSmallScreen ? 10 : 12,
+    borderRadius: isSmallScreen ? 10 : 12,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: isSmallScreen ? 6 : 8,
-    elevation: 5,
+    shadowRadius: isSmallScreen ? 3 : 4,
+    elevation: 3,
+    flexDirection: 'row',
+    backgroundColor: '#8B4513',
+    padding: isSmallScreen ? 14 : 16,
   },
-  campaignGradient: {
-    padding: isSmallScreen ? 16 : 20,
+  campaignImageContainer: {
+    width: isSmallScreen ? 80 : 90,
+    height: isSmallScreen ? 80 : 90,
+    marginRight: isSmallScreen ? 12 : 16,
   },
-  campaignContent: {
+  campaignImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: isSmallScreen ? 8 : 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  campaignContentContainer: {
     flex: 1,
+    justifyContent: 'space-between',
   },
   campaignHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: isSmallScreen ? 10 : 12,
-  },
-  campaignIcon: {
-    width: isSmallScreen ? 36 : 40,
-    height: isSmallScreen ? 36 : 40,
-    borderRadius: isSmallScreen ? 18 : 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    marginBottom: isSmallScreen ? 8 : 10,
   },
   campaignBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -372,16 +403,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   campaignTitle: {
-    fontSize: isSmallScreen ? 16 : 18,
+    fontSize: isSmallScreen ? 14 : 16,
     fontWeight: 'bold',
+    fontFamily: 'System',
     color: 'white',
-    marginBottom: isSmallScreen ? 6 : 8,
+    flex: 1,
+    marginRight: 8,
   },
   campaignDescription: {
-    fontSize: isSmallScreen ? 13 : 14,
+    fontSize: isSmallScreen ? 12 : 13,
+    fontFamily: 'System',
     color: 'rgba(255,255,255,0.9)',
-    lineHeight: isSmallScreen ? 18 : 20,
-    marginBottom: isSmallScreen ? 10 : 12,
+    lineHeight: isSmallScreen ? 16 : 18,
+    marginBottom: isSmallScreen ? 8 : 10,
   },
   campaignFooter: {
     flexDirection: 'row',
@@ -408,20 +442,35 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: isSmallScreen ? 3 : 4,
     elevation: 3,
+    flexDirection: 'row',
+  },
+  announcementImageContainer: {
+    width: isSmallScreen ? 80 : 90,
+    height: isSmallScreen ? 80 : 90,
+    marginRight: isSmallScreen ? 12 : 16,
+  },
+  announcementImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#FEF3C7',
+    borderRadius: isSmallScreen ? 8 : 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  announcementImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: isSmallScreen ? 8 : 10,
+  },
+  announcementContentContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
   announcementHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: isSmallScreen ? 10 : 12,
-  },
-  announcementIcon: {
-    width: isSmallScreen ? 28 : 32,
-    height: isSmallScreen ? 28 : 32,
-    borderRadius: isSmallScreen ? 14 : 16,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    marginBottom: isSmallScreen ? 8 : 10,
   },
   announcementBadge: {
     backgroundColor: '#FEF3C7',
@@ -437,14 +486,17 @@ const styles = StyleSheet.create({
   announcementTitle: {
     fontSize: isSmallScreen ? 14 : 16,
     fontWeight: 'bold',
+    fontFamily: 'System',
     color: '#1F2937',
-    marginBottom: isSmallScreen ? 6 : 8,
+    flex: 1,
+    marginRight: 8,
   },
   announcementContent: {
-    fontSize: isSmallScreen ? 13 : 14,
+    fontSize: isSmallScreen ? 12 : 13,
+    fontFamily: 'System',
     color: '#6B7280',
-    lineHeight: isSmallScreen ? 18 : 20,
-    marginBottom: isSmallScreen ? 10 : 12,
+    lineHeight: isSmallScreen ? 16 : 18,
+    marginBottom: isSmallScreen ? 8 : 10,
   },
   announcementFooter: {
     flexDirection: 'row',
