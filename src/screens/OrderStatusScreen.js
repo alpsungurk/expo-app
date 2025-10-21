@@ -103,13 +103,13 @@ export default function OrderStatusScreen() {
       const pulseAnimation = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 1.05,
-            duration: 1500,
+            toValue: 1.2,
+            duration: 600,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
-            duration: 1500,
+            duration: 600,
             useNativeDriver: true,
           }),
         ])
@@ -275,6 +275,205 @@ export default function OrderStatusScreen() {
     }
   };
 
+  // Hazırlandı durumu için özel ekran
+  if (activeOrder && activeOrder.durum === 'hazir') {
+    return (
+      <SafeAreaView style={styles.readyContainer}>
+        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+
+        {/* Test Butonları - Geliştirme için */}
+        <View style={styles.testButtonsContainer}>
+          <TouchableOpacity 
+            style={[styles.testButton, { backgroundColor: '#FEF3C7' }]}
+            onPress={() => setTestOrder('hazirlaniyor')}
+          >
+            <Text style={[styles.testButtonText, { color: '#8B4513' }]}>Hazırlanıyor</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.testButton, { backgroundColor: '#DCFCE7' }]}
+            onPress={() => setTestOrder('hazir')}
+          >
+            <Text style={[styles.testButtonText, { color: '#166534' }]}>Hazırlandı</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.testButton, { backgroundColor: '#F3F4F6' }]}
+            onPress={() => setTestOrder(null)}
+          >
+            <Text style={[styles.testButtonText, { color: '#6B7280' }]}>Sipariş Yok</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Hazırlandı Ekranı */}
+        <View style={styles.readyContent}>
+          {/* Hazır İkon */}
+          <View style={styles.readyIconContainer}>
+            <View style={styles.readyIcon}>
+              <Ionicons name="checkmark-circle" size={120} color="#8B4513" />
+            </View>
+          </View>
+
+          {/* Başlık */}
+          <Text style={styles.readyTitle}>Siparişiniz Hazır!</Text>
+          
+          {/* Açıklama */}
+          <Text style={styles.readyDescription}>
+            Kahve verilen sipariş masanıza getirilecek
+          </Text>
+
+          {/* Progress Bar */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressStep}>
+              <View style={[styles.progressIcon, styles.progressIconCompleted]}>
+                <Ionicons name="cafe" size={24} color="white" />
+              </View>
+              <Text style={styles.progressText}>Hazırlandı</Text>
+            </View>
+            
+            <View style={styles.progressLine} />
+            
+            <View style={styles.progressStep}>
+              <View style={[styles.progressIcon, styles.progressIconActive]}>
+                <Ionicons name="checkmark-circle" size={24} color="white" />
+              </View>
+              <Text style={styles.progressText}>Hazır</Text>
+            </View>
+          </View>
+        </View>
+
+        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      </SafeAreaView>
+    );
+  }
+
+  // Hazırlanıyor durumu için özel animasyonlu ekran
+  if (activeOrder && activeOrder.durum === 'hazirlaniyor') {
+    return (
+      <SafeAreaView style={styles.preparingContainer}>
+        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+
+        {/* Test Butonları - Geliştirme için */}
+        <View style={styles.testButtonsContainer}>
+          <TouchableOpacity 
+            style={[styles.testButton, { backgroundColor: '#FEF3C7' }]}
+            onPress={() => setTestOrder('hazirlaniyor')}
+          >
+            <Text style={[styles.testButtonText, { color: '#8B4513' }]}>Hazırlanıyor</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.testButton, { backgroundColor: '#DCFCE7' }]}
+            onPress={() => setTestOrder('hazir')}
+          >
+            <Text style={[styles.testButtonText, { color: '#166534' }]}>Hazırlandı</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.testButton, { backgroundColor: '#F3F4F6' }]}
+            onPress={() => setTestOrder(null)}
+          >
+            <Text style={[styles.testButtonText, { color: '#6B7280' }]}>Sipariş Yok</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Hazırlanıyor Animasyonlu Ekran */}
+        <View style={styles.preparingContent}>
+          {/* Animasyonlu İkon */}
+          <View style={styles.preparingIconContainer}>
+            <Animated.View 
+              style={[
+                styles.preparingIcon,
+                { transform: [{ scale: pulseAnim }] }
+              ]}
+            >
+              <Ionicons name="cafe" size={120} color="#8B4513" />
+            </Animated.View>
+            
+            {/* Dönen Malzemeler */}
+            <Animated.View 
+              style={[
+                styles.floatingIngredient1,
+                { 
+                  transform: [{ 
+                    rotate: pulseAnim.interpolate({
+                      inputRange: [1, 1.2],
+                      outputRange: ['0deg', '360deg']
+                    })
+                  }] 
+                }
+              ]}
+            >
+              <Ionicons name="ellipse" size={20} color="#A0522D" />
+            </Animated.View>
+            
+            <Animated.View 
+              style={[
+                styles.floatingIngredient2,
+                { 
+                  transform: [{ 
+                    rotate: pulseAnim.interpolate({
+                      inputRange: [1, 1.2],
+                      outputRange: ['360deg', '0deg']
+                    })
+                  }] 
+                }
+              ]}
+            >
+              <Ionicons name="ellipse" size={16} color="#8B4513" />
+            </Animated.View>
+            
+            <Animated.View 
+              style={[
+                styles.floatingIngredient3,
+                { 
+                  transform: [{ 
+                    rotate: pulseAnim.interpolate({
+                      inputRange: [1, 1.2],
+                      outputRange: ['0deg', '-360deg']
+                    })
+                  }] 
+                }
+              ]}
+            >
+              <Ionicons name="ellipse" size={18} color="#D2691E" />
+            </Animated.View>
+          </View>
+
+          {/* Başlık */}
+          <Text style={styles.preparingTitle}>Şef Siparişinizi Hazırlıyor</Text>
+          
+          {/* Açıklama */}
+          <Text style={styles.preparingDescription}>
+            Kahve verilen sipariş hazırlanıyor
+          </Text>
+
+          {/* Progress Bar */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressStep}>
+              <View style={[styles.progressIcon, styles.progressIconActive]}>
+                <Ionicons name="cafe" size={24} color="white" />
+              </View>
+              <Text style={styles.progressText}>Hazırlanıyor</Text>
+            </View>
+            
+            <View style={styles.progressLine} />
+            
+            <View style={styles.progressStep}>
+              <View style={styles.progressIcon}>
+                <Ionicons name="checkmark-circle" size={24} color="#9CA3AF" />
+              </View>
+              <Text style={[styles.progressText, styles.progressTextInactive]}>Hazır</Text>
+            </View>
+          </View>
+
+        </View>
+
+        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      </SafeAreaView>
+    );
+  }
+
   if (!order) {
     return (
       <SafeAreaView style={styles.container}>
@@ -356,10 +555,10 @@ export default function OrderStatusScreen() {
                     styles.orderStatusIcon,
                     { 
                       backgroundColor: activeOrder.durum === 'hazir' ? '#10B981' : '#F59E0B',
-                      transform: [{ rotate: activeOrder.durum === 'hazirlaniyor' ? pulseAnim.interpolate({
-                        inputRange: [1, 1.05],
-                        outputRange: ['0deg', '360deg']
-                      }) : '0deg' }]
+                    transform: [{ rotate: activeOrder.durum === 'hazirlaniyor' ? pulseAnim.interpolate({
+                      inputRange: [1, 1.2],
+                      outputRange: ['0deg', '360deg']
+                    }) : '0deg' }]
                     }
                   ]}
                 >
@@ -826,5 +1025,178 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     fontFamily: 'System',
+  },
+  // Hazırlanıyor Animasyonlu Ekran Stilleri
+  preparingContainer: {
+    flex: 1,
+    backgroundColor: '#F9FAFB', // Uygulama arka plan rengi
+  },
+  preparingContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  preparingIconContainer: {
+    position: 'relative',
+    marginBottom: 40,
+  },
+  preparingIcon: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  floatingIngredient1: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingIngredient2: {
+    position: 'absolute',
+    bottom: 30,
+    left: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingIngredient3: {
+    position: 'absolute',
+    top: 60,
+    left: -10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  preparingTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#8B4513',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontFamily: 'System',
+  },
+  preparingDescription: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
+    fontFamily: 'System',
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  progressStep: {
+    alignItems: 'center',
+  },
+  progressIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressIconActive: {
+    backgroundColor: '#8B4513',
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#8B4513',
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  progressTextInactive: {
+    color: '#9CA3AF',
+  },
+  progressLine: {
+    width: 60,
+    height: 2,
+    backgroundColor: '#D1D5DB',
+    marginHorizontal: 20,
+  },
+  timeContainer: {
+    alignItems: 'center',
+  },
+  timeLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 8,
+    fontFamily: 'System',
+  },
+  timeValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    fontFamily: 'System',
+  },
+  // Hazırlandı Ekran Stilleri
+  readyContainer: {
+    flex: 1,
+    backgroundColor: '#F9FAFB', // Uygulama arka plan rengi
+  },
+  readyContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  readyIconContainer: {
+    marginBottom: 40,
+  },
+  readyIcon: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  readyTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#8B4513',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontFamily: 'System',
+  },
+  readyDescription: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
+    fontFamily: 'System',
+  },
+  progressIconCompleted: {
+    backgroundColor: '#10B981',
   },
 });

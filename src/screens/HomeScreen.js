@@ -257,7 +257,7 @@ export default function HomeScreen() {
           style={[styles.testButton, { backgroundColor: '#FEF3C7' }]}
           onPress={() => setTestOrder('hazirlaniyor')}
         >
-          <Text style={[styles.testButtonText, { color: '#8B4513' }]}>Hazırlanıyor</Text>
+          <Text style={[styles.testButtonText, { color: '#8B4513' }]}></Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
