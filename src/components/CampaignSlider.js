@@ -45,10 +45,13 @@ const getBarMargin = () => {
 const BAR_WIDTH = getBarWidth();
 const BAR_MARGIN = getBarMargin();
 
-export default function CampaignSlider() {
+export default function CampaignSlider({ loading = false }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollViewRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const slideInAnim = useRef(new Animated.Value(0)).current;
+  const autoScrollInterval = useRef(null);
+  const isScrolling = useRef(false);
   const { campaigns, announcements, getActiveCampaigns, getActiveAnnouncements, yeniOneriler, getActiveYeniOneriler, activeOrder } = useAppStore();
 
   const activeCampaigns = getActiveCampaigns();
@@ -56,44 +59,112 @@ export default function CampaignSlider() {
   const activeYeniOneriler = getActiveYeniOneriler();
 
   // Sadece aktif öğeleri al, öncelik sırasına göre
-  const allItems = [
+  const originalItems = [
     ...activeCampaigns.map(campaign => ({ ...campaign, type: 'campaign' })),
     ...activeAnnouncements.map(announcement => ({ ...announcement, type: 'announcement' })),
     ...activeYeniOneriler.map(o => ({ ...o, type: 'suggestion' }))
   ].sort((a, b) => (b.oncelik || 0) - (a.oncelik || 0));
 
+  // Infinite scroll için items'ı 3 kez tekrarla - unique key'ler ile
+  const allItems = originalItems.length > 0 ? [
+    ...originalItems.map((item, index) => ({ ...item, uniqueKey: `${item.type}-${item.id}-1-${index}` })),
+    ...originalItems.map((item, index) => ({ ...item, uniqueKey: `${item.type}-${item.id}-2-${index}` })),
+    ...originalItems.map((item, index) => ({ ...item, uniqueKey: `${item.type}-${item.id}-3-${index}` }))
+  ] : [];
+
   // Debug bilgileri kaldırıldı
 
-  useEffect(() => {
-    if (allItems.length > 1) {
-      const interval = setInterval(() => {
+  // Otomatik scroll fonksiyonu - infinite scroll mantığı
+  const startAutoScroll = () => {
+    if (autoScrollInterval.current) {
+      clearInterval(autoScrollInterval.current);
+    }
+    
+    if (originalItems.length > 1) {
+      autoScrollInterval.current = setInterval(() => {
         setCurrentIndex((prevIndex) => {
-          const nextIndex = (prevIndex + 1) % allItems.length;
+          const nextIndex = prevIndex + 1;
           scrollViewRef.current?.scrollTo({
             x: nextIndex * width, // Tam ekran genişliği
             animated: true,
           });
           return nextIndex;
         });
-      }, 4000);
-
-      return () => clearInterval(interval);
+      }, 5000);
     }
-  }, [allItems.length]);
+  };
 
-  // Sipariş durumu animasyonu
+  // Otomatik scroll'u durdur
+  const stopAutoScroll = () => {
+    if (autoScrollInterval.current) {
+      clearInterval(autoScrollInterval.current);
+      autoScrollInterval.current = null;
+    }
+  };
+
+  // Touch event'leri
+  const handleTouchStart = () => {
+    stopAutoScroll();
+  };
+
+  const handleTouchEnd = () => {
+    // Touch bittikten 2 saniye sonra otomatik scroll'u yeniden başlat
+    setTimeout(() => {
+      startAutoScroll();
+    }, 2000);
+  };
+
+  useEffect(() => {
+    startAutoScroll();
+    
+    return () => {
+      stopAutoScroll();
+    };
+  }, [originalItems.length]);
+
+  // Component mount olduğunda orta bölümde başla
+  useEffect(() => {
+    if (originalItems.length > 0) {
+      const originalLength = originalItems.length;
+      const startIndex = originalLength; // Orta bölümde başla
+      setCurrentIndex(startIndex);
+      
+      // ScrollView'ı orta bölümde başlat
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({
+          x: startIndex * width,
+          animated: false,
+        });
+      }, 100);
+    }
+  }, [originalItems.length]);
+
+  // Loading bittikten sonra slide-in animasyonu
+  useEffect(() => {
+    if (!loading && allItems.length > 0) {
+      Animated.timing(slideInAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      slideInAnim.setValue(0);
+    }
+  }, [loading, allItems.length]);
+
+  // Sipariş durumu animasyonu - biraz daha belirgin
   useEffect(() => {
     if (activeOrder && activeOrder.durum === 'hazirlaniyor') {
       const pulseAnimation = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 1.2,
-            duration: 600,
+            toValue: 1.1,
+            duration: 800,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
-            duration: 600,
+            duration: 800,
             useNativeDriver: true,
           }),
         ])
@@ -106,10 +177,67 @@ export default function CampaignSlider() {
   }, [activeOrder]);
 
   const handleScroll = (event) => {
+    if (isScrolling.current) return;
+    
     const contentOffsetX = event.nativeEvent.contentOffset.x;
     const index = Math.round(contentOffsetX / width);
-    setCurrentIndex(index);
+    
+    if (index !== currentIndex && index >= 0 && index < allItems.length) {
+      // Infinite scroll mantığı - orta bölümde kal
+      if (originalItems.length > 0) {
+        const originalLength = originalItems.length;
+        
+        // Eğer ilk bölümdeyse (0 - originalLength-1), son bölüme geç
+        if (index < originalLength) {
+          // Önce dots'ı doğru pozisyonda göster
+          setCurrentIndex(index + originalLength * 2);
+          setTimeout(() => {
+            isScrolling.current = true;
+            scrollViewRef.current?.scrollTo({
+              x: (index + originalLength * 2) * width,
+              animated: false,
+            });
+            setTimeout(() => {
+              isScrolling.current = false;
+            }, 100);
+          }, 50);
+        }
+        // Eğer son bölümdeyse (originalLength*2 - originalLength*3-1), ilk bölüme geç
+        else if (index >= originalLength * 2) {
+          // Önce dots'ı doğru pozisyonda göster
+          setCurrentIndex(index - originalLength * 2);
+          setTimeout(() => {
+            isScrolling.current = true;
+            scrollViewRef.current?.scrollTo({
+              x: (index - originalLength * 2) * width,
+              animated: false,
+            });
+            setTimeout(() => {
+              isScrolling.current = false;
+            }, 100);
+          }, 50);
+        } else {
+          // Orta bölümdeyse normal güncelle
+          setCurrentIndex(index);
+        }
+      } else {
+        setCurrentIndex(index);
+      }
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Animated.View style={styles.loadingIcon}>
+            <Ionicons name="cafe" size={40} color="#6B4E3D" />
+          </Animated.View>
+          <Text style={styles.loadingText}>Kampanyalar yükleniyor...</Text>
+        </View>
+      </View>
+    );
+  }
 
   if (allItems.length === 0) {
     return null;
@@ -142,9 +270,14 @@ export default function CampaignSlider() {
         item.image
       );
       
-      // Eğer yeni öneri için resim yoksa, ürünün resmini kullan
-      if (!raw && isSuggestion && item.urunler?.resim_path) {
-        raw = item.urunler.resim_path;
+      // Yeni öneri için sadece kendi resmi varsa kullan, ürün resmini kullanma
+      if (isSuggestion) {
+        if (!raw) return null; // Yeni öneri için resim yoksa null döndür
+      } else {
+        // Kampanya ve duyuru için ürün resmi kullanılabilir
+        if (!raw && item.urunler?.resim_path) {
+          raw = item.urunler.resim_path;
+        }
       }
       
       if (!raw) return null;
@@ -189,103 +322,93 @@ export default function CampaignSlider() {
     };
 
     return (
-      <View key={`${item.type}-${item.id}`} style={styles.slideContainer}>
+      <View key={item.uniqueKey} style={styles.slideContainer}>
         <TouchableOpacity
           style={styles.card}
-          activeOpacity={0.9}
+          activeOpacity={0.8}
         >
-          {/* If there is an image, render it and apply a subtle dark gradient overlay */}
-          <LinearGradient
-            colors={getImageUri() ? ['rgba(0,0,0,0.20)','rgba(0,0,0,0.55)'] : getGradientColors()}
-            style={[
-              styles.gradient,
-              {
-                minHeight: getResponsiveValue(140, 160, 200, 220)
-              }
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
+          {/* Modern Card Design */}
+          <View style={styles.modernCard}>
+            {/* Background Image */}
             {getImageUri() ? (
               <Image
                 source={{ uri: getImageUri() }}
-                style={styles.bgImage}
+                style={styles.modernBgImage}
                 resizeMode="cover"
               />
-            ) : null}
-            <View style={styles.cardContent}>
-              <View style={styles.headerRow}>
-                <View style={[
-                  styles.iconContainer,
-                  {
-                    width: getResponsiveValue(50, 55, 70, 75),
-                    height: getResponsiveValue(50, 55, 70, 75),
-                    borderRadius: getResponsiveValue(25, 27, 35, 37),
-                  }
-                ]}>
-                  <Ionicons
-                    name={getIcon()}
-                    size={getResponsiveValue(26, 28, 36, 38)}
-                    color="white"
-                  />
+            ) : (
+              <View style={styles.modernBgPlaceholder}>
+                <Ionicons
+                  name={getIcon()}
+                  size={getResponsiveValue(60, 70, 80, 90)}
+                  color="#6B4E3D"
+                />
+              </View>
+            )}
+            
+            {/* Content Overlay - sadece resim yoksa göster */}
+            {!getImageUri() && (
+              <View style={styles.modernContentOverlay}>
+                {/* Header with Badge */}
+                <View style={styles.modernHeader}>
+                  <View style={styles.modernBadge}>
+                    <Text style={styles.modernBadgeText}>
+                      {getBadgeText()}
+                    </Text>
+                  </View>
                 </View>
 
-                <View style={[
-                  styles.badge,
-                  {
-                    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
-                    paddingVertical: getResponsiveValue(6, 7, 8, 10),
-                    borderRadius: getResponsiveValue(12, 14, 16, 18),
-                  }
-                ]}>
-                  <Text style={[
-                    styles.badgeText,
-                    { fontSize: getResponsiveValue(12, 13, 14, 16) }
-                  ]}>
-                    {getBadgeText()}
+                {/* Content */}
+                <View style={styles.modernContent}>
+                  <Text style={styles.modernTitle} numberOfLines={2}>
+                    {getTitle()}
+                  </Text>
+                  <Text style={styles.modernDescription} numberOfLines={3}>
+                    {getDescription()}
                   </Text>
                 </View>
               </View>
+            )}
 
-              <View style={styles.textContainer}>
-                 <Text style={[
-                   styles.title,
-                   {
-                     fontSize: getResponsiveValue(18, 20, 24, 26),
-                     marginBottom: getResponsiveValue(6, 8, 10, 12),
-                     lineHeight: getResponsiveValue(20, 24, 28, 30),
-                   }
-                 ]} numberOfLines={3}>
-                   {getTitle()}
-                 </Text>
-                 <Text style={[
-                   styles.description,
-                   {
-                     fontSize: getResponsiveValue(12, 14, 16, 18),
-                     lineHeight: getResponsiveValue(18, 20, 22, 24),
-                   }
-                 ]} numberOfLines={4}>
-                   {getDescription()}
-                 </Text>
+            {/* Resim varsa sadece badge */}
+            {getImageUri() && (
+              <View style={styles.imageOverlay}>
+                <View style={styles.modernHeader}>
+                  <View style={styles.modernBadge}>
+                    <Text style={styles.modernBadgeText}>
+                      {getBadgeText()}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
-          </LinearGradient>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
     );
   };
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[
+      styles.container,
+      {
+        opacity: slideInAnim,
+        transform: [{
+          translateY: slideInAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [30, 0],
+          })
+        }]
+      }
+    ]}>
       {/* Sipariş Durumu Göstergesi */}
       {activeOrder && (
         <View style={styles.orderStatusContainer}>
-          <Animated.View 
+          <View 
             style={[
               styles.orderStatusCard,
               { 
                 backgroundColor: activeOrder.durum === 'hazir' ? '#DCFCE7' : '#FEF3C7',
-                transform: [{ scale: activeOrder.durum === 'hazirlaniyor' ? pulseAnim : 1 }]
               }
             ]}
           >
@@ -295,10 +418,7 @@ export default function CampaignSlider() {
                   styles.orderStatusIcon,
                   { 
                     backgroundColor: activeOrder.durum === 'hazir' ? '#10B981' : '#F59E0B',
-                    transform: [{ rotate: activeOrder.durum === 'hazirlaniyor' ? pulseAnim.interpolate({
-                      inputRange: [1, 1.2],
-                      outputRange: ['0deg', '360deg']
-                    }) : '0deg' }]
+                    transform: [{ scale: activeOrder.durum === 'hazirlaniyor' ? pulseAnim : 1 }]
                   }
                 ]}
               >
@@ -330,7 +450,7 @@ export default function CampaignSlider() {
                 </Text>
               </View>
             </View>
-          </Animated.View>
+          </View>
         </View>
       )}
 
@@ -342,35 +462,34 @@ export default function CampaignSlider() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
         contentContainerStyle={styles.scrollContent}
-        snapToInterval={width}
         decelerationRate="fast"
-        style={[styles.scrollView, { height: getResponsiveValue(160, 180, 220, 240) }]}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onScrollBeginDrag={handleTouchStart}
+        onScrollEndDrag={handleTouchEnd}
+        style={[styles.scrollView, { height: getResponsiveValue(220, 240, 280, 300) }]}
       >
         {allItems.map((item, index) => renderItem(item, index))}
       </ScrollView>
 
-      {allItems.length > 1 && (
+      {originalItems.length > 1 && (
         <View style={styles.dotsContainer}>
-          {allItems.map((_, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.dot,
-                index === currentIndex && styles.activeDot
-              ]}
-              onPress={() => {
-                setCurrentIndex(index);
-                scrollViewRef.current?.scrollTo({
-                  x: index * width,
-                  animated: true,
-                });
-              }}
-              activeOpacity={0.7}
-            />
-          ))}
+          {originalItems.map((_, index) => {
+            // Infinite scroll için gerçek index'i hesapla
+            const realIndex = currentIndex % originalItems.length;
+            return (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  index === realIndex && styles.activeDot
+                ]}
+              />
+            );
+          })}
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -462,25 +581,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
   },
   card: {
-    width: width - getResponsiveValue(32, 40, 48, 56), // Padding'i çıkar
-    borderRadius: getResponsiveValue(16, 20, 24, 28),
+    width: width - getResponsiveValue(24, 32, 40, 48),
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { 
-      width: 0, 
-      height: getResponsiveValue(2, 3, 4, 5) 
-    },
-    shadowOpacity: getResponsiveValue(0.1, 0.12, 0.15, 0.18),
-    shadowRadius: getResponsiveValue(8, 10, 12, 14),
-    elevation: getResponsiveValue(6, 8, 10, 12),
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  gradient: {
-    padding: getResponsiveValue(20, 24, 30, 35),
-    width: '100%',
+  // Modern Card Styles
+  modernCard: {
+    backgroundColor: '#efe7df',
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    minHeight: getResponsiveValue(200, 220, 240, 260),
     position: 'relative',
     overflow: 'hidden',
   },
-  bgImage: {
+  modernBgImage: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -489,76 +607,95 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-    borderRadius: getResponsiveValue(16, 20, 24, 28),
-    opacity: 0.6,
   },
-  cardContent: {
-    flex: 1,
-    justifyContent: 'space-between',
+  modernBgPlaceholder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
     height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 69, 19, 0.05)',
   },
-  headerRow: {
+  modernContentOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    padding: getResponsiveValue(20, 22, 24, 26),
+    justifyContent: 'space-between',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: getResponsiveValue(16, 18, 20, 22),
+  },
+  modernHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: getResponsiveValue(14, 16, 20, 24),
   },
-  iconContainer: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  modernIconContainer: {
+    width: getResponsiveValue(40, 44, 48, 52),
+    height: getResponsiveValue(40, 44, 48, 52),
+    borderRadius: getResponsiveValue(20, 22, 24, 26),
+    backgroundColor: 'rgba(139, 69, 19, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: getResponsiveValue(1, 1, 2, 2),
-    borderColor: 'rgba(255,255,255,0.3)',
   },
-  textContainer: {
-    flex: 1,
-    marginBottom: getResponsiveValue(8, 10, 12, 14),
-    justifyContent: 'flex-end',
+  modernBadge: {
+    backgroundColor: 'rgba(106, 78, 61, 0.8)',
+    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
+    paddingVertical: getResponsiveValue(6, 7, 8, 10),
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
   },
-  title: {
-    fontWeight: 'bold',
-    fontFamily: 'System',
+  modernBadgeText: {
     color: 'white',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { 
-      width: 0, 
-      height: getResponsiveValue(1, 1, 2, 2) 
-    },
-    textShadowRadius: getResponsiveValue(2, 3, 4, 5),
-  },
-  description: {
+    fontSize: getResponsiveValue(12, 13, 14, 16),
+    fontWeight: '600',
     fontFamily: 'System',
-    color: 'rgba(255,255,255,0.9)',
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { 
-      width: 0, 
-      height: getResponsiveValue(0.5, 1, 1, 1.5) 
-    },
-    textShadowRadius: getResponsiveValue(1, 2, 3, 4),
   },
-  badge: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignSelf: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { 
-      width: 0, 
-      height: getResponsiveValue(1, 2, 2, 3) 
-    },
-    shadowOpacity: getResponsiveValue(0.2, 0.25, 0.3, 0.35),
-    shadowRadius: getResponsiveValue(3, 4, 5, 6),
-    elevation: getResponsiveValue(3, 4, 5, 6),
-    borderWidth: getResponsiveValue(1, 1, 1, 2),
-    borderColor: 'rgba(255,255,255,0.3)',
+  modernContent: {
+    flex: 1,
+    justifyContent: 'center',
   },
-  badgeText: {
-    fontWeight: '700',
+  modernTitle: {
+    fontSize: getResponsiveValue(18, 20, 22, 24),
+    fontWeight: 'bold',
+    color: '#4A3429',
+    marginBottom: getResponsiveValue(8, 10, 12, 14),
+    lineHeight: getResponsiveValue(22, 24, 26, 28),
     fontFamily: 'System',
-    color: '#8B4513',
-    textShadowColor: 'rgba(0,0,0,0.1)',
-    textShadowOffset: { 
-      width: 0, 
-      height: getResponsiveValue(0.5, 1, 1, 1.5) 
-    },
-    textShadowRadius: getResponsiveValue(1, 2, 2, 3),
+  },
+  modernDescription: {
+    fontSize: getResponsiveValue(14, 15, 16, 18),
+    color: '#6B4E3D',
+    lineHeight: getResponsiveValue(20, 22, 24, 26),
+    fontFamily: 'System',
+  },
+  // Loading Styles
+  loadingContainer: {
+    height: getResponsiveValue(200, 220, 260, 280),
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 69, 19, 0.05)',
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    marginHorizontal: getResponsiveValue(16, 20, 24, 28),
+  },
+  loadingIcon: {
+    marginBottom: getResponsiveValue(12, 14, 16, 18),
+  },
+  loadingText: {
+    fontSize: getResponsiveValue(14, 15, 16, 18),
+    color: '#6B4E3D',
+    fontWeight: '500',
+    fontFamily: 'System',
   },
 });

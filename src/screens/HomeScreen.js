@@ -12,12 +12,13 @@ import {
   Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
 import { useAppStore } from '../store/appStore';
 import { useCartStore } from '../store/cartStore';
 import TableHeader from '../components/TableHeader';
 import CampaignSlider from '../components/CampaignSlider';
+import ProductDetailScreen from './ProductDetailScreen';
 import ProductCard from '../components/ProductCard';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 
@@ -41,6 +42,11 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [campaignsLoading, setCampaignsLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productModalVisible, setProductModalVisible] = useState(false);
+  const modalSlideAnim = useRef(new Animated.Value(0)).current;
 
   // Animation refs
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -58,7 +64,8 @@ export default function HomeScreen() {
     setYeniOneriler,
     setSistemAyarlari,
     isLoading,
-    setLoading
+    setLoading,
+    setProductModalOpen
   } = useAppStore();
 
   const { tableNumber, addItem } = useCartStore();
@@ -71,13 +78,13 @@ export default function HomeScreen() {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 300,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        tension: 50,
-        friction: 7,
+        tension: 100,
+        friction: 8,
         useNativeDriver: true,
       })
     ]).start();
@@ -94,6 +101,22 @@ export default function HomeScreen() {
     }
   }, [selectedCategory, products]);
 
+  // Modal açılırken animasyon
+  useEffect(() => {
+    if (selectedProduct) {
+      // Modal açılırken aşağıdan yukarıya animasyon
+      Animated.timing(modalSlideAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      // Modal kapandığında animasyonu sıfırla
+      modalSlideAnim.setValue(0);
+    }
+  }, [selectedProduct]);
+
+
   const handleCategorySelect = (category) => {
     // Haptic feedback for better UX
     const isCurrentlySelected = selectedCategory?.id === category.id;
@@ -105,6 +128,8 @@ export default function HomeScreen() {
       // Animate category selection
       Animated.spring(categoryScrollX, {
         toValue: category.id * 80, // Approximate width per category
+        tension: 150,
+        friction: 8,
         useNativeDriver: false,
       }).start();
     }
@@ -181,6 +206,10 @@ export default function HomeScreen() {
       setAnnouncements(announcementsData || []);
       setYeniOneriler(suggestionsData || []);
       setSistemAyarlari(sistemAyarlariData || []);
+      
+      // Loading state'lerini güncelle
+      setCampaignsLoading(false);
+      setProductsLoading(false);
     } catch (error) {
       console.error('Veri yükleme hatası:', error);
       Alert.alert('Hata', 'Veriler yüklenirken bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.');
@@ -190,6 +219,10 @@ export default function HomeScreen() {
       setAnnouncements([]);
       setYeniOneriler([]);
       setSistemAyarlari([]);
+      
+      // Loading state'lerini güncelle
+      setCampaignsLoading(false);
+      setProductsLoading(false);
     } finally {
       setLoading(false);
     }
@@ -200,8 +233,24 @@ export default function HomeScreen() {
   };
 
   const handleProductPress = (product) => {
-    navigation.navigate('ProductDetail', { product });
+    setSelectedProduct(product);
+    setProductModalVisible(true);
+    setProductModalOpen(true); // Global state'i güncelle
   };
+
+  const handleCloseModal = () => {
+    setProductModalOpen(false); // Global state'i güncelle
+    // Modal kapanırken yukarıdan aşağıya animasyon
+    Animated.timing(modalSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setProductModalVisible(false);
+      setSelectedProduct(null);
+    });
+  };
+
 
   const handleAddToCart = (product) => {
     if (!tableNumber) {
@@ -240,8 +289,9 @@ export default function HomeScreen() {
       <View style={{ flex: 1, maxWidth: `${100 / numCols}%` }}>
         <ProductCard
           product={item}
-          onPress={handleProductPress}
+          onPress={handleAddToCart}
           onAddToCart={handleAddToCart}
+          onProductDetail={handleProductPress}
         />
       </View>
     );
@@ -249,7 +299,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TableHeader onQRScan={handleQRScan} onSidebarPress={() => setSidebarVisible(true)} />
+      <TableHeader 
+        onQRScan={handleQRScan} 
+        onSidebarPress={() => setSidebarVisible(true)}
+      />
 
       {/* Test Butonları - Geliştirme için */}
       <View style={styles.testButtonsContainer}>
@@ -295,22 +348,23 @@ export default function HomeScreen() {
             }]
           }
         ]}>
-          <CampaignSlider />
+          <CampaignSlider loading={campaignsLoading} />
         </Animated.View>
 
         {/* Kategoriler */}
-        <Animated.View style={[
-          styles.section,
-          {
-            transform: [{
-              translateY: scrollY.interpolate({
-                inputRange: [0, 200],
-                outputRange: [0, -10],
-                extrapolate: 'clamp',
-              })
-            }]
-          }
-        ]}>
+        {!productsLoading && (
+          <Animated.View style={[
+            styles.section,
+            {
+              transform: [{
+                translateY: scrollY.interpolate({
+                  inputRange: [0, 200],
+                  outputRange: [0, -10],
+                  extrapolate: 'clamp',
+                })
+              }]
+            }
+          ]}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -358,7 +412,8 @@ export default function HomeScreen() {
               );
             })}
           </ScrollView>
-        </Animated.View>
+          </Animated.View>
+        )}
 
         {/* Ürünler */}
         <Animated.View style={[
@@ -382,7 +437,7 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          {isLoading ? (
+          {productsLoading ? (
             <Animated.View style={[
               styles.loadingContainer,
               {
@@ -409,8 +464,9 @@ export default function HomeScreen() {
                 >
                   <ProductCard
                     product={item}
-                    onPress={handleProductPress}
+                    onPress={handleAddToCart}
                     onAddToCart={handleAddToCart}
+                    onProductDetail={handleProductPress}
                   />
                 </View>
               ))}
@@ -420,6 +476,33 @@ export default function HomeScreen() {
       </Animated.ScrollView>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <Animated.View 
+          style={[
+            styles.modalContainer,
+            {
+              transform: [
+                {
+                  translateY: modalSlideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [Dimensions.get('window').height, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <ProductDetailScreen
+            route={{ params: { product: selectedProduct } }}
+            navigation={{
+              goBack: handleCloseModal
+            }}
+          />
+        </Animated.View>
+      )}
+
     </SafeAreaView>
   );
 }
@@ -551,6 +634,14 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: getResponsiveValue(12, 16, 20, 24),
     fontWeight: '500',
+  },
+  modalContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
   },
   // Grid Stilleri
   productsGrid: {

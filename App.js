@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { CartProvider } from './src/store/cartStore';
 import { AppProvider } from './src/store/appStore';
+import { NotificationProvider } from './src/contexts/NotificationContext';
 
 export default function App() {
   return (
@@ -13,8 +14,10 @@ export default function App() {
       <GestureHandlerRootView style={styles.container}>
         <AppProvider>
           <CartProvider>
-            <AppNavigator />
-            <StatusBar style="light" />
+            <NotificationProvider>
+              <AppNavigator />
+              <StatusBar style="light" />
+            </NotificationProvider>
           </CartProvider>
         </AppProvider>
       </GestureHandlerRootView>

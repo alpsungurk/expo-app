@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -10,10 +10,13 @@ import {
   Alert,
   TextInput,
   Modal,
-  Dimensions
+  Dimensions,
+  Animated,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
 import TableHeader from '../components/TableHeader';
@@ -24,61 +27,42 @@ const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 
-export default function ProductDetailScreen() {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const { product: initialProduct } = route.params;
+export default function ProductDetailScreen({ route, navigation }) {
+  // Modal olarak kullanıldığında route ve navigation props olarak gelir
+  const routeParams = route?.params || {};
+  const { product: initialProduct } = routeParams;
   
   const [product, setProduct] = useState(initialProduct);
-  const [customizations, setCustomizations] = useState({});
   const [notes, setNotes] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [customizationOptions, setCustomizationOptions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   
   const { tableNumber, addItem } = useCartStore();
+  const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    loadCustomizationOptions();
-  }, []);
-
-  const loadCustomizationOptions = async () => {
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.URUN_OZELLESTIRME)
-        .select(`
-          *,
-          ozellestirme_degerleri (*)
-        `)
-        .eq('urun_id', product.id)
-        .eq('aktif', true)
-        .order('sira_no');
-
-      if (error) throw error;
-      setCustomizationOptions(data || []);
-    } catch (error) {
-      console.error('Özelleştirme seçenekleri yükleme hatası:', error);
+  // Resim URL'sini Supabase Storage'dan al
+  const getImageUri = () => {
+    const STORAGE_BUCKET = 'images';
+    const resimPath = product.resim_path;
+    
+    if (!resimPath) return null;
+    
+    // Eğer zaten tam URL ise direkt kullan
+    if (typeof resimPath === 'string' && /^https?:\/\//i.test(resimPath)) {
+      return resimPath;
     }
+    
+    // Supabase Storage'dan public URL oluştur
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(resimPath);
+    return data?.publicUrl || null;
   };
 
-  const handleCustomizationChange = (customizationId, valueId, value) => {
-    setCustomizations(prev => ({
-      ...prev,
-      [customizationId]: {
-        id: valueId,
-        name: value.deger_adi,
-        price: value.ek_fiyat || 0
-      }
-    }));
-  };
+  const imageUri = getImageUri();
+
 
   const calculateTotalPrice = () => {
-    let total = product.fiyat;
-    Object.values(customizations).forEach(customization => {
-      total += customization.price;
-    });
-    return total * quantity;
+    return product.fiyat * quantity;
   };
 
   const handleAddToCart = () => {
@@ -91,10 +75,12 @@ export default function ProductDetailScreen() {
       return;
     }
 
-    // Miktar kadar ürün ekle
-    for (let i = 0; i < quantity; i++) {
-      addItem(product, customizations, notes);
-    }
+    // Ürünü sepete ekle
+    addItem({
+      ...product,
+      quantity,
+      notes
+    });
 
     Alert.alert(
       'Başarılı', 
@@ -116,80 +102,29 @@ export default function ProductDetailScreen() {
     return `₺${parseFloat(price).toFixed(2)}`;
   };
 
-  const renderCustomizationOption = (option) => {
-    const selectedValue = customizations[option.id];
-    
-    return (
-      <View key={option.id} style={styles.customizationSection}>
-        <Text style={styles.customizationTitle}>
-          {option.secenek_adi}
-          {option.zorunlu && <Text style={styles.required}> *</Text>}
-        </Text>
-        
-        {option.ozellestirme_degerleri?.map((value) => (
-          <TouchableOpacity
-            key={value.id}
-            style={[
-              styles.customizationOption,
-              selectedValue?.id === value.id && styles.selectedOption
-            ]}
-            onPress={() => handleCustomizationChange(option.id, value.id, value)}
-          >
-            <View style={styles.optionContent}>
-              <Text style={[
-                styles.optionText,
-                selectedValue?.id === value.id && styles.selectedOptionText
-              ]}>
-                {value.deger_adi}
-              </Text>
-              {value.ek_fiyat > 0 && (
-                <Text style={[
-                  styles.optionPrice,
-                  selectedValue?.id === value.id && styles.selectedOptionPrice
-                ]}>
-                  +{formatPrice(value.ek_fiyat)}
-                </Text>
-              )}
-            </View>
-            <View style={[
-              styles.radioButton,
-              selectedValue?.id === value.id && styles.selectedRadioButton
-            ]}>
-              {selectedValue?.id === value.id && (
-                <View style={styles.radioButtonInner} />
-              )}
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
-  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.sidebarButton}
-          onPress={() => setSidebarVisible(true)}
-        >
-          <Ionicons name="menu" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Ürün Detayı</Text>
-
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Ürün Detayı</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Ürün Görseli */}
         <View style={styles.imageContainer}>
-          {product.resim_path ? (
-            <Image source={{ uri: product.resim_path }} style={styles.image} />
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.image} />
           ) : (
             <View style={styles.placeholderImage}>
               <Ionicons name="cafe" size={80} color="#8B4513" />
@@ -232,13 +167,6 @@ export default function ProductDetailScreen() {
             </View>
           </View>
 
-          {/* Özelleştirme Seçenekleri */}
-          {customizationOptions.length > 0 && (
-            <View style={styles.customizationsContainer}>
-              <Text style={styles.sectionTitle}>Özelleştirme Seçenekleri</Text>
-              {customizationOptions.map(renderCustomizationOption)}
-            </View>
-          )}
 
           {/* Notlar */}
           <View style={styles.notesContainer}>
@@ -256,20 +184,20 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       {/* Alt Bar */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.quantityContainer}>
           <TouchableOpacity
             style={styles.quantityButton}
             onPress={() => setQuantity(Math.max(1, quantity - 1))}
           >
-            <Ionicons name="remove" size={20} color="#8B4513" />
+            <Ionicons name="remove" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
           </TouchableOpacity>
           <Text style={styles.quantityText}>{quantity}</Text>
           <TouchableOpacity
             style={styles.quantityButton}
             onPress={() => setQuantity(quantity + 1)}
           >
-            <Ionicons name="add" size={20} color="#8B4513" />
+            <Ionicons name="add" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
           </TouchableOpacity>
         </View>
 
@@ -278,7 +206,7 @@ export default function ProductDetailScreen() {
         </View>
 
         <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
-          <Ionicons name="cart" size={20} color="white" />
+          <Ionicons name="cart" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="white" />
           <Text style={styles.addToCartText}>Sepete Ekle</Text>
         </TouchableOpacity>
       </View>
@@ -297,9 +225,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingTop: isLargeScreen ? 60 : isMediumScreen ? 50 : 40,
+    paddingBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
     backgroundColor: '#8B4513',
   },
   sidebarButton: {
@@ -311,14 +239,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: isLargeScreen ? 22 : isMediumScreen ? 20 : 18,
     fontWeight: 'bold',
     color: 'white',
   },
-  backButton: {
+  headerSpacer: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
+  },
+  backButton: {
+    width: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
+    height: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
+    borderRadius: isLargeScreen ? 24 : isMediumScreen ? 22 : 20,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -326,9 +257,12 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: isLargeScreen ? 140 : isMediumScreen ? 120 : 100, // Bottom bar için boşluk
+  },
   imageContainer: {
     position: 'relative',
-    height: 250,
+    height: isLargeScreen ? 300 : isMediumScreen ? 280 : 250,
     backgroundColor: '#F3F4F6',
   },
   image: {
@@ -372,19 +306,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   content: {
-    padding: 20,
+    padding: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: isLargeScreen ? 28 : isMediumScreen ? 24 : 20,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 8,
+    marginBottom: isLargeScreen ? 12 : isMediumScreen ? 8 : 6,
   },
   description: {
-    fontSize: 16,
+    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     color: '#6B7280',
-    lineHeight: 24,
-    marginBottom: 16,
+    lineHeight: isLargeScreen ? 28 : isMediumScreen ? 24 : 20,
+    marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
   },
   infoRow: {
     flexDirection: 'row',
@@ -404,10 +338,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: isLargeScreen ? 22 : isMediumScreen ? 20 : 18,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 16,
+    marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
   },
   customizationSection: {
     marginBottom: 20,
@@ -479,33 +413,46 @@ const styles = StyleSheet.create({
   },
   notesInput: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
+    borderRadius: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    padding: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     color: '#374151',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     textAlignVertical: 'top',
+    minHeight: isLargeScreen ? 120 : isMediumScreen ? 100 : 80,
   },
   bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    paddingTop: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
   },
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
-    borderRadius: 25,
-    paddingHorizontal: 4,
+    borderRadius: isLargeScreen ? 30 : isMediumScreen ? 25 : 20,
+    paddingHorizontal: isLargeScreen ? 6 : isMediumScreen ? 4 : 2,
+    minWidth: isLargeScreen ? 120 : isMediumScreen ? 100 : 80,
   },
   quantityButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
+    height: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
+    borderRadius: isLargeScreen ? 24 : isMediumScreen ? 22 : 20,
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
@@ -516,19 +463,22 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   quantityText: {
-    fontSize: 18,
+    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginHorizontal: 16,
-    minWidth: 30,
+    marginHorizontal: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    minWidth: isLargeScreen ? 35 : isMediumScreen ? 30 : 25,
     textAlign: 'center',
   },
   priceContainer: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    minWidth: isLargeScreen ? 100 : isMediumScreen ? 80 : 60,
   },
   totalPrice: {
-    fontSize: 20,
+    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 12,
     fontWeight: 'bold',
     color: '#8B4513',
   },
@@ -536,19 +486,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#8B4513',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 25,
+    paddingHorizontal: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    paddingVertical: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
+    borderRadius: isLargeScreen ? 30 : isMediumScreen ? 25 : 20,
     shadowColor: '#8B4513',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+    minWidth: isLargeScreen ? 100 : isMediumScreen ? 85 : 70,
   },
   addToCartText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     fontWeight: 'bold',
-    marginLeft: 8,
+    marginLeft: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
   },
 });

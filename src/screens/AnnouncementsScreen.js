@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase, TABLES } from '../config/supabase';
 import TableHeader from '../components/TableHeader';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
+import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -25,6 +26,7 @@ const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 
 export default function AnnouncementsScreen() {
+  const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
@@ -141,13 +143,48 @@ export default function AnnouncementsScreen() {
     });
   };
 
-  const renderCampaign = (campaign) => (
-    <TouchableOpacity key={campaign.id} style={styles.campaignCard} activeOpacity={0.8}>
-      <View style={styles.campaignImageContainer}>
-        <View style={styles.campaignImagePlaceholder}>
-          <Ionicons name="gift" size={isSmallScreen ? 24 : isMediumScreen ? 28 : 32} color="white" />
+  const renderCampaign = (campaign) => {
+    // Resim URL'sini kontrol et
+    const getImageUri = () => {
+      const STORAGE_BUCKET = 'images';
+      let raw = (
+        campaign.resim_path ||
+        campaign.image_url ||
+        campaign.resimUrl ||
+        campaign.banner_url ||
+        campaign.gorsel_url ||
+        campaign.image
+      );
+      
+      if (!raw) return null;
+      if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
+      // Build public URL via Supabase Storage for path-only values
+      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(raw);
+      return data?.publicUrl || null;
+    };
+
+    const imageUri = getImageUri();
+
+    return (
+      <TouchableOpacity 
+        key={campaign.id} 
+        style={styles.campaignCard} 
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('AnnouncementDetail', { announcement: campaign })}
+      >
+        <View style={styles.campaignImageContainer}>
+          {imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.campaignImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.campaignImagePlaceholder}>
+              <Ionicons name="gift" size={isSmallScreen ? 24 : isMediumScreen ? 28 : 32} color="white" />
+            </View>
+          )}
         </View>
-      </View>
 
       {/* Sağ taraf - İçerik */}
       <View style={styles.campaignContentContainer}>
@@ -171,7 +208,8 @@ export default function AnnouncementsScreen() {
         </View>
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   const renderAnnouncement = (announcement) => {
     const now = new Date();
@@ -195,7 +233,7 @@ export default function AnnouncementsScreen() {
       badgeColor = '#E0E7FF';
       badgeTextColor = '#3730A3';
     } else if (isHistorical) {
-      badgeText = 'Geçmiş';
+      badgeText = 'Duyuru';
       badgeColor = '#FEF3C7';
       badgeTextColor = '#8B4513';
     }
@@ -222,7 +260,12 @@ export default function AnnouncementsScreen() {
     const imageUri = getImageUri();
 
     return (
-      <View key={announcement.id} style={styles.announcementCard}>
+      <TouchableOpacity 
+        key={announcement.id} 
+        style={styles.announcementCard}
+        onPress={() => navigation.navigate('AnnouncementDetail', { announcement })}
+        activeOpacity={0.7}
+      >
         {/* Sol taraf - Fotoğraf */}
         <View style={styles.announcementImageContainer}>
           {imageUri ? (
@@ -259,7 +302,7 @@ export default function AnnouncementsScreen() {
             </View>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -372,6 +415,11 @@ const styles = StyleSheet.create({
     width: isSmallScreen ? 80 : 90,
     height: isSmallScreen ? 80 : 90,
     marginRight: isSmallScreen ? 12 : 16,
+  },
+  campaignImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: isSmallScreen ? 8 : 10,
   },
   campaignImagePlaceholder: {
     width: '100%',

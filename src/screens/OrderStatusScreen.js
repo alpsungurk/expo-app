@@ -124,7 +124,6 @@ export default function OrderStatusScreen() {
   const loadOrderData = async () => {
     try {
       if (!orderId) {
-        Alert.alert('Hata', 'Sipariş ID bulunamadı.');
         setIsLoading(false);
         setIsRefreshing(false);
         return;
@@ -309,9 +308,7 @@ export default function OrderStatusScreen() {
         <View style={styles.readyContent}>
           {/* Hazır İkon */}
           <View style={styles.readyIconContainer}>
-            <View style={styles.readyIcon}>
-              <Ionicons name="checkmark-circle" size={120} color="#8B4513" />
-            </View>
+            <Ionicons name="checkmark-circle" size={120} color="#10B981" />
           </View>
 
           {/* Başlık */}
@@ -325,19 +322,19 @@ export default function OrderStatusScreen() {
           {/* Progress Bar */}
           <View style={styles.progressContainer}>
             <View style={styles.progressStep}>
-              <View style={[styles.progressIcon, styles.progressIconCompleted]}>
+              <View style={[styles.progressIcon, styles.progressIconActive]}>
                 <Ionicons name="cafe" size={24} color="white" />
               </View>
-              <Text style={styles.progressText}>Hazırlandı</Text>
+              <Text style={styles.progressText}>Hazırlanıyor</Text>
             </View>
             
             <View style={styles.progressLine} />
             
             <View style={styles.progressStep}>
-              <View style={[styles.progressIcon, styles.progressIconActive]}>
+              <View style={[styles.progressIcon, styles.progressIconCompleted]}>
                 <Ionicons name="checkmark-circle" size={24} color="white" />
               </View>
-              <Text style={styles.progressText}>Hazır</Text>
+              <Text style={[styles.progressText, styles.progressTextCompleted]}>Hazır</Text>
             </View>
           </View>
         </View>
@@ -382,61 +379,9 @@ export default function OrderStatusScreen() {
           {/* Animasyonlu İkon */}
           <View style={styles.preparingIconContainer}>
             <Animated.View 
-              style={[
-                styles.preparingIcon,
-                { transform: [{ scale: pulseAnim }] }
-              ]}
+              style={{ transform: [{ scale: pulseAnim }] }}
             >
               <Ionicons name="cafe" size={120} color="#8B4513" />
-            </Animated.View>
-            
-            {/* Dönen Malzemeler */}
-            <Animated.View 
-              style={[
-                styles.floatingIngredient1,
-                { 
-                  transform: [{ 
-                    rotate: pulseAnim.interpolate({
-                      inputRange: [1, 1.2],
-                      outputRange: ['0deg', '360deg']
-                    })
-                  }] 
-                }
-              ]}
-            >
-              <Ionicons name="ellipse" size={20} color="#A0522D" />
-            </Animated.View>
-            
-            <Animated.View 
-              style={[
-                styles.floatingIngredient2,
-                { 
-                  transform: [{ 
-                    rotate: pulseAnim.interpolate({
-                      inputRange: [1, 1.2],
-                      outputRange: ['360deg', '0deg']
-                    })
-                  }] 
-                }
-              ]}
-            >
-              <Ionicons name="ellipse" size={16} color="#8B4513" />
-            </Animated.View>
-            
-            <Animated.View 
-              style={[
-                styles.floatingIngredient3,
-                { 
-                  transform: [{ 
-                    rotate: pulseAnim.interpolate({
-                      inputRange: [1, 1.2],
-                      outputRange: ['0deg', '-360deg']
-                    })
-                  }] 
-                }
-              ]}
-            >
-              <Ionicons name="ellipse" size={18} color="#D2691E" />
             </Animated.View>
           </View>
 
@@ -645,15 +590,27 @@ export default function OrderStatusScreen() {
         </View>
 
         {/* Sipariş Detayları */}
-        <View style={styles.detailsCard}>
-          <Text style={styles.sectionTitle}>Sipariş Detayları</Text>
-          {orderDetails.map(renderOrderItem)}
+        <TouchableOpacity 
+          style={styles.detailsCard}
+          onPress={() => navigation.navigate('OrderDetail', { order, orderDetails })}
+          activeOpacity={0.7}
+        >
+          <View style={styles.detailsHeader}>
+            <Text style={styles.sectionTitle}>Sipariş Detayları</Text>
+            <Ionicons name="chevron-forward" size={20} color="#8B4513" />
+          </View>
+          {orderDetails.slice(0, 2).map(renderOrderItem)}
+          {orderDetails.length > 2 && (
+            <Text style={styles.moreItemsText}>
+              +{orderDetails.length - 2} ürün daha...
+            </Text>
+          )}
           
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Toplam Tutar:</Text>
             <Text style={styles.totalAmount}>{formatPrice(order.toplam_tutar)}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Notlar */}
         {order.notlar && (
@@ -821,6 +778,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+  },
+  detailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  moreItemsText: {
+    fontSize: 14,
+    color: '#8B4513',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginVertical: 8,
+    fontFamily: 'System',
   },
   orderItem: {
     flexDirection: 'row',
@@ -1041,52 +1012,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 40,
   },
-  preparingIcon: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  floatingIngredient1: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  floatingIngredient2: {
-    position: 'absolute',
-    bottom: 30,
-    left: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  floatingIngredient3: {
-    position: 'absolute',
-    top: 60,
-    left: -10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   preparingTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -1132,6 +1057,12 @@ const styles = StyleSheet.create({
   progressTextInactive: {
     color: '#9CA3AF',
   },
+  progressIconCompleted: {
+    backgroundColor: '#10B981',
+  },
+  progressTextCompleted: {
+    color: '#10B981',
+  },
   progressLine: {
     width: 60,
     height: 2,
@@ -1167,19 +1098,6 @@ const styles = StyleSheet.create({
   readyIconContainer: {
     marginBottom: 40,
   },
-  readyIcon: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
   readyTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -1195,8 +1113,5 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     lineHeight: 24,
     fontFamily: 'System',
-  },
-  progressIconCompleted: {
-    backgroundColor: '#10B981',
   },
 });
