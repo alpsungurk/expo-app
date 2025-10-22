@@ -1,10 +1,28 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Telefon token oluştur veya al
+const getOrCreatePhoneToken = async () => {
+  try {
+    let token = await AsyncStorage.getItem('phoneToken');
+    if (!token) {
+      // Benzersiz token oluştur: timestamp + random
+      token = `PHONE_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      await AsyncStorage.setItem('phoneToken', token);
+    }
+    return token;
+  } catch (error) {
+    console.error('Phone token hatası:', error);
+    return `PHONE_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  }
+};
 
 // Initial state
 const initialState = {
   items: [],
-  tableNumber: null,
-  qrToken: null,
+  tableId: null,      // Masa ID (masalar tablosundan)
+  tableNumber: null,  // Masa numarası (gösterim için)
+  phoneToken: null,   // Cihaz kimliği
 };
 
 // Action types
@@ -14,32 +32,34 @@ const CART_ACTIONS = {
   UPDATE_QUANTITY: 'UPDATE_QUANTITY',
   CLEAR_CART: 'CLEAR_CART',
   SET_TABLE_INFO: 'SET_TABLE_INFO',
+  CLEAR_TABLE_INFO: 'CLEAR_TABLE_INFO',
+  SET_PHONE_TOKEN: 'SET_PHONE_TOKEN',
 };
 
 // Reducer
 const cartReducer = (state, action) => {
   switch (action.type) {
     case CART_ACTIONS.ADD_ITEM: {
-      const { product, customizations, notes } = action.payload;
+      const { product, customizations, notes, quantity } = action.payload;
       const items = state.items;
       const existingItemIndex = items.findIndex(
         item => 
           item.id === product.id && 
-          JSON.stringify(item.customizations) === JSON.stringify(customizations)
+          JSON.stringify(item.customizations || {}) === JSON.stringify(customizations || {})
       );
 
       if (existingItemIndex > -1) {
         const updatedItems = [...items];
-        updatedItems[existingItemIndex].quantity += 1;
+        updatedItems[existingItemIndex].quantity += (quantity || 1);
         return { ...state, items: updatedItems };
       } else {
         const newItem = {
           id: product.id,
           name: product.ad,
           price: product.fiyat,
-          quantity: 1,
-          customizations,
-          notes,
+          quantity: quantity || 1,
+          customizations: customizations || {},
+          notes: notes || '',
           image: product.resim_path,
           preparationTime: product.hazirlanma_suresi || 5,
         };
@@ -75,8 +95,21 @@ const cartReducer = (state, action) => {
     case CART_ACTIONS.SET_TABLE_INFO:
       return { 
         ...state, 
-        tableNumber: action.payload.tableNumber, 
-        qrToken: action.payload.qrToken 
+        tableId: action.payload.tableId,
+        tableNumber: action.payload.tableNumber
+      };
+
+    case CART_ACTIONS.CLEAR_TABLE_INFO:
+      return {
+        ...state,
+        tableId: null,
+        tableNumber: null
+      };
+
+    case CART_ACTIONS.SET_PHONE_TOKEN:
+      return {
+        ...state,
+        phoneToken: action.payload
       };
 
     default:
@@ -91,10 +124,28 @@ const CartContext = createContext();
 export const CartProvider = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
 
-  const addItem = (product, customizations = {}, notes = '') => {
+  // Telefon token'ı yükle
+  useEffect(() => {
+    const loadPhoneToken = async () => {
+      const token = await getOrCreatePhoneToken();
+      dispatch({
+        type: CART_ACTIONS.SET_PHONE_TOKEN,
+        payload: token
+      });
+    };
+    loadPhoneToken();
+  }, []);
+
+  const addItem = (productData) => {
+    const { quantity, notes, ...product } = productData;
     dispatch({
       type: CART_ACTIONS.ADD_ITEM,
-      payload: { product, customizations, notes }
+      payload: { 
+        product, 
+        customizations: {}, 
+        notes: notes || '', 
+        quantity: quantity || 1 
+      }
     });
   };
 
@@ -116,24 +167,20 @@ export const CartProvider = ({ children }) => {
     dispatch({ type: CART_ACTIONS.CLEAR_CART });
   };
 
-  const setTableInfo = (tableNumber, qrToken) => {
+  const setTableInfo = (tableId, tableNumber) => {
     dispatch({
       type: CART_ACTIONS.SET_TABLE_INFO,
-      payload: { tableNumber, qrToken }
+      payload: { tableId, tableNumber }
     });
+  };
+
+  const clearTableInfo = () => {
+    dispatch({ type: CART_ACTIONS.CLEAR_TABLE_INFO });
   };
 
   const getTotalPrice = () => {
     return state.items.reduce((total, item) => {
-      let itemPrice = item.price;
-      
-      Object.values(item.customizations).forEach(customization => {
-        if (customization.price) {
-          itemPrice += customization.price;
-        }
-      });
-      
-      return total + (itemPrice * item.quantity);
+      return total + (item.price * item.quantity);
     }, 0);
   };
 
@@ -148,6 +195,7 @@ export const CartProvider = ({ children }) => {
     updateQuantity,
     clearCart,
     setTableInfo,
+    clearTableInfo,
     getTotalPrice,
     getTotalItems,
   };

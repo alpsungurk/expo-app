@@ -1,28 +1,48 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image, Animated, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../config/supabase';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 
-export default function ProductCard({ product, onPress, onAddToCart }) {
+export default function ProductCard({ product, onPress, onAddToCart, onProductDetail }) {
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Resim URL'sini Supabase Storage'dan al
+  const getImageUri = () => {
+    const STORAGE_BUCKET = 'images';
+    const resimPath = product.resim_path;
+    
+    if (!resimPath) return null;
+    
+    // Eğer zaten tam URL ise direkt kullan
+    if (typeof resimPath === 'string' && /^https?:\/\//i.test(resimPath)) {
+      return resimPath;
+    }
+    
+    // Supabase Storage'dan public URL oluştur
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(resimPath);
+    return data?.publicUrl || null;
+  };
+
+  const imageUri = getImageUri();
 
   useEffect(() => {
     // Staggered entrance animation
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: 1,
-        tension: 50,
-        friction: 7,
+        tension: 100,
+        friction: 8,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
-        duration: 400,
+        duration: 200,
         useNativeDriver: true,
       })
     ]).start();
@@ -39,6 +59,8 @@ export default function ProductCard({ product, onPress, onAddToCart }) {
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 0.95,
+      tension: 200,
+      friction: 8,
       useNativeDriver: true,
     }).start();
   };
@@ -46,8 +68,8 @@ export default function ProductCard({ product, onPress, onAddToCart }) {
   const handlePressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      tension: 50,
-      friction: 7,
+      tension: 200,
+      friction: 8,
       useNativeDriver: true,
     }).start();
   };
@@ -71,8 +93,8 @@ export default function ProductCard({ product, onPress, onAddToCart }) {
           styles.imageContainer,
           { height: isLargeScreen ? 200 : isMediumScreen ? 180 : 160 }
         ]}>
-          {product.resim_path ? (
-            <Image source={{ uri: product.resim_path }} style={styles.image} />
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.image} />
           ) : (
             <View style={styles.placeholderImage}>
               <Ionicons name="cafe" size={isLargeScreen ? 50 : isMediumScreen ? 45 : 40} color="#8B4513" />
@@ -171,7 +193,11 @@ export default function ProductCard({ product, onPress, onAddToCart }) {
               ]}
               onPress={(e) => {
                 e.stopPropagation();
-                onAddToCart(product);
+                if (onProductDetail) {
+                  onProductDetail(product);
+                } else {
+                  onAddToCart(product);
+                }
               }}
               activeOpacity={0.8}
             >

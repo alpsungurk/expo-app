@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../store/cartStore';
 import { useAppStore } from '../store/appStore';
+import { useNotification } from '../contexts/NotificationContext';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -12,6 +13,7 @@ const isLargeScreen = width >= 768;
 export default function TableHeader({ onQRScan, onSidebarPress }) {
   const { tableNumber, qrToken } = useCartStore();
   const { getSistemAyarı } = useAppStore();
+  const { showNotifications } = useNotification();
   
   const kafeAdi = getSistemAyarı('kafe_adi') || 'Kahve Dükkanı';
 
@@ -22,17 +24,27 @@ export default function TableHeader({ onQRScan, onSidebarPress }) {
           style={styles.sidebarButton}
           onPress={onSidebarPress}
         >
-          <Ionicons name="menu" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
+          <Ionicons name="menu" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
         </TouchableOpacity>
 
         <View style={styles.shopInfo}>
-          <Text style={styles.shopName}>☕ {kafeAdi}</Text>
+          <View style={styles.shopNameContainer}>
+            <Ionicons name="cafe" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
+            <Text style={styles.shopName}>{kafeAdi}</Text>
+          </View>
           {tableNumber ? (
-            <Text style={styles.tableInfo}>Masa {tableNumber}</Text>
+            <Text style={styles.tableInfo}>{tableNumber}</Text>
           ) : (
             <Text style={styles.tableInfo}>Masa seçilmedi</Text>
           )}
         </View>
+
+        <TouchableOpacity 
+          style={styles.notificationButton}
+          onPress={showNotifications}
+        >
+          <Ionicons name="notifications" size={isLargeScreen ? 20 : isMediumScreen ? 18 : 16} color="#8B4513" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -41,16 +53,14 @@ export default function TableHeader({ onQRScan, onSidebarPress }) {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#8B4513',
-    paddingTop: 35,
-    paddingBottom: 8,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowRadius: 4,
+    elevation: 4,
   },
   header: {
     flexDirection: 'row',
@@ -58,37 +68,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sidebarButton: {
-    width: isLargeScreen ? 42 : isMediumScreen ? 38 : 36,
-    height: isLargeScreen ? 42 : isMediumScreen ? 38 : 36,
-    borderRadius: isLargeScreen ? 21 : isMediumScreen ? 19 : 18,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    width: isLargeScreen ? 36 : isMediumScreen ? 34 : 32,
+    height: isLargeScreen ? 36 : isMediumScreen ? 34 : 32,
+    borderRadius: isLargeScreen ? 18 : isMediumScreen ? 17 : 16,
+    backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
   },
   shopInfo: {
     flex: 1,
     alignItems: 'center',
+    marginHorizontal: 16,
+  },
+  shopNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
   },
   shopName: {
-    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
+    fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20,
     fontWeight: 'bold',
     fontFamily: 'System',
     color: 'white',
-    marginBottom: 1,
+    marginLeft: 6,
     textAlign: 'center',
   },
   tableInfo: {
-    fontSize: isLargeScreen ? 12 : isMediumScreen ? 11 : 10,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
+    fontSize: isLargeScreen ? 15 : isMediumScreen ? 14 : 13,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '600',
     fontFamily: 'System',
     textAlign: 'center',
+  },
+  notificationButton: {
+    width: isLargeScreen ? 36 : isMediumScreen ? 34 : 32,
+    height: isLargeScreen ? 36 : isMediumScreen ? 34 : 32,
+    borderRadius: isLargeScreen ? 18 : isMediumScreen ? 17 : 16,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

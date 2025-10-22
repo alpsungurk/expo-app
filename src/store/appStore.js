@@ -12,6 +12,7 @@ const initialState = {
   categories: [],
   products: [],
   sistemAyarlari: [],
+  isProductModalOpen: false, // Product detail modal durumu
 };
 
 // Action types
@@ -25,7 +26,8 @@ const APP_ACTIONS = {
   SET_YENI_ONERILER: 'SET_YENI_ONERILER',
   SET_CATEGORIES: 'SET_CATEGORIES',
   SET_PRODUCTS: 'SET_PRODUCTS',
-  SET_SISTEM_AYARLARI: 'SET_SISTEM_AYARLARI'
+  SET_SISTEM_AYARLARI: 'SET_SISTEM_AYARLARI',
+  SET_PRODUCT_MODAL_OPEN: 'SET_PRODUCT_MODAL_OPEN'
 };
 
 // Reducer
@@ -51,6 +53,8 @@ const appReducer = (state, action) => {
       return { ...state, yeniOneriler: action.payload };
     case APP_ACTIONS.SET_SISTEM_AYARLARI:
       return { ...state, sistemAyarlari: action.payload };
+    case APP_ACTIONS.SET_PRODUCT_MODAL_OPEN:
+      return { ...state, isProductModalOpen: action.payload };
     default:
       return state;
   }
@@ -101,6 +105,10 @@ export const AppProvider = ({ children }) => {
 
   const setSistemAyarlari = (sistemAyarlari) => {
     dispatch({ type: APP_ACTIONS.SET_SISTEM_AYARLARI, payload: sistemAyarlari });
+  };
+
+  const setProductModalOpen = (isOpen) => {
+    dispatch({ type: APP_ACTIONS.SET_PRODUCT_MODAL_OPEN, payload: isOpen });
   };
   
 
@@ -181,6 +189,7 @@ export const AppProvider = ({ children }) => {
     getActiveYeniOneriler,
     setSistemAyarlari,
     getSistemAyarı,
+    setProductModalOpen,
   };
 
   return (

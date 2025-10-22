@@ -8,7 +8,8 @@ import {
   SafeAreaView,
   Dimensions,
   TextInput,
-  Modal 
+  Modal,
+  ScrollView
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,8 +31,37 @@ export default function QRScanScreen() {
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualTableNumber, setManualTableNumber] = useState('');
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const { setTableInfo, tableNumber } = useCartStore();
+  const [showCamera, setShowCamera] = useState(false);
+  const [showTableSelect, setShowTableSelect] = useState(false);
+  const [tables, setTables] = useState([]);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const { setTableInfo, clearTableInfo, tableNumber } = useCartStore();
   const navigation = useNavigation();
+
+  // Masaları yükle
+  useEffect(() => {
+    loadTables();
+  }, []);
+
+  const loadTables = async () => {
+    try {
+      const { data: tablesData, error } = await supabase
+        .from(TABLES.MASALAR)
+        .select('id, masa_no')
+        .eq('aktif', true)
+        .order('masa_no', { ascending: true });
+
+      if (error) {
+        console.error('Masalar yüklenirken hata:', error);
+        return;
+      }
+
+      setTables(tablesData || []);
+    } catch (error) {
+      console.error('Masalar yüklenirken hata:', error);
+    }
+  };
 
   const handleBarCodeScanned = async ({ type, data }) => {
     if (scanned) return;
@@ -41,19 +71,20 @@ export default function QRScanScreen() {
 
     try {
       // QR kod verisini parse et
-      let qrData;
+      let qrToken;
       try {
-        qrData = JSON.parse(data);
+        const qrData = JSON.parse(data);
+        qrToken = qrData.qr_token || data;
       } catch {
-        // JSON değilse direkt string olarak kabul et
-        qrData = { qr_token: data };
+        // JSON değilse direkt string olarak kabul et (qr_token)
+        qrToken = data;
       }
 
-      // Masa bilgilerini veritabanından al
+      // Masa bilgilerini veritabanından al (qr_token'a göre)
       const { data: tableData, error: tableError } = await supabase
         .from(TABLES.MASALAR)
         .select('*')
-        .eq('qr_token', qrData.qr_token || data)
+        .eq('qr_token', qrToken)
         .eq('aktif', true)
         .single();
 
@@ -61,8 +92,8 @@ export default function QRScanScreen() {
         throw new Error('Masa bulunamadı');
       }
 
-      // Masa bilgilerini store'a kaydet
-      setTableInfo(tableData.masa_no, tableData.qr_token);
+      // Masa bilgilerini store'a kaydet (ID ve numara)
+      setTableInfo(tableData.id, tableData.masa_no);
       
       Alert.alert(
         'Masa Bulundu! 🎉',
@@ -92,28 +123,290 @@ export default function QRScanScreen() {
     setScanned(false);
   };
 
-  const handleManualTableEntry = () => {
-    setManualTableNumber(tableNumber || '');
-    setShowManualModal(true);
+  const handleQRScanPress = async () => {
+    if (!permission?.granted) {
+      await requestPermission();
+    }
+    if (permission?.granted) {
+      setShowCamera(true);
+    }
   };
 
-  const handleManualSubmit = () => {
-    if (manualTableNumber && manualTableNumber.trim()) {
-      setTableInfo(manualTableNumber.trim(), `manual-${manualTableNumber.trim()}`);
-      setShowManualModal(false);
+  const handleTableSelectPress = () => {
+    setShowTableSelect(true);
+  };
+
+  const handleTableSelection = (table) => {
+    setSelectedTable(table);
+  };
+
+  const handleConfirmTableSelection = () => {
+    if (selectedTable) {
+      setTableInfo(selectedTable.id, selectedTable.masa_no);
+      setShowTableSelect(false);
+      
       Alert.alert(
-        'Masa Ayarlandı! 🎉',
-        `Masa ${manualTableNumber} için menüye yönlendiriliyorsunuz.`,
+        'Masa Seçildi! 🎉',
+        `Masa ${selectedTable.masa_no} için menüye yönlendiriliyorsunuz.`,
         [
           {
             text: 'Menüye Git',
             onPress: () => navigation.navigate('Menü')
+          },
+          {
+            text: 'Sepete Git',
+            onPress: () => navigation.navigate('Sepet')
           }
         ]
       );
     }
   };
 
+  const handleManualTableEntry = () => {
+    setManualTableNumber(tableNumber || '');
+    setShowManualModal(true);
+  };
+
+  const handleManualSubmit = async () => {
+    if (manualTableNumber && manualTableNumber.trim()) {
+      try {
+        // Manuel girilen masa numarasını database'de ara
+        const { data: tableData, error } = await supabase
+          .from(TABLES.MASALAR)
+          .select('*')
+          .eq('masa_no', manualTableNumber.trim())
+          .eq('aktif', true)
+          .single();
+
+        if (error || !tableData) {
+          Alert.alert('Hata', 'Masa bulunamadı. Lütfen geçerli bir masa numarası girin.');
+          return;
+        }
+
+        setTableInfo(tableData.id, tableData.masa_no);
+        setShowManualModal(false);
+        Alert.alert(
+          'Masa Ayarlandı! 🎉',
+          `Masa ${tableData.masa_no} için menüye yönlendiriliyorsunuz.`,
+          [
+            {
+              text: 'Menüye Git',
+              onPress: () => navigation.navigate('Menü')
+            }
+          ]
+        );
+      } catch (error) {
+        Alert.alert('Hata', 'Masa bilgisi alınamadı.');
+      }
+    }
+  };
+
+  const handleDeleteTable = () => {
+    console.log('Delete table button pressed');
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = () => {
+    clearTableInfo();
+    setSelectedTable(null);
+    setShowDeleteModal(false);
+    Alert.alert('Başarılı', 'Masa seçimi kaldırıldı.');
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+  };
+
+  // Ana seçenekler ekranı
+  if (!showCamera) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+
+        <View style={styles.mainContainer}>
+          <View style={styles.welcomeContainer}>
+            <Ionicons name="restaurant" size={isLargeScreen ? 80 : isMediumScreen ? 70 : 60} color="#8B4513" />
+            <Text style={styles.welcomeTitle}>Masa Seçimi</Text>
+            <Text style={styles.welcomeDescription}>
+              Sipariş vermek için masa seçimi yapın
+            </Text>
+          </View>
+
+          {(tableNumber || selectedTable) && (
+            <View style={styles.currentTableContainer}>
+              <View style={styles.currentTableInfo}>
+                <Ionicons name="restaurant" size={16} color="#8B4513" />
+                <Text style={styles.currentTableText}>
+                  Seçilen Masa: {selectedTable ? selectedTable.masa_no : tableNumber}
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.deleteTableButton}
+                onPress={handleDeleteTable}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="close-circle" size={26} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={styles.optionsContainer}>
+            <TouchableOpacity 
+              style={[styles.optionButton, styles.qrOptionButton]} 
+              onPress={handleQRScanPress}
+              disabled={isLoading}
+            >
+              <View style={styles.optionIconContainer}>
+                <Ionicons name="qr-code" size={isLargeScreen ? 40 : isMediumScreen ? 35 : 30} color="white" />
+              </View>
+              <Text style={styles.optionTitle}>QR Kod Tarayın</Text>
+              <Text style={styles.optionDescription}>
+                Masa üzerindeki QR kodu kameraya doğrultun
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.optionButton, styles.tableOptionButton]} 
+              onPress={handleTableSelectPress}
+              disabled={isLoading}
+            >
+              <View style={styles.optionIconContainerTable}>
+                <Ionicons name="list" size={isLargeScreen ? 40 : isMediumScreen ? 35 : 30} color="#8B4513" />
+              </View>
+              <Text style={[styles.optionTitle, styles.tableOptionTitle]}>Masa Seçin</Text>
+              <Text style={[styles.optionDescription, styles.tableOptionDescription]}>
+                Masa numarasını manuel olarak girin
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Masa Seçimi Modal */}
+        <Modal
+          visible={showTableSelect}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowTableSelect(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.tableSelectModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Masa Seçimi</Text>
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={() => setShowTableSelect(false)}
+                >
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.modalDescription}>
+                Lütfen masanızı seçin:
+              </Text>
+              
+              <ScrollView 
+                style={styles.tableList}
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={styles.tableListContent}
+              >
+                {tables.map((table) => (
+                  <TouchableOpacity
+                    key={table.id}
+                    style={[
+                      styles.tableItem,
+                      selectedTable?.id === table.id && styles.selectedTableItem
+                    ]}
+                    onPress={() => handleTableSelection(table)}
+                  >
+                    <View style={styles.tableItemContent}>
+                      <Ionicons 
+                        name="restaurant" 
+                        size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} 
+                        color={selectedTable?.id === table.id ? "white" : "#8B4513"} 
+                      />
+                      <Text style={[
+                        styles.tableItemText,
+                        selectedTable?.id === table.id && styles.selectedTableItemText
+                      ]}>
+                        Masa {table.masa_no}
+                      </Text>
+                    </View>
+                    {selectedTable?.id === table.id && (
+                      <Ionicons name="checkmark-circle" size={24} color="white" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setShowTableSelect(false)}
+                >
+                  <Text style={styles.modalCancelText}>İptal</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.modalSubmitButton,
+                    !selectedTable && styles.disabledButton
+                  ]}
+                  onPress={handleConfirmTableSelection}
+                  disabled={!selectedTable}
+                >
+                  <Text style={[
+                    styles.modalSubmitText,
+                    !selectedTable && styles.disabledButtonText
+                  ]}>Tamam</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Masa Silme Onay Modal */}
+        <Modal
+          visible={showDeleteModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={handleCancelDelete}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.deleteModalContent}>
+              <View style={styles.deleteModalHeader}>
+                <Ionicons name="warning" size={32} color="#EF4444" />
+                <Text style={styles.deleteModalTitle}>Masa Seçimini Kaldır</Text>
+              </View>
+              
+              <Text style={styles.deleteModalDescription}>
+                Seçilen masa bilgisini kaldırmak istediğinizden emin misiniz?
+              </Text>
+              
+              <View style={styles.deleteModalButtons}>
+                <TouchableOpacity
+                  style={styles.deleteModalCancelButton}
+                  onPress={handleCancelDelete}
+                >
+                  <Text style={styles.deleteModalCancelText}>İptal</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.deleteModalConfirmButton}
+                  onPress={handleConfirmDelete}
+                >
+                  <Text style={styles.deleteModalConfirmText}>Kaldır</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      </SafeAreaView>
+    );
+  }
+
+  // Kamera ekranı
   if (!permission) {
     return (
       <SafeAreaView style={styles.container}>
@@ -142,8 +435,8 @@ export default function QRScanScreen() {
           <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
             <Text style={styles.permissionButtonText}>İzin Ver</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.manualButton} onPress={handleManualTableEntry}>
-            <Text style={styles.manualButtonText}>Manuel Masa Girişi</Text>
+          <TouchableOpacity style={styles.manualButton} onPress={() => setShowCamera(false)}>
+            <Text style={styles.manualButtonText}>Geri Dön</Text>
           </TouchableOpacity>
         </View>
 
@@ -183,19 +476,40 @@ export default function QRScanScreen() {
         
         {tableNumber && (
           <View style={styles.currentTableContainer}>
-            <Ionicons name="restaurant" size={16} color="#8B4513" />
-            <Text style={styles.currentTableText}>
-              Mevcut Masa: {tableNumber}
-            </Text>
+            <View style={styles.currentTableInfo}>
+              <Ionicons name="restaurant" size={16} color="#8B4513" />
+              <Text style={styles.currentTableText}>
+                Mevcut Masa: {tableNumber}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.deleteTableButton}
+              onPress={handleDeleteTable}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="close-circle" size={26} color="#EF4444" />
+            </TouchableOpacity>
           </View>
         )}
         
-        {scanned && (
-          <TouchableOpacity style={styles.rescanButton} onPress={resetScanner}>
-            <Ionicons name="refresh" size={20} color="#8B4513" />
-            <Text style={styles.rescanText}>Tekrar Tara</Text>
+        <View style={styles.cameraButtons}>
+          <TouchableOpacity 
+            style={[styles.cameraButton, styles.backButton]} 
+            onPress={() => setShowCamera(false)}
+          >
+            <Ionicons name="arrow-back" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
+            <Text style={[styles.cameraButtonText, styles.backButtonText]}>Geri</Text>
           </TouchableOpacity>
-        )}
+          
+          <TouchableOpacity 
+            style={[styles.cameraButton, styles.rescanButton]} 
+            onPress={resetScanner}
+            disabled={isLoading}
+          >
+            <Ionicons name="refresh" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
+            <Text style={styles.cameraButtonText}>Tekrar Tara</Text>
+          </TouchableOpacity>
+        </View>
 
         {isLoading && (
           <View style={styles.loadingContainer}>
@@ -203,48 +517,6 @@ export default function QRScanScreen() {
           </View>
         )}
       </View>
-
-      {/* Manuel Masa Girişi Modal */}
-      <Modal
-        visible={showManualModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowManualModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Masa Numarası</Text>
-            <Text style={styles.modalDescription}>
-              Lütfen masa numaranızı girin:
-            </Text>
-            
-            <TextInput
-              style={styles.modalInput}
-              value={manualTableNumber}
-              onChangeText={setManualTableNumber}
-              placeholder="Örn: 5"
-              keyboardType="numeric"
-              autoFocus={true}
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowManualModal(false)}
-              >
-                <Text style={styles.modalCancelText}>İptal</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.modalSubmitButton}
-                onPress={handleManualSubmit}
-              >
-                <Text style={styles.modalSubmitText}>Tamam</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
@@ -254,12 +526,175 @@ export default function QRScanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#F9FAFB',
+  },
+  mainContainer: {
+    flex: 1,
+    padding: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    justifyContent: 'center',
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+    marginBottom: isLargeScreen ? 40 : isMediumScreen ? 32 : 24,
+  },
+  welcomeTitle: {
+    fontSize: isLargeScreen ? 28 : isMediumScreen ? 24 : 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    marginBottom: isLargeScreen ? 12 : isMediumScreen ? 8 : 6,
+  },
+  welcomeDescription: {
+    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: isLargeScreen ? 28 : isMediumScreen ? 24 : 20,
+  },
+  optionsContainer: {
+    gap: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+  },
+  optionButton: {
+    backgroundColor: 'white',
+    borderRadius: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    padding: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  qrOptionButton: {
+    borderColor: '#8B4513',
+  },
+  tableOptionButton: {
+    borderColor: '#E5E7EB',
+  },
+  optionIconContainer: {
+    width: isLargeScreen ? 80 : isMediumScreen ? 70 : 60,
+    height: isLargeScreen ? 80 : isMediumScreen ? 70 : 60,
+    borderRadius: isLargeScreen ? 40 : isMediumScreen ? 35 : 30,
+    backgroundColor: '#8B4513',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: isLargeScreen ? 16 : isMediumScreen ? 12 : 8,
+  },
+  optionIconContainerTable: {
+    width: isLargeScreen ? 80 : isMediumScreen ? 70 : 60,
+    height: isLargeScreen ? 80 : isMediumScreen ? 70 : 60,
+    borderRadius: isLargeScreen ? 40 : isMediumScreen ? 35 : 30,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: isLargeScreen ? 16 : isMediumScreen ? 12 : 8,
+  },
+  optionTitle: {
+    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+  },
+  tableOptionTitle: {
+    color: '#8B4513',
+  },
+  optionDescription: {
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+  },
+  tableOptionDescription: {
+    color: '#8B4513',
+  },
+  tableSelectModal: {
+    backgroundColor: 'white',
+    borderRadius: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    padding: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    width: '95%',
+    maxWidth: 450,
+    maxHeight: '85%',
+  },
+  tableList: {
+    maxHeight: isLargeScreen ? 400 : isMediumScreen ? 350 : 300,
+    marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+  },
+  tableListContent: {
+    paddingBottom: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
+  },
+  tableItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    padding: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    marginBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  selectedTableItem: {
+    backgroundColor: '#8B4513',
+    borderColor: '#8B4513',
+  },
+  tableItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  tableItemText: {
+    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+  },
+  selectedTableItemText: {
+    color: 'white',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: isLargeScreen ? 16 : isMediumScreen ? 12 : 8,
+  },
+  closeButton: {
+    padding: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+  },
+  cameraButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+  },
+  cameraButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    paddingVertical: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
+    borderRadius: isLargeScreen ? 25 : isMediumScreen ? 20 : 15,
+  },
+  backButton: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#8B4513',
+  },
+  cameraButtonText: {
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    fontWeight: 'bold',
+    marginLeft: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+  },
+  backButtonText: {
+    color: '#8B4513',
   },
   cameraContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000',
   },
   camera: {
     width: width,
@@ -329,17 +764,78 @@ const styles = StyleSheet.create({
   currentTableContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: 'rgba(139, 69, 19, 0.2)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
     marginBottom: 16,
   },
+  currentTableInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
   currentTableText: {
     color: '#8B4513',
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 6,
+  },
+  deleteTableButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginLeft: 8,
+    borderRadius: 25,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    paddingVertical: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    borderRadius: isLargeScreen ? 30 : isMediumScreen ? 25 : 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  qrButton: {
+    backgroundColor: '#8B4513',
+  },
+  menuButton: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#8B4513',
+  },
+  actionButtonText: {
+    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
+    fontWeight: 'bold',
+    marginLeft: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
+  },
+  menuButtonText: {
+    color: '#8B4513',
   },
   rescanButton: {
     flexDirection: 'row',
@@ -471,5 +967,68 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#D1D5DB',
+    borderColor: '#D1D5DB',
+  },
+  disabledButtonText: {
+    color: '#9CA3AF',
+  },
+  deleteModalContent: {
+    backgroundColor: 'white',
+    borderRadius: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    padding: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+  },
+  deleteModalTitle: {
+    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    textAlign: 'center',
+  },
+  deleteModalDescription: {
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    marginBottom: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: isLargeScreen ? 16 : isMediumScreen ? 12 : 8,
+  },
+  deleteModalCancelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    alignItems: 'center',
+  },
+  deleteModalCancelText: {
+    color: '#6B7280',
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    fontWeight: '600',
+  },
+  deleteModalConfirmButton: {
+    flex: 1,
+    backgroundColor: '#EF4444',
+    paddingVertical: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    alignItems: 'center',
+  },
+  deleteModalConfirmText: {
+    color: 'white',
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    fontWeight: '600',
   },
 });
