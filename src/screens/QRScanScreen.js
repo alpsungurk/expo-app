@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -9,12 +9,13 @@ import {
   Dimensions,
   TextInput,
   Modal,
-  ScrollView
+  ScrollView,
+  Animated
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../store/cartStore';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
 import TableHeader from '../components/TableHeader';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
@@ -39,10 +40,38 @@ export default function QRScanScreen() {
   const { setTableInfo, clearTableInfo, tableNumber } = useCartStore();
   const navigation = useNavigation();
 
+  // Animasyon değişkenleri
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+
   // Masaları yükle
   useEffect(() => {
     loadTables();
   }, []);
+
+  // Sayfa açılış animasyonu
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, []);
+
+  // Sayfa her açıldığında verileri yenile
+  useFocusEffect(
+    useCallback(() => {
+      loadTables();
+    }, [])
+  );
 
   const loadTables = async () => {
     try {
@@ -97,7 +126,7 @@ export default function QRScanScreen() {
       
       Alert.alert(
         'Masa Bulundu! 🎉',
-        `Masa ${tableData.masa_no} için menüye yönlendiriliyorsunuz.`,
+        ` ${tableData.masa_no} için menüye yönlendiriliyorsunuz.`,
         [
           {
             text: 'Menüye Git',
@@ -144,21 +173,6 @@ export default function QRScanScreen() {
     if (selectedTable) {
       setTableInfo(selectedTable.id, selectedTable.masa_no);
       setShowTableSelect(false);
-      
-      Alert.alert(
-        'Masa Seçildi! 🎉',
-        `Masa ${selectedTable.masa_no} için menüye yönlendiriliyorsunuz.`,
-        [
-          {
-            text: 'Menüye Git',
-            onPress: () => navigation.navigate('Menü')
-          },
-          {
-            text: 'Sepete Git',
-            onPress: () => navigation.navigate('Sepet')
-          }
-        ]
-      );
     }
   };
 
@@ -223,32 +237,37 @@ export default function QRScanScreen() {
       <SafeAreaView style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
-        <View style={styles.mainContainer}>
+        <Animated.View style={[
+          styles.mainContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}>
           <View style={styles.welcomeContainer}>
             <Ionicons name="restaurant" size={isLargeScreen ? 80 : isMediumScreen ? 70 : 60} color="#8B4513" />
-            <Text style={styles.welcomeTitle}>Masa Seçimi</Text>
-            <Text style={styles.welcomeDescription}>
-              Sipariş vermek için masa seçimi yapın
+            <Text style={styles.welcomeTitle}>
+              {(tableNumber || selectedTable) ? 
+                `${selectedTable ? selectedTable.masa_no : tableNumber}` : 
+                'Masa Seçimi'
+              }
             </Text>
-          </View>
-
-          {(tableNumber || selectedTable) && (
-            <View style={styles.currentTableContainer}>
-              <View style={styles.currentTableInfo}>
-                <Ionicons name="restaurant" size={16} color="#8B4513" />
-                <Text style={styles.currentTableText}>
-                  Seçilen Masa: {selectedTable ? selectedTable.masa_no : tableNumber}
-                </Text>
-              </View>
+            {(tableNumber || selectedTable) ? (
               <TouchableOpacity 
-                style={styles.deleteTableButton}
+                style={styles.deleteTableButtonMain}
                 onPress={handleDeleteTable}
                 activeOpacity={0.6}
               >
-                <Ionicons name="close-circle" size={26} color="#EF4444" />
+                <Ionicons name="trash" size={20} color="#EF4444" />
+                <Text style={styles.deleteTableButtonText}>Masa Sil</Text>
               </TouchableOpacity>
-            </View>
-          )}
+            ) : (
+              <Text style={styles.welcomeDescription}>
+                Sipariş vermek için masa seçimi yapın
+              </Text>
+            )}
+          </View>
+
 
           <View style={styles.optionsContainer}>
             <TouchableOpacity 
@@ -279,7 +298,7 @@ export default function QRScanScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Masa Seçimi Modal */}
         <Modal
@@ -328,7 +347,7 @@ export default function QRScanScreen() {
                         styles.tableItemText,
                         selectedTable?.id === table.id && styles.selectedTableItemText
                       ]}>
-                        Masa {table.masa_no}
+                        {table.masa_no}
                       </Text>
                     </View>
                     {selectedTable?.id === table.id && (
@@ -479,7 +498,7 @@ export default function QRScanScreen() {
             <View style={styles.currentTableInfo}>
               <Ionicons name="restaurant" size={16} color="#8B4513" />
               <Text style={styles.currentTableText}>
-                Mevcut Masa: {tableNumber}
+                 {tableNumber}
               </Text>
             </View>
             <TouchableOpacity 
@@ -761,27 +780,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
-  currentTableContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(139, 69, 19, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    marginBottom: 16,
-  },
-  currentTableInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  currentTableText: {
-    color: '#8B4513',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 6,
-  },
   deleteTableButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1030,5 +1028,24 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
     fontWeight: '600',
+  },
+  // Ana Masa Sil Butonu
+  deleteTableButtonMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    paddingVertical: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    marginTop: isLargeScreen ? 16 : isMediumScreen ? 12 : 8,
+  },
+  deleteTableButtonText: {
+    color: '#EF4444',
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    fontWeight: '600',
+    marginLeft: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
   },
 });

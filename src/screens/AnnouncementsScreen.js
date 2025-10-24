@@ -108,6 +108,7 @@ export default function AnnouncementsScreen() {
 
      
 
+
       setCampaigns(campaignsData || []);
       setAnnouncements(announcementsData || []);
       setYeniOneriler(suggestionsData || []);
@@ -170,7 +171,7 @@ export default function AnnouncementsScreen() {
         key={campaign.id} 
         style={styles.campaignCard} 
         activeOpacity={0.7}
-        onPress={() => navigation.navigate('AnnouncementDetail', { announcement: campaign })}
+        onPress={() => navigation.navigate('AnnouncementDetail', { announcement: { ...campaign, tur: 'kampanya' } })}
       >
         <View style={styles.campaignImageContainer}>
           {imageUri ? (
@@ -195,7 +196,9 @@ export default function AnnouncementsScreen() {
           </View>
         </View>
         
-        <Text style={styles.campaignDescription}>{campaign.aciklama}</Text>
+        <Text style={styles.campaignDescription}>
+          {campaign.aciklama || campaign.kampanya_aciklama || 'Kampanya detayları'}
+        </Text>
         
         <View style={styles.campaignFooter}>
           <View style={styles.campaignDate}>
@@ -263,7 +266,7 @@ export default function AnnouncementsScreen() {
       <TouchableOpacity 
         key={announcement.id} 
         style={styles.announcementCard}
-        onPress={() => navigation.navigate('AnnouncementDetail', { announcement })}
+        onPress={() => navigation.navigate('AnnouncementDetail', { announcement: { ...announcement, tur: 'duyuru' } })}
         activeOpacity={0.7}
       >
         {/* Sol taraf - Fotoğraf */}
@@ -290,7 +293,9 @@ export default function AnnouncementsScreen() {
             </View>
           </View>
           
-          <Text style={styles.announcementContent}>{announcement.icerik}</Text>
+          <Text style={styles.announcementContent}>
+            {announcement.icerik || announcement.duyuru_aciklama || 'Duyuru detayları'}
+          </Text>
 
           <View style={styles.announcementFooter}>
             <View style={styles.announcementDate}>
@@ -308,6 +313,7 @@ export default function AnnouncementsScreen() {
 
   const activeCampaigns = getActiveCampaigns();
   const activeAnnouncements = getActiveAnnouncements();
+
 
   return (
     <SafeAreaView style={styles.container}>

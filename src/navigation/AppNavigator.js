@@ -9,6 +9,7 @@ import { useAppStore } from '../store/appStore';
 
 import HomeScreen from '../screens/HomeScreen';
 import CartScreen from '../screens/CartScreen';
+import EditCartItemScreen from '../screens/EditCartItemScreen';
 import OrderStatusScreen from '../screens/OrderStatusScreen';
 import OrderDetailScreen from '../screens/OrderDetailScreen';
 import QRScanScreen from '../screens/QRScanScreen';
@@ -22,6 +23,49 @@ function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="HomeMain" component={HomeScreen} />
+      <Stack.Screen 
+        name="OrderDetail" 
+        component={OrderDetailScreen}
+        options={{
+          presentation: 'modal',
+          gestureEnabled: true,
+          gestureDirection: 'vertical',
+          cardStyleInterpolator: ({ current, layouts }) => {
+            return {
+              cardStyle: {
+                transform: [
+                  {
+                    translateY: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.height, 0],
+                    }),
+                  },
+                ],
+                opacity: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1],
+                }),
+              },
+            };
+          },
+          transitionSpec: {
+            open: {
+              animation: 'timing',
+              config: {
+                duration: 350,
+                useNativeDriver: true,
+              },
+            },
+            close: {
+              animation: 'timing',
+              config: {
+                duration: 350,
+                useNativeDriver: true,
+              },
+            },
+          },
+        }}
+      />
     </Stack.Navigator>
   );
 }
@@ -30,7 +74,59 @@ function CartStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CartMain" component={CartScreen} />
+      <Stack.Screen name="EditCartItem" component={EditCartItemScreen} />
       <Stack.Screen name="OrderStatus" component={OrderStatusScreen} />
+      <Stack.Screen 
+        name="OrderDetail" 
+        component={OrderDetailScreen}
+        options={{
+          presentation: 'modal',
+          gestureEnabled: true,
+          gestureDirection: 'vertical',
+          cardStyleInterpolator: ({ current, layouts }) => {
+            return {
+              cardStyle: {
+                transform: [
+                  {
+                    translateY: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.height, 0],
+                    }),
+                  },
+                ],
+                opacity: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1],
+                }),
+              },
+            };
+          },
+          transitionSpec: {
+            open: {
+              animation: 'timing',
+              config: {
+                duration: 350,
+                useNativeDriver: true,
+              },
+            },
+            close: {
+              animation: 'timing',
+              config: {
+                duration: 350,
+                useNativeDriver: true,
+              },
+            },
+          },
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+function OrderStatusStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="OrderStatusMain" component={OrderStatusScreen} />
       <Stack.Screen 
         name="OrderDetail" 
         component={OrderDetailScreen}
@@ -156,7 +252,7 @@ function AnnouncementsStack() {
 
 export default function AppNavigator() {
   const { getTotalItems } = useCartStore();
-  const { isProductModalOpen } = useAppStore();
+  const { isProductModalOpen, getActiveOrdersCount } = useAppStore();
   const insets = useSafeAreaInsets();
 
   return (
@@ -203,22 +299,37 @@ export default function AppNavigator() {
         <Tab.Screen 
           name="Menü" 
           component={HomeStack}
-          options={{
+          options={({ route }) => ({
             tabBarBadge: undefined,
-            tabBarStyle: isProductModalOpen ? { display: 'none' } : {
-              paddingBottom: Math.max(insets.bottom, 10),
-              paddingTop: 10,
-              height: 70 + Math.max(insets.bottom, 0),
-              borderTopWidth: 1,
-              borderTopColor: '#E5E7EB',
-              backgroundColor: '#FFFFFF',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 8,
-              elevation: 8,
-            },
-          }}
+            tabBarStyle: ((route) => {
+              const routeName = getFocusedRouteNameFromRoute(route) ?? 'HomeMain';
+              
+              // OrderDetail ekranındaysa tab bar'ı gizle
+              if (routeName === 'OrderDetail') {
+                return { display: 'none' };
+              }
+              
+              // Product modal açıksa tab bar'ı gizle
+              if (isProductModalOpen) {
+                return { display: 'none' };
+              }
+              
+              // Diğer durumlarda normal tab bar
+              return {
+                paddingBottom: Math.max(insets.bottom, 10),
+                paddingTop: 10,
+                height: 70 + Math.max(insets.bottom, 0),
+                borderTopWidth: 1,
+                borderTopColor: '#E5E7EB',
+                backgroundColor: '#FFFFFF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 8,
+              };
+            })(route),
+          })}
         />
         <Tab.Screen 
           name="Sepet" 
@@ -266,10 +377,40 @@ export default function AppNavigator() {
         />
         <Tab.Screen 
           name="Siparişlerim" 
-          component={OrderStatusScreen}
-          options={{
-            tabBarBadge: undefined,
-          }}
+          component={OrderStatusStack}
+          options={({ route }) => ({
+            tabBarBadge: getActiveOrdersCount() > 0 ? getActiveOrdersCount() : undefined,
+            tabBarBadgeStyle: {
+              backgroundColor: '#F59E0B', // Turuncu - beklemede/hazırlanıyor rengi
+              color: 'white',
+              fontSize: 12,
+              fontWeight: 'bold',
+              fontFamily: 'System',
+            },
+            tabBarStyle: ((route) => {
+              const routeName = getFocusedRouteNameFromRoute(route) ?? 'OrderStatusMain';
+              
+              // OrderDetail ekranındaysa tab bar'ı gizle
+              if (routeName === 'OrderDetail') {
+                return { display: 'none' };
+              }
+              
+              // Diğer durumlarda normal tab bar
+              return {
+                paddingBottom: Math.max(insets.bottom, 10),
+                paddingTop: 10,
+                height: 70 + Math.max(insets.bottom, 0),
+                borderTopWidth: 1,
+                borderTopColor: '#E5E7EB',
+                backgroundColor: '#FFFFFF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 8,
+              };
+            })(route),
+          })}
         />
             <Tab.Screen 
           name="Duyurular" 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -8,16 +8,17 @@ import {
   SafeAreaView,
   Alert,
   RefreshControl,
-  Modal,
   Dimensions,
-  Animated
+  Animated,
+  ActivityIndicator
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
 import { useAppStore } from '../store/appStore';
 import TableHeader from '../components/TableHeader';
-import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
+import Sidebar from '../components/Sidebar';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -54,131 +55,174 @@ const ORDER_STATUSES = {
     color: '#EF4444', 
     icon: 'close-circle-outline',
     description: 'Siparişiniz iptal edildi'
+  },
+  siparis_yok: { 
+    label: 'Sipariş Yok', 
+    color: '#6B7280', 
+    icon: 'document-outline',
+    description: 'Henüz bir siparişiniz bulunmuyor'
   }
 };
 
 export default function OrderStatusScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const { orderId } = route.params || { orderId: null };
   
-  const [order, setOrder] = useState(null);
-  const [orderDetails, setOrderDetails] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [estimatedTime, setEstimatedTime] = useState(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+
+  // Aktif sipariş sayısını hesapla (beklemede, hazırlanıyor, hazır)
+  const getActiveOrdersCount = () => {
+    return orders.filter(order => 
+      ['beklemede', 'hazirlaniyor', 'hazir'].includes(order.durum)
+    ).length;
+  };
+  const [phoneToken, setPhoneToken] = useState(null);
   
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const { currentOrder, setCurrentOrder, activeOrder, setActiveOrder } = useAppStore();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const { currentOrder, setCurrentOrder, activeOrder, setActiveOrder, setAllOrders } = useAppStore();
 
+  // Phone token'ı al
   useEffect(() => {
-    loadOrderData();
-    
-    // Gerçek zamanlı güncellemeler için subscription
-    const subscription = supabase
-      .channel('order-updates')
-      .on('postgres_changes', 
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: TABLES.SIPARISLER,
-          filter: `id=eq.${orderId}`
-        }, 
-        (payload) => {
-          setOrder(payload.new);
-          setCurrentOrder(payload.new);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
+    const getPhoneToken = async () => {
+      try {
+        const token = await AsyncStorage.getItem('phoneToken');
+        console.log('Phone Token:', token);
+        setPhoneToken(token);
+      } catch (error) {
+        console.error('Phone token alma hatası:', error);
+      }
     };
-  }, [orderId]);
+    getPhoneToken();
+  }, []);
 
-  // Sipariş durumu animasyonu
   useEffect(() => {
-    if (activeOrder && activeOrder.durum === 'hazirlaniyor') {
-      const pulseAnimation = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.2,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      pulseAnimation.start();
-      return () => pulseAnimation.stop();
-    } else {
-      pulseAnim.setValue(1);
-    }
-  }, [activeOrder]);
+    if (phoneToken) {
+      loadOrdersData();
+      
+      // Gerçek zamanlı güncellemeler için subscription
+      const subscription = supabase
+        .channel('orders-updates')
+        .on('postgres_changes', 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: TABLES.SIPARISLER
+          }, 
+          (payload) => {
+            loadOrdersData();
+          }
+        )
+        .subscribe();
 
-  const loadOrderData = async () => {
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [phoneToken]);
+
+  // Sayfa açılış animasyonu
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, []);
+
+  // Sayfa her açıldığında verileri yenile
+  useFocusEffect(
+    useCallback(() => {
+      if (phoneToken) {
+        loadOrdersData();
+      }
+    }, [phoneToken])
+  );
+
+  const loadOrdersData = async () => {
     try {
-      if (!orderId) {
+      if (!phoneToken) {
+        console.log('Phone token bulunamadı, siparişler yüklenemiyor');
         setIsLoading(false);
         setIsRefreshing(false);
         return;
       }
 
-      // Sipariş bilgilerini yükle
-      const { data: orderData, error: orderError } = await supabase
+      console.log('Siparişler yükleniyor, token:', phoneToken);
+
+      // Telefon token'a göre tüm siparişleri yükle
+      const { data: ordersData, error: ordersError } = await supabase
         .from(TABLES.SIPARISLER)
-        .select('*')
-        .eq('id', orderId)
-        .single();
-
-      if (orderError) throw orderError;
-
-      // Sipariş detaylarını yükle
-      const { data: orderDetailsData, error: detailsError } = await supabase
-        .from(TABLES.SIPARIS_DETAYLARI)
         .select(`
           *,
-          urunler (
-            ad,
-            fiyat,
-            resim_path
+          siparis_detaylari (
+            id,
+            adet,
+            toplam_fiyat,
+            urunler (
+              ad,
+              fiyat
+            )
           )
         `)
-        .eq('siparis_id', orderId);
+        .eq('telefon_token', phoneToken)
+        .order('olusturma_tarihi', { ascending: false });
 
-      if (detailsError) throw detailsError;
+      if (ordersError) throw ordersError;
 
-      setOrder(orderData);
-      setOrderDetails(orderDetailsData || []);
-      calculateEstimatedTime(orderDetailsData || []);
+      console.log('Bulunan sipariş sayısı:', ordersData?.length || 0);
+      console.log('Siparişler:', ordersData);
+
+      setOrders(ordersData || []);
+      
+      // Tüm siparişleri AppStore'a kaydet
+      setAllOrders(ordersData || []);
+
+      // Aktif siparişi güncelle (beklemede, hazırlanıyor veya hazır olan ilk sipariş)
+      const activeOrderData = ordersData?.find(o => 
+        ['beklemede', 'hazirlaniyor', 'hazir'].includes(o.durum)
+      );
+      
+      if (activeOrderData) {
+        console.log('Aktif sipariş bulundu:', activeOrderData.siparis_no);
+        setActiveOrder(activeOrderData);
+      } else {
+        console.log('Aktif sipariş bulunamadı');
+        setActiveOrder(null);
+      }
 
     } catch (error) {
-      console.error('Sipariş verileri yükleme hatası:', error);
-      Alert.alert('Hata', 'Sipariş bilgileri yüklenirken bir hata oluştu.');
+      console.error('Siparişler yükleme hatası:', error);
+      Alert.alert('Hata', 'Siparişler yüklenirken bir hata oluştu.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  const calculateEstimatedTime = (details) => {
-    const totalPreparationTime = details.reduce((total, detail) => {
+  const calculateEstimatedTime = (orderDetails) => {
+    const totalPreparationTime = orderDetails.reduce((total, detail) => {
       return total + (detail.urunler?.hazirlanma_suresi || 5) * detail.adet;
     }, 0);
     
     // Ortalama hazırlık süresi + 5 dakika buffer
-    const estimatedMinutes = Math.max(totalPreparationTime + 5, 10);
-    setEstimatedTime(estimatedMinutes);
+    return Math.max(totalPreparationTime + 5, 10);
   };
 
   const onRefresh = () => {
     setIsRefreshing(true);
-    loadOrderData();
+    loadOrdersData();
   };
 
   const formatPrice = (price) => {
@@ -200,259 +244,99 @@ export default function OrderStatusScreen() {
     return ORDER_STATUSES[status] || ORDER_STATUSES.beklemede;
   };
 
-  const renderStatusStep = (status, isActive, isCompleted) => {
-    const statusInfo = getStatusInfo(status);
-    
-    return (
-      <View key={status} style={styles.statusStep}>
-        <View style={[
-          styles.statusIcon,
-          isCompleted && { backgroundColor: '#10B981' },
-          isActive && { backgroundColor: statusInfo.color },
-          !isActive && !isCompleted && { backgroundColor: '#E5E7EB' }
-        ]}>
-          <Ionicons 
-            name={statusInfo.icon} 
-            size={20} 
-            color={isCompleted || isActive ? 'white' : '#9CA3AF'} 
-          />
-        </View>
-        <View style={styles.statusContent}>
-          <Text style={[
-            styles.statusLabel,
-            isActive && { color: statusInfo.color, fontWeight: 'bold' },
-            isCompleted && { color: '#10B981', fontWeight: 'bold' }
-          ]}>
-            {statusInfo.label}
-          </Text>
-          {isActive && (
-            <Text style={styles.statusDescription}>
-              {statusInfo.description}
-            </Text>
-          )}
-        </View>
-      </View>
-    );
-  };
-
-  const renderOrderItem = (item) => (
-    <View key={item.id} style={styles.orderItem}>
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName}>{item.urunler?.ad || 'Ürün'}</Text>
-        <Text style={styles.itemQuantity}>x{item.adet}</Text>
-      </View>
-      <Text style={styles.itemPrice}>{formatPrice(item.toplam_fiyat)}</Text>
-    </View>
-  );
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Sipariş bilgileri yükleniyor...</Text>
+          <ActivityIndicator size="large" color="#8B4513" />
         </View>
 
-        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </SafeAreaView>
     );
   }
 
-  // Test fonksiyonları
-  const setTestOrder = (status) => {
-    if (status === null) {
-      setActiveOrder(null);
-    } else {
-      setActiveOrder({
-        id: 1,
-        siparis_no: 'TEST-001',
-        durum: status,
-        olusturma_tarihi: new Date().toISOString(),
-        qr_token: 'test-table'
-      });
-    }
+  // Sipariş kartı render fonksiyonu
+  const renderOrderCard = (order) => {
+    const statusInfo = getStatusInfo(order.durum);
+    const itemCount = order.siparis_detaylari?.length || 0;
+    const estimatedTime = calculateEstimatedTime(order.siparis_detaylari || []);
+
+    return (
+      <TouchableOpacity 
+        key={order.id}
+        style={styles.orderCard}
+        onPress={() => navigation.navigate('OrderDetail', { 
+          order, 
+          orderDetails: order.siparis_detaylari 
+        })}
+        activeOpacity={0.7}
+      >
+        {/* Üst Kısım - Sipariş No ve Durum */}
+        <View style={styles.orderCardHeader}>
+          <View style={styles.orderCardLeft}>
+            <Ionicons 
+              name={statusInfo.icon} 
+              size={24} 
+              color={statusInfo.color} 
+            />
+            <View style={styles.orderCardInfo}>
+              <Text style={styles.orderCardNumber}>#{order.siparis_no}</Text>
+              <Text style={styles.orderCardDate}>{formatDate(order.olusturma_tarihi)}</Text>
+            </View>
+          </View>
+          
+          <View style={[
+            styles.orderCardBadge,
+            { backgroundColor: statusInfo.color }
+          ]}>
+            <Text style={styles.orderCardBadgeText}>{statusInfo.label}</Text>
+          </View>
+        </View>
+
+        {/* Orta Kısım - Ürün Sayısı ve Tutar */}
+        <View style={styles.orderCardBody}>
+          <View style={styles.orderCardDetail}>
+            <Ionicons name="fast-food-outline" size={16} color="#6B7280" />
+            <Text style={styles.orderCardDetailText}>{itemCount} ürün</Text>
+          </View>
+          
+          {['beklemede', 'hazirlaniyor'].includes(order.durum) && (
+            <View style={styles.orderCardDetail}>
+              <Ionicons name="time-outline" size={16} color="#6B7280" />
+              <Text style={styles.orderCardDetailText}>~{estimatedTime} dk</Text>
+            </View>
+          )}
+          
+          <View style={styles.orderCardDetail}>
+            <Text style={styles.orderCardPrice}>{formatPrice(order.toplam_tutar)}</Text>
+          </View>
+        </View>
+
+        {/* Alt Kısım - Durum Açıklaması */}
+        <View style={styles.orderCardFooter}>
+          <Text style={[styles.orderCardDescription, { color: statusInfo.color }]}>
+            {statusInfo.description}
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </View>
+      </TouchableOpacity>
+    );
   };
 
-  // Hazırlandı durumu için özel ekran
-  if (activeOrder && activeOrder.durum === 'hazir') {
-    return (
-      <SafeAreaView style={styles.readyContainer}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
-
-        {/* Test Butonları - Geliştirme için */}
-        <View style={styles.testButtonsContainer}>
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#FEF3C7' }]}
-            onPress={() => setTestOrder('hazirlaniyor')}
-          >
-            <Text style={[styles.testButtonText, { color: '#8B4513' }]}>Hazırlanıyor</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#DCFCE7' }]}
-            onPress={() => setTestOrder('hazir')}
-          >
-            <Text style={[styles.testButtonText, { color: '#166534' }]}>Hazırlandı</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#F3F4F6' }]}
-            onPress={() => setTestOrder(null)}
-          >
-            <Text style={[styles.testButtonText, { color: '#6B7280' }]}>Sipariş Yok</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Hazırlandı Ekranı */}
-        <View style={styles.readyContent}>
-          {/* Hazır İkon */}
-          <View style={styles.readyIconContainer}>
-            <Ionicons name="checkmark-circle" size={120} color="#10B981" />
-          </View>
-
-          {/* Başlık */}
-          <Text style={styles.readyTitle}>Siparişiniz Hazır!</Text>
-          
-          {/* Açıklama */}
-          <Text style={styles.readyDescription}>
-            Kahve verilen sipariş masanıza getirilecek
-          </Text>
-
-          {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressStep}>
-              <View style={[styles.progressIcon, styles.progressIconActive]}>
-                <Ionicons name="cafe" size={24} color="white" />
-              </View>
-              <Text style={styles.progressText}>Hazırlanıyor</Text>
-            </View>
-            
-            <View style={styles.progressLine} />
-            
-            <View style={styles.progressStep}>
-              <View style={[styles.progressIcon, styles.progressIconCompleted]}>
-                <Ionicons name="checkmark-circle" size={24} color="white" />
-              </View>
-              <Text style={[styles.progressText, styles.progressTextCompleted]}>Hazır</Text>
-            </View>
-          </View>
-        </View>
-
-        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-      </SafeAreaView>
-    );
-  }
-
-  // Hazırlanıyor durumu için özel animasyonlu ekran
-  if (activeOrder && activeOrder.durum === 'hazirlaniyor') {
-    return (
-      <SafeAreaView style={styles.preparingContainer}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
-
-        {/* Test Butonları - Geliştirme için */}
-        <View style={styles.testButtonsContainer}>
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#FEF3C7' }]}
-            onPress={() => setTestOrder('hazirlaniyor')}
-          >
-            <Text style={[styles.testButtonText, { color: '#8B4513' }]}>Hazırlanıyor</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#DCFCE7' }]}
-            onPress={() => setTestOrder('hazir')}
-          >
-            <Text style={[styles.testButtonText, { color: '#166534' }]}>Hazırlandı</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#F3F4F6' }]}
-            onPress={() => setTestOrder(null)}
-          >
-            <Text style={[styles.testButtonText, { color: '#6B7280' }]}>Sipariş Yok</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Hazırlanıyor Animasyonlu Ekran */}
-        <View style={styles.preparingContent}>
-          {/* Animasyonlu İkon */}
-          <View style={styles.preparingIconContainer}>
-            <Animated.View 
-              style={{ transform: [{ scale: pulseAnim }] }}
-            >
-              <Ionicons name="cafe" size={120} color="#8B4513" />
-            </Animated.View>
-          </View>
-
-          {/* Başlık */}
-          <Text style={styles.preparingTitle}>Şef Siparişinizi Hazırlıyor</Text>
-          
-          {/* Açıklama */}
-          <Text style={styles.preparingDescription}>
-            Kahve verilen sipariş hazırlanıyor
-          </Text>
-
-          {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressStep}>
-              <View style={[styles.progressIcon, styles.progressIconActive]}>
-                <Ionicons name="cafe" size={24} color="white" />
-              </View>
-              <Text style={styles.progressText}>Hazırlanıyor</Text>
-            </View>
-            
-            <View style={styles.progressLine} />
-            
-            <View style={styles.progressStep}>
-              <View style={styles.progressIcon}>
-                <Ionicons name="checkmark-circle" size={24} color="#9CA3AF" />
-              </View>
-              <Text style={[styles.progressText, styles.progressTextInactive]}>Hazır</Text>
-            </View>
-          </View>
-
-        </View>
-
-        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-      </SafeAreaView>
-    );
-  }
-
-  if (!order) {
+  // Sipariş yoksa
+  if (!isLoading && orders.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
-        {/* Test Butonları - Geliştirme için */}
-        <View style={styles.testButtonsContainer}>
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#FEF3C7' }]}
-            onPress={() => setTestOrder('hazirlaniyor')}
-          >
-            <Text style={[styles.testButtonText, { color: '#8B4513' }]}>Hazırlanıyor</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#DCFCE7' }]}
-            onPress={() => setTestOrder('hazir')}
-          >
-            <Text style={[styles.testButtonText, { color: '#166534' }]}>Hazırlandı</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.testButton, { backgroundColor: '#F3F4F6' }]}
-            onPress={() => setTestOrder(null)}
-          >
-            <Text style={[styles.testButtonText, { color: '#6B7280' }]}>Sipariş Yok</Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.emptyContainer}>
-          <Ionicons name="receipt-outline" size={80} color="#D1D5DB" />
-          <Text style={styles.emptyTitle}>Aktif Siparişiniz Yok</Text>
+          <Ionicons name="document-outline" size={80} color="#6B7280" />
+          <Text style={styles.emptyTitle}>Sipariş Yok</Text>
           <Text style={styles.emptyDescription}>
-            Henüz aktif bir siparişiniz bulunmuyor. Yeni sipariş vermek için menüye göz atabilirsiniz.
+            Henüz bir siparişiniz bulunmuyor. Yeni sipariş vermek için menüye göz atabilirsiniz.
           </Text>
           <TouchableOpacity 
             style={styles.backToMenuButton}
@@ -462,184 +346,47 @@ export default function OrderStatusScreen() {
           </TouchableOpacity>
         </View>
 
-        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </SafeAreaView>
     );
   }
 
-  const currentStatus = order.durum;
-  const statusOrder = ['beklemede', 'hazirlaniyor', 'hazir', 'teslim_edildi'];
-  const currentIndex = statusOrder.indexOf(currentStatus);
-
+  // Ana sipariş listesi ekranı
   return (
     <SafeAreaView style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
-      <ScrollView 
-        style={styles.scrollView}
+      <Animated.ScrollView 
+        style={[
+          styles.scrollView,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Sipariş Durumu Göstergesi */}
-        {activeOrder && (
-          <View style={styles.orderStatusContainer}>
-            <Animated.View 
-              style={[
-                styles.orderStatusCard,
-                { 
-                  backgroundColor: activeOrder.durum === 'hazir' ? '#DCFCE7' : '#FEF3C7',
-                  transform: [{ scale: activeOrder.durum === 'hazirlaniyor' ? pulseAnim : 1 }]
-                }
-              ]}
-            >
-              <View style={styles.orderStatusContent}>
-                <Animated.View 
-                  style={[
-                    styles.orderStatusIcon,
-                    { 
-                      backgroundColor: activeOrder.durum === 'hazir' ? '#10B981' : '#F59E0B',
-                    transform: [{ rotate: activeOrder.durum === 'hazirlaniyor' ? pulseAnim.interpolate({
-                      inputRange: [1, 1.2],
-                      outputRange: ['0deg', '360deg']
-                    }) : '0deg' }]
-                    }
-                  ]}
-                >
-                  <Ionicons 
-                    name={activeOrder.durum === 'hazir' ? 'checkmark' : 'cafe'} 
-                    size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} 
-                    color="white" 
-                  />
-                </Animated.View>
-                
-                <View style={styles.orderStatusTextContainer}>
-                  <Text style={[
-                    styles.orderStatusTitle,
-                    { 
-                      color: activeOrder.durum === 'hazir' ? '#166534' : '#8B4513',
-                      fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16
-                    }
-                  ]}>
-                    {activeOrder.durum === 'hazir' ? 'Siparişiniz Hazır!' : 'Siparişiniz Hazırlanıyor'}
-                  </Text>
-                  <Text style={[
-                    styles.orderStatusSubtitle,
-                    { 
-                      color: activeOrder.durum === 'hazir' ? '#166534' : '#8B4513',
-                      fontSize: isLargeScreen ? 14 : isMediumScreen ? 13 : 12
-                    }
-                  ]}>
-                    {activeOrder.durum === 'hazir' ? 'Masanıza getirilecek' : 'Lütfen bekleyin...'}
-                  </Text>
-                </View>
-              </View>
-            </Animated.View>
-          </View>
-        )}
+        {/* Aktif Sipariş Durumu Göstergesi - Kaldırıldı */}
 
-        {/* Sipariş Özeti */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryHeader}>
-            <Text style={styles.orderNumber}>#{order.siparis_no}</Text>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusInfo(currentStatus).color }
-            ]}>
-              <Text style={styles.statusBadgeText}>
-                {getStatusInfo(currentStatus).label}
-              </Text>
-            </View>
-          </View>
-          
-          <View style={styles.summaryInfo}>
-            <View style={styles.infoRow}>
-              <Ionicons name="time" size={16} color="#6B7280" />
-              <Text style={styles.infoText}>
-                Sipariş Tarihi: {formatDate(order.olusturma_tarihi)}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="restaurant" size={16} color="#6B7280" />
-              <Text style={styles.infoText}>
-                Masa: {order.qr_token ? 'QR Masa' : 'Bilinmiyor'}
-              </Text>
-            </View>
-            {estimatedTime && currentStatus !== 'teslim_edildi' && currentStatus !== 'iptal' && (
-              <View style={styles.infoRow}>
-                <Ionicons name="hourglass" size={16} color="#6B7280" />
-                <Text style={styles.infoText}>
-                  Tahmini Süre: {estimatedTime} dakika
-                </Text>
-              </View>
-            )}
-          </View>
+        {/* Siparişlerim Başlığı */}
+        <View style={styles.ordersHeader}>
+          <Text style={styles.ordersTitle}>Siparişlerim</Text>
+          <Text style={styles.ordersCount}>{orders.length} sipariş</Text>
         </View>
 
-        {/* Durum Takibi */}
-        <View style={styles.statusCard}>
-          <Text style={styles.sectionTitle}>Sipariş Durumu</Text>
-          {statusOrder.map((status, index) => 
-            renderStatusStep(
-              status, 
-              index === currentIndex,
-              index < currentIndex
-            )
-          )}
+        {/* Sipariş Listesi */}
+        <View style={styles.ordersContainer}>
+          {orders.map(renderOrderCard)}
         </View>
 
-        {/* Sipariş Detayları */}
-        <TouchableOpacity 
-          style={styles.detailsCard}
-          onPress={() => navigation.navigate('OrderDetail', { order, orderDetails })}
-          activeOpacity={0.7}
-        >
-          <View style={styles.detailsHeader}>
-            <Text style={styles.sectionTitle}>Sipariş Detayları</Text>
-            <Ionicons name="chevron-forward" size={20} color="#8B4513" />
-          </View>
-          {orderDetails.slice(0, 2).map(renderOrderItem)}
-          {orderDetails.length > 2 && (
-            <Text style={styles.moreItemsText}>
-              +{orderDetails.length - 2} ürün daha...
-            </Text>
-          )}
-          
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Toplam Tutar:</Text>
-            <Text style={styles.totalAmount}>{formatPrice(order.toplam_tutar)}</Text>
-          </View>
-        </TouchableOpacity>
+        {/* Alt Boşluk */}
+        <View style={{ height: 20 }} />
+      </Animated.ScrollView>
 
-        {/* Notlar */}
-        {order.notlar && (
-          <View style={styles.notesCard}>
-            <Text style={styles.sectionTitle}>Notlar</Text>
-            <Text style={styles.notesText}>{order.notlar}</Text>
-          </View>
-        )}
-
-        {/* Aksiyon Butonları */}
-        <View style={styles.actionsContainer}>
-          {currentStatus === 'hazir' && (
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="checkmark-circle" size={20} color="white" />
-              <Text style={styles.actionButtonText}>Siparişi Onayla</Text>
-            </TouchableOpacity>
-          )}
-          
-          <TouchableOpacity 
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate('Menü')}
-          >
-            <Ionicons name="home" size={20} color="#8B4513" />
-            <Text style={styles.secondaryButtonText}>Ana Sayfaya Dön</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -976,142 +723,149 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     opacity: 0.8,
   },
-  // Test Butonları Stilleri
-  testButtonsContainer: {
+  // Sipariş Listesi Stilleri
+  ordersHeader: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: 16,
+    marginTop: 10,
   },
-  testButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  testButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'System',
-  },
-  // Hazırlanıyor Animasyonlu Ekran Stilleri
-  preparingContainer: {
-    flex: 1,
-    backgroundColor: '#F9FAFB', // Uygulama arka plan rengi
-  },
-  preparingContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  preparingIconContainer: {
-    position: 'relative',
-    marginBottom: 40,
-  },
-  preparingTitle: {
-    fontSize: 28,
+  ordersTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#8B4513',
-    textAlign: 'center',
-    marginBottom: 16,
+    color: '#1F2937',
     fontFamily: 'System',
   },
-  preparingDescription: {
-    fontSize: 16,
+  ordersCount: {
+    fontSize: 14,
     color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 24,
     fontFamily: 'System',
   },
-  progressContainer: {
+  ordersContainer: {
+    paddingHorizontal: 20,
+  },
+  orderCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  orderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  orderCardLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
+    gap: 12,
   },
-  progressStep: {
-    alignItems: 'center',
+  orderCardInfo: {
+    gap: 4,
   },
-  progressIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  progressIconActive: {
-    backgroundColor: '#8B4513',
-  },
-  progressText: {
-    fontSize: 14,
-    color: '#8B4513',
-    fontWeight: '600',
+  orderCardNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
     fontFamily: 'System',
   },
-  progressTextInactive: {
-    color: '#9CA3AF',
-  },
-  progressIconCompleted: {
-    backgroundColor: '#10B981',
-  },
-  progressTextCompleted: {
-    color: '#10B981',
-  },
-  progressLine: {
-    width: 60,
-    height: 2,
-    backgroundColor: '#D1D5DB',
-    marginHorizontal: 20,
-  },
-  timeContainer: {
-    alignItems: 'center',
-  },
-  timeLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 8,
+  orderCardDate: {
+    fontSize: 12,
+    color: '#6B7280',
     fontFamily: 'System',
   },
-  timeValue: {
-    fontSize: 24,
+  orderCardBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  orderCardBadgeText: {
+    fontSize: 12,
     fontWeight: 'bold',
     color: 'white',
     fontFamily: 'System',
   },
-  // Hazırlandı Ekran Stilleri
-  readyContainer: {
-    flex: 1,
-    backgroundColor: '#F9FAFB', // Uygulama arka plan rengi
+  orderCardBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  readyContent: {
+  orderCardDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  orderCardDetailText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'System',
+  },
+  orderCardPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#8B4513',
+    fontFamily: 'System',
+  },
+  orderCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  orderCardDescription: {
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+    fontFamily: 'System',
+  },
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    padding: 40,
   },
-  readyIconContainer: {
-    marginBottom: 40,
-  },
-  readyTitle: {
-    fontSize: 28,
+  emptyTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#8B4513',
+    color: '#1F2937',
+    marginTop: 20,
+    marginBottom: 12,
     textAlign: 'center',
-    marginBottom: 16,
-    fontFamily: 'System',
   },
-  readyDescription: {
+  emptyDescription: {
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 40,
     lineHeight: 24,
-    fontFamily: 'System',
+    marginBottom: 30,
+  },
+  backToMenuButton: {
+    backgroundColor: '#8B4513',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 25,
+    shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  backToMenuButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

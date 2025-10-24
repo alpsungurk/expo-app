@@ -40,8 +40,15 @@ export default {
       ]
     ],
     extra: {
-      supabaseUrl: "https://hgxicutwejvfysjsmjcw.supabase.co",
-      supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneGljdXR3ZWp2ZnlzanNtamN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MjAwNDYsImV4cCI6MjA3NjE5NjA0Nn0.4rNe3GfRBXkG3Dfei5-tsfLXb_9EHGt39oPrtwuO0nE"
+      // Local Supabase Configuration
+      // ÖNEMLİ: Telefondan erişim için 127.0.0.1 yerine PC'nizin yerel ağ IP adresini kullanın
+      // IP adresinizi bulmak için: Windows'ta "ipconfig" komutunu çalıştırın
+      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || "http://10.50.10.26:54321",
+      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+      
+      // Production Supabase (yorum satırında bırakıldı)
+      // supabaseUrl: "https://hgxicutwejvfysjsmjcw.supabase.co",
+      // supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneGljdXR3ZWp2ZnlzanNtamN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MjAwNDYsImV4cCI6MjA3NjE5NjA0Nn0.4rNe3GfRBXkG3Dfei5-tsfLXb_9EHGt39oPrtwuO0nE"
     }
   }
 };
