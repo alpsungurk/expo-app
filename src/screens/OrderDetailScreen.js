@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Dimensions,
   StatusBar,
   Animated,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +19,9 @@ const OrderDetailScreen = ({ route }) => {
   const navigation = useNavigation();
   const { order, orderDetails } = route.params;
   const slideAnim = useRef(new Animated.Value(0)).current;
+  
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesText, setNotesText] = useState(order.aciklama || '');
 
   // Animasyon fonksiyonları
   const slideIn = () => {
@@ -77,13 +81,43 @@ const OrderDetailScreen = ({ route }) => {
     });
   };
 
+  const handleCancelItem = (item) => {
+    // İptal etme işlemi - şimdilik console log
+    console.log('Ürün iptal ediliyor:', item);
+    // TODO: İptal etme onayı ve API çağrısı
+  };
+
+  const handleSaveNotes = () => {
+    console.log('Notlar kaydediliyor:', notesText);
+    // TODO: API çağrısı ile notları güncelle
+    setIsEditingNotes(false);
+  };
+
+  const handleCancelEditNotes = () => {
+    setNotesText(order.aciklama || '');
+    setIsEditingNotes(false);
+  };
+
   const renderOrderItem = (item) => (
     <View key={item.id} style={styles.orderItem}>
       <View style={styles.itemInfo}>
         <Text style={styles.itemName}>{item.urunler?.ad || 'Ürün'}</Text>
         <Text style={styles.itemQuantity}>x{item.adet}</Text>
       </View>
-      <Text style={styles.itemPrice}>{formatPrice(item.toplam_fiyat)}</Text>
+      <View style={styles.itemActions}>
+        <Text style={styles.itemPrice}>{formatPrice(item.toplam_fiyat)}</Text>
+        
+        {/* Sadece beklemede ve hazırlanıyor durumlarında iptal butonunu göster */}
+        {['beklemede', 'hazirlaniyor'].includes(order.durum) && (
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.cancelButton]}
+            onPress={() => handleCancelItem(item)}
+          >
+            <Ionicons name="close-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.cancelButtonText}>İptal</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
@@ -111,7 +145,7 @@ const OrderDetailScreen = ({ route }) => {
           style={styles.backButton}
           onPress={handleGoBack}
         >
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={26} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Sipariş Detayı</Text>
         <View style={styles.headerSpacer} />
@@ -160,12 +194,52 @@ const OrderDetailScreen = ({ route }) => {
         </View>
 
         {/* Notlar */}
-        {order.aciklama && (
-          <View style={styles.notesCard}>
+        <View style={styles.notesCard}>
+          <View style={styles.notesHeader}>
             <Text style={styles.sectionTitle}>Notlar</Text>
-            <Text style={styles.notesText}>{order.aciklama}</Text>
+            {!isEditingNotes && ['beklemede', 'hazirlaniyor'].includes(order.durum) && (
+              <TouchableOpacity 
+                style={styles.editNotesButton}
+                onPress={() => setIsEditingNotes(true)}
+              >
+                <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.editNotesButtonText}>Düzenle</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        )}
+          
+          {isEditingNotes ? (
+            <View style={styles.notesEditContainer}>
+              <TextInput
+                style={styles.notesTextInput}
+                value={notesText}
+                onChangeText={setNotesText}
+                placeholder="Notlarınızı buraya yazın..."
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+              <View style={styles.notesEditButtons}>
+                <TouchableOpacity 
+                  style={[styles.notesEditButton, styles.cancelEditButton]}
+                  onPress={handleCancelEditNotes}
+                >
+                  <Text style={styles.cancelEditButtonText}>İptal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.notesEditButton, styles.saveEditButton]}
+                  onPress={handleSaveNotes}
+                >
+                  <Text style={styles.saveEditButtonText}>Kaydet</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.notesText}>
+              {order.aciklama || 'Henüz not eklenmemiş'}
+            </Text>
+          )}
+        </View>
       </ScrollView>
     </Animated.View>
   );
@@ -191,12 +265,17 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   headerTitle: {
     color: 'white',
@@ -289,6 +368,36 @@ const styles = StyleSheet.create({
   itemInfo: {
     flex: 1,
   },
+  itemActions: {
+    alignItems: 'flex-end',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
+    gap: 8,
+    marginTop: 12,
+    minHeight: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  cancelButton: {
+    backgroundColor: '#DC143C',
+    borderWidth: 0,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontFamily: 'System',
+    letterSpacing: 0.5,
+  },
   itemName: {
     fontSize: 16,
     fontWeight: '500',
@@ -345,6 +454,89 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 20,
     fontFamily: 'System',
+  },
+  notesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  editNotesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#8B4513',
+    borderWidth: 0,
+    gap: 8,
+    minHeight: 40,
+    shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  editNotesButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontFamily: 'System',
+    letterSpacing: 0.3,
+  },
+  notesEditContainer: {
+    gap: 12,
+  },
+  notesTextInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#374151',
+    backgroundColor: '#F9FAFB',
+    minHeight: 80,
+    fontFamily: 'System',
+  },
+  notesEditButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 16,
+  },
+  notesEditButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 0,
+    minHeight: 48,
+    minWidth: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  cancelEditButton: {
+    backgroundColor: '#DC143C',
+  },
+  saveEditButton: {
+    backgroundColor: '#2ED573',
+  },
+  cancelEditButtonText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontFamily: 'System',
+    letterSpacing: 0.5,
+  },
+  saveEditButtonText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontFamily: 'System',
+    letterSpacing: 0.5,
   },
 });
 
