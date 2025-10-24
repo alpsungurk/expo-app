@@ -258,6 +258,22 @@ export default function OrderStatusScreen() {
     );
   }
 
+  // Ürün listesini render et (alt alta)
+  const renderProductList = (orderDetails) => {
+    if (!orderDetails || orderDetails.length === 0) {
+      return <Text style={styles.productItemText}>Ürün yok</Text>;
+    }
+    
+    return orderDetails.map((detail, index) => {
+      const productName = detail.urunler?.ad || 'Bilinmeyen Ürün';
+      return (
+        <Text key={index} style={styles.productItemText}>
+          {detail.adet}x {productName}
+        </Text>
+      );
+    });
+  };
+
   // Sipariş kartı render fonksiyonu
   const renderOrderCard = (order) => {
     const statusInfo = getStatusInfo(order.durum);
@@ -296,11 +312,13 @@ export default function OrderStatusScreen() {
           </View>
         </View>
 
-        {/* Orta Kısım - Ürün Sayısı ve Tutar */}
+        {/* Orta Kısım - Ürün Listesi ve Tutar */}
         <View style={styles.orderCardBody}>
-          <View style={styles.orderCardDetail}>
+          <View style={styles.productListContainer}>
             <Ionicons name="fast-food-outline" size={16} color="#6B7280" />
-            <Text style={styles.orderCardDetailText}>{itemCount} ürün</Text>
+            <View style={styles.productList}>
+              {renderProductList(order.siparis_detaylari)}
+            </View>
           </View>
           
           {['beklemede', 'hazirlaniyor'].includes(order.durum) && (
@@ -756,6 +774,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+    minHeight: 160, // Kart boyutunu büyüttük
   },
   orderCardHeader: {
     flexDirection: 'row',
@@ -795,13 +814,28 @@ const styles = StyleSheet.create({
   },
   orderCardBody: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 16,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  productListContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    flex: 1,
+  },
+  productList: {
+    flex: 1,
+  },
+  productItemText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'System',
+    marginBottom: 2,
   },
   orderCardDetail: {
     flexDirection: 'row',
