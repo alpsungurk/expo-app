@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
@@ -33,10 +34,11 @@ export default function ProductDetailScreen({ route, navigation }) {
   const { product: initialProduct } = routeParams;
   
   const [product, setProduct] = useState(initialProduct);
-  const [notes, setNotes] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [ingredients, setIngredients] = useState([]);
+  const [ingredientsLoading, setIngredientsLoading] = useState(true);
   
   const { tableNumber, addItem } = useCartStore();
   const insets = useSafeAreaInsets();
@@ -60,46 +62,94 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   const imageUri = getImageUri();
 
+  useEffect(() => {
+    fetchIngredients();
+  }, [product?.id]);
+
 
   const calculateTotalPrice = () => {
     return product.fiyat * quantity;
   };
 
+  // Malzemeleri çek
+  const fetchIngredients = async () => {
+    if (!product?.id) return;
+    
+    try {
+      setIngredientsLoading(true);
+      const { data, error } = await supabase
+        .from('urun_malzemeleri')
+        .select('*')
+        .eq('urun_id', product.id)
+        .order('sira_no', { ascending: true });
+
+      if (error) {
+        console.error('Malzemeler çekilirken hata:', error);
+        return;
+      }
+
+      setIngredients(data || []);
+    } catch (error) {
+      console.error('Malzemeler çekilirken hata:', error);
+    } finally {
+      setIngredientsLoading(false);
+    }
+  };
+
   const handleAddToCart = () => {
     if (!tableNumber) {
-      Alert.alert(
-        'Masa Seçilmedi',
-        'Ürün eklemek için önce masa QR kodunu tarayın.',
-        [{ text: 'Tamam' }]
-      );
+      Toast.show({
+        type: 'error',
+        text1: 'Masa Seçilmedi',
+        text2: 'Ürün eklemek için önce masa QR kodunu tarayın.',
+        position: 'top',
+        visibilityTime: 3000,
+      });
       return;
     }
 
     // Ürünü sepete ekle
     addItem({
       ...product,
-      quantity,
-      notes
+      quantity
     });
 
-    Alert.alert(
-      'Başarılı', 
-      `${product.ad} sepete eklendi!`,
-      [
-        {
-          text: 'Sepete Git',
-          onPress: () => navigation.navigate('Cart')
-        },
-        {
-          text: 'Devam Et',
-          style: 'cancel'
-        }
-      ]
-    );
+    // Önce mevcut toast'ı gizle
+    Toast.hide();
+    
+    // Kısa bir gecikme sonra yeni toast'ı göster
+    setTimeout(() => {
+      Toast.show({
+        type: 'success',
+        text1: 'Başarılı',
+        text2: `${product.ad} sepete eklendi!`,
+        position: 'top',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 60,
+      });
+    }, 100);
+
+    // HomeScreen'e yönlendir
+    setTimeout(() => {
+      navigation.goBack();
+    }, 1000);
   };
 
   const formatPrice = (price) => {
     return `₺${parseFloat(price).toFixed(2)}`;
+  };
+
+  // Malzeme render fonksiyonu
+  const renderIngredient = (ingredient, index) => {
+    return (
+      <View key={ingredient.id} style={styles.ingredientItem}>
+        <View style={styles.ingredientIcon}>
+          <Ionicons name="leaf" size={16} color="#8B4513" />
+        </View>
+        <Text style={styles.ingredientText}>{ingredient.malzeme_adi}</Text>
+      </View>
+    );
   };
 
 
@@ -167,19 +217,16 @@ export default function ProductDetailScreen({ route, navigation }) {
             </View>
           </View>
 
+          {/* Malzemeler */}
+          {ingredients.length > 0 && (
+            <View style={styles.ingredientsContainer}>
+              <Text style={styles.ingredientsTitle}>Malzemeler</Text>
+              <View style={styles.ingredientsGrid}>
+                {ingredients.map(renderIngredient)}
+              </View>
+            </View>
+          )}
 
-          {/* Notlar */}
-          <View style={styles.notesContainer}>
-            <Text style={styles.sectionTitle}>Özel Notlar</Text>
-            <TextInput
-              style={styles.notesInput}
-              placeholder="Ürününüz için özel notlarınızı yazın..."
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={3}
-            />
-          </View>
         </View>
       </ScrollView>
 
@@ -408,20 +455,6 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#8B4513',
   },
-  notesContainer: {
-    marginBottom: 24,
-  },
-  notesInput: {
-    backgroundColor: 'white',
-    borderRadius: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-    padding: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
-    fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
-    color: '#374151',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    textAlignVertical: 'top',
-    minHeight: isLargeScreen ? 120 : isMediumScreen ? 100 : 80,
-  },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -444,6 +477,7 @@ const styles = StyleSheet.create({
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F3F4F6',
     borderRadius: isLargeScreen ? 30 : isMediumScreen ? 25 : 20,
     paddingHorizontal: isLargeScreen ? 6 : isMediumScreen ? 4 : 2,
@@ -501,5 +535,40 @@ const styles = StyleSheet.create({
     fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     fontWeight: 'bold',
     marginLeft: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
+  },
+  // Malzemeler Styles
+  ingredientsContainer: {
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  ingredientsTitle: {
+    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  ingredientsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  ingredientItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 8,
+  },
+  ingredientIcon: {
+    marginRight: 8,
+  },
+  ingredientText: {
+    fontSize: isLargeScreen ? 14 : isMediumScreen ? 13 : 12,
+    color: '#374151',
+    fontWeight: '500',
   },
 });

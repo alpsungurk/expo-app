@@ -142,7 +142,7 @@ const OrderDetailScreen = ({ route }) => {
             <View style={styles.infoRow}>
               <Ionicons name="restaurant" size={16} color="#6B7280" />
               <Text style={styles.infoText}>
-                Masa: {order.qr_token ? 'QR Masa' : 'Bilinmiyor'}
+                {order.qr_token ? 'QR Token: ' + order.qr_token : 'Bilinmiyor'}
               </Text>
             </View>
           </View>

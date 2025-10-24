@@ -401,58 +401,7 @@ export default function CampaignSlider({ loading = false }) {
         }]
       }
     ]}>
-      {/* Sipariş Durumu Göstergesi */}
-      {activeOrder && (
-        <View style={styles.orderStatusContainer}>
-          <View 
-            style={[
-              styles.orderStatusCard,
-              { 
-                backgroundColor: activeOrder.durum === 'hazir' ? '#DCFCE7' : '#FEF3C7',
-              }
-            ]}
-          >
-            <View style={styles.orderStatusContent}>
-              <Animated.View 
-                style={[
-                  styles.orderStatusIcon,
-                  { 
-                    backgroundColor: activeOrder.durum === 'hazir' ? '#10B981' : '#F59E0B',
-                    transform: [{ scale: activeOrder.durum === 'hazirlaniyor' ? pulseAnim : 1 }]
-                  }
-                ]}
-              >
-                <Ionicons 
-                  name={activeOrder.durum === 'hazir' ? 'checkmark' : 'cafe'} 
-                  size={getResponsiveValue(16, 18, 20, 22)} 
-                  color="white" 
-                />
-              </Animated.View>
-              
-              <View style={styles.orderStatusTextContainer}>
-                <Text style={[
-                  styles.orderStatusTitle,
-                  { 
-                    color: activeOrder.durum === 'hazir' ? '#166534' : '#8B4513',
-                    fontSize: getResponsiveValue(14, 16, 18, 20)
-                  }
-                ]}>
-                  {activeOrder.durum === 'hazir' ? 'Siparişiniz Hazır!' : 'Siparişiniz Hazırlanıyor'}
-                </Text>
-                <Text style={[
-                  styles.orderStatusSubtitle,
-                  { 
-                    color: activeOrder.durum === 'hazir' ? '#166534' : '#8B4513',
-                    fontSize: getResponsiveValue(11, 12, 13, 14)
-                  }
-                ]}>
-                  {activeOrder.durum === 'hazir' ? 'Masanıza getirilecek' : 'Lütfen bekleyin...'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      )}
+      {/* Sipariş Durumu Göstergesi - Kaldırıldı */}
 
       <ScrollView
         ref={scrollViewRef}

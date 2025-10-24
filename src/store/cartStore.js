@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase, TABLES } from '../config/supabase';
 
 // Telefon token oluştur veya al
 const getOrCreatePhoneToken = async () => {
@@ -30,6 +31,7 @@ const CART_ACTIONS = {
   ADD_ITEM: 'ADD_ITEM',
   REMOVE_ITEM: 'REMOVE_ITEM',
   UPDATE_QUANTITY: 'UPDATE_QUANTITY',
+  UPDATE_ITEM_NOTES: 'UPDATE_ITEM_NOTES',
   CLEAR_CART: 'CLEAR_CART',
   SET_TABLE_INFO: 'SET_TABLE_INFO',
   CLEAR_TABLE_INFO: 'CLEAR_TABLE_INFO',
@@ -69,11 +71,27 @@ const cartReducer = (state, action) => {
 
     case CART_ACTIONS.REMOVE_ITEM: {
       const { itemId, customizations } = action.payload;
+      
+      // Customizations karşılaştırması için normalize edilmiş JSON kullan
+      const normalizeCustomizations = (obj) => {
+        if (!obj || Object.keys(obj).length === 0) return '{}';
+        const sorted = Object.keys(obj).sort().reduce((acc, key) => {
+          acc[key] = obj[key];
+          return acc;
+        }, {});
+        return JSON.stringify(sorted);
+      };
+      
+      const payloadCustomizationsNormalized = normalizeCustomizations(customizations);
+      
       const filteredItems = state.items.filter(
-        item => 
-          !(item.id === itemId && 
-            JSON.stringify(item.customizations) === JSON.stringify(customizations))
+        item => {
+          const itemCustomizationsNormalized = normalizeCustomizations(item.customizations);
+          const shouldRemove = item.id === itemId && itemCustomizationsNormalized === payloadCustomizationsNormalized;
+          return !shouldRemove;
+        }
       );
+      
       return { ...state, items: filteredItems };
     }
 
@@ -86,6 +104,18 @@ const cartReducer = (state, action) => {
         }
         return item;
       }).filter(item => item.quantity > 0);
+      return { ...state, items: updatedItems };
+    }
+
+    case CART_ACTIONS.UPDATE_ITEM_NOTES: {
+      const { itemId, customizations, newNotes } = action.payload;
+      const updatedItems = state.items.map(item => {
+        if (item.id === itemId && 
+            JSON.stringify(item.customizations) === JSON.stringify(customizations)) {
+          return { ...item, notes: newNotes };
+        }
+        return item;
+      });
       return { ...state, items: updatedItems };
     }
 
@@ -163,6 +193,13 @@ export const CartProvider = ({ children }) => {
     });
   };
 
+  const updateItemNotes = (itemId, customizations, newNotes) => {
+    dispatch({
+      type: CART_ACTIONS.UPDATE_ITEM_NOTES,
+      payload: { itemId, customizations, newNotes }
+    });
+  };
+
   const clearCart = () => {
     dispatch({ type: CART_ACTIONS.CLEAR_CART });
   };
@@ -188,16 +225,87 @@ export const CartProvider = ({ children }) => {
     return state.items.reduce((total, item) => total + item.quantity, 0);
   };
 
+  // Sipariş oluşturma fonksiyonu
+  const createOrder = async (phoneToken) => {
+    if (!state.tableId) {
+      throw new Error('Masa bilgisi bulunamadı. Lütfen QR kodu tekrar tarayın.');
+    }
+
+    if (state.items.length === 0) {
+      throw new Error('Sepetiniz boş.');
+    }
+
+    try {
+      // Sipariş numarası oluştur
+      const generateOrderNumber = () => {
+        const timestamp = Date.now().toString().slice(-6);
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        return `SIP${timestamp}${random}`;
+      };
+
+      const orderNumber = generateOrderNumber();
+      const totalAmount = getTotalPrice();
+
+      // Sipariş oluştur
+      const { data: orderData, error: orderError } = await supabase
+        .from(TABLES.SIPARISLER)
+        .insert({
+          masa_id: state.tableId,
+          siparis_no: orderNumber,
+          toplam_tutar: totalAmount,
+          durum: 'beklemede',
+          aciklama: 'Müşteri siparişi',
+          telefon_token: phoneToken
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Sipariş detaylarını oluştur
+      const orderDetails = state.items.map(item => ({
+        siparis_id: orderData.id,
+        urun_id: item.id,
+        adet: item.quantity,
+        birim_fiyat: parseFloat(item.price),
+        toplam_fiyat: parseFloat(item.price) * item.quantity,
+        ozellestirmeler: item.customizations ? JSON.stringify(item.customizations) : null,
+        notlar: item.notes || null
+      }));
+
+      const { error: detailsError } = await supabase
+        .from(TABLES.SIPARIS_DETAYLARI)
+        .insert(orderDetails);
+
+      if (detailsError) throw detailsError;
+
+      // Sepeti temizle
+      clearCart();
+
+      return {
+        ...orderData,
+        siparis_detaylari: orderDetails
+      };
+
+    } catch (error) {
+      console.error('Sipariş oluşturma hatası:', error);
+      throw error;
+    }
+  };
+
   const value = {
     ...state,
     addItem,
     removeItem,
     updateQuantity,
+    updateItemNotes,
     clearCart,
     setTableInfo,
     clearTableInfo,
     getTotalPrice,
     getTotalItems,
+    createOrder,
+    dispatch,
   };
 
   return (

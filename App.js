@@ -7,6 +7,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { CartProvider } from './src/store/cartStore';
 import { AppProvider } from './src/store/appStore';
 import { NotificationProvider } from './src/contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
             <NotificationProvider>
               <AppNavigator />
               <StatusBar style="light" />
+              <Toast />
             </NotificationProvider>
           </CartProvider>
         </AppProvider>

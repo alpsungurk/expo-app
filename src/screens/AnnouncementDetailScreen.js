@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,11 @@ import {
   Dimensions,
   StatusBar,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../config/supabase';
+import { supabase, TABLES } from '../config/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -20,6 +21,10 @@ const AnnouncementDetailScreen = ({ route }) => {
   const navigation = useNavigation();
   const { announcement } = route.params;
   const slideAnim = useRef(new Animated.Value(0)).current;
+  
+  // State for loading and data
+  const [loading, setLoading] = useState(false);
+  const [announcementData, setAnnouncementData] = useState(announcement);
   
   // Kampanya mı duyuru mu kontrol et
   const isCampaign = announcement.tur === 'kampanya' || announcement.baslik?.toLowerCase().includes('kampanya');
@@ -49,21 +54,65 @@ const AnnouncementDetailScreen = ({ route }) => {
     slideOut();
   };
 
-  // Component mount olduğunda animasyonu başlat
+  // Database'den detaylı veri çek
+  const fetchAnnouncementDetails = async () => {
+    if (!announcement.id) return;
+    
+    setLoading(true);
+    try {
+      let query;
+      
+      if (isCampaign) {
+        // Kampanya detaylarını çek
+        query = supabase
+          .from(TABLES.KAMPANYALAR)
+          .select('*')
+          .eq('id', announcement.id)
+          .eq('aktif', true)
+          .single();
+      } else {
+        // Duyuru detaylarını çek
+        query = supabase
+          .from(TABLES.DUYURULAR)
+          .select('*')
+          .eq('id', announcement.id)
+          .eq('aktif', true)
+          .single();
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Veri çekme hatası:', error);
+        return;
+      }
+      
+      if (data) {
+        setAnnouncementData(data);
+      }
+    } catch (error) {
+      console.error('Beklenmeyen hata:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Component mount olduğunda animasyonu başlat ve veri çek
   useEffect(() => {
     slideIn();
+    fetchAnnouncementDetails();
   }, []);
 
   // Resim URL'sini oluştur
   const getImageUri = () => {
     const STORAGE_BUCKET = 'images';
     let raw = (
-      announcement.resim_url ||
-      announcement.resim_path ||
-      announcement.image_url ||
-      announcement.banner_url ||
-      announcement.gorsel_url ||
-      announcement.image
+      announcementData.resim_url ||
+      announcementData.resim_path ||
+      announcementData.image_url ||
+      announcementData.banner_url ||
+      announcementData.gorsel_url ||
+      announcementData.image
     );
     
     if (!raw) return null;
@@ -122,22 +171,33 @@ const AnnouncementDetailScreen = ({ route }) => {
               resizeMode="cover"
             />
              <View style={styles.imageOverlay}>
-               <Text style={styles.imageTitle}>Kahve İndirimi</Text>
-               <Text style={styles.imageDescription}>Tüm kahvelerde %20 indirim</Text>
+               <Text style={styles.imageTitle}>{announcementData.baslik || announcementData.ad || 'Kampanya'}</Text>
+               <Text style={styles.imageDescription}>
+                 {isCampaign ? 
+                   (announcementData.aciklama || announcementData.kampanya_aciklama || 'Kampanya detayları') :
+                   (announcementData.icerik || announcementData.duyuru_aciklama || 'Duyuru detayları')
+                 }
+               </Text>
                <View style={styles.imageDateContainer}>
                  <Ionicons name="calendar" size={14} color="white" />
                  <Text style={styles.imageDateText}>
-                   {announcement.baslangic_tarihi ? 
-                     `${new Date(announcement.baslangic_tarihi).toLocaleDateString('tr-TR', {
+                   {announcementData.baslangic_tarihi ? 
+                     `${new Date(announcementData.baslangic_tarihi).toLocaleDateString('tr-TR', {
                        day: '2-digit',
                        month: '2-digit',
                        year: 'numeric',
-                     })} - ${announcement.bitis_tarihi ? new Date(announcement.bitis_tarihi).toLocaleDateString('tr-TR', {
+                     })} - ${announcementData.bitis_tarihi ? new Date(announcementData.bitis_tarihi).toLocaleDateString('tr-TR', {
                        day: '2-digit',
                        month: '2-digit',
                        year: 'numeric',
-                     }) : '31.12.2025'}` :
-                     '01.01.2024 - 31.12.2025'
+                     }) : 'Devam ediyor'}` :
+                     announcementData.olusturma_tarihi ? 
+                       new Date(announcementData.olusturma_tarihi).toLocaleDateString('tr-TR', {
+                         day: '2-digit',
+                         month: '2-digit',
+                         year: 'numeric',
+                       }) :
+                       'Tarih belirtilmemiş'
                    }
                  </Text>
                </View>
@@ -145,7 +205,7 @@ const AnnouncementDetailScreen = ({ route }) => {
           </View>
         ) : (
           <View style={styles.titleHeader}>
-            <Text style={styles.titleHeaderText}>{announcement.baslik || 'Kahve İndirimi'}</Text>
+            <Text style={styles.titleHeaderText}>{announcementData.baslik || announcementData.ad || 'Duyuru'}</Text>
           </View>
         )}
 
@@ -154,17 +214,33 @@ const AnnouncementDetailScreen = ({ route }) => {
           {/* Resim yoksa başlık göster */}
           {!imageUri && (
             <Text style={styles.smallTitle}>
-              {announcement.baslik || 'Kahve İndirimi'}
+              {announcementData.baslik || announcementData.ad || 'Duyuru'}
             </Text>
           )}
           
-          {/* Açıklama - ufak boyutlu */}
+          {/* Loading indicator */}
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#8B4513" />
+              <Text style={styles.loadingText}>Detaylar yükleniyor...</Text>
+            </View>
+          )}
+          
+          {/* Açıklama - beyaz kısımda gösterilecek */}
           <Text style={styles.smallDescription}>
-            {announcement.duyuru_aciklama || 
-             announcement.kampanya_aciklama || 
-             announcement.aciklama || 
-             announcement.icerik || 
-             'Tüm kahvelerde %20 indirim'}
+            {(() => {
+              if (isCampaign) {
+                // Kampanya detail sayfasında kampanya_aciklama gösterilecek
+                return announcementData.kampanya_aciklama || 
+                       announcementData.aciklama || 
+                       'Kampanya detayları yükleniyor...';
+              } else {
+                // Duyuru detail sayfasında duyuru_aciklama gösterilecek
+                return announcementData.duyuru_aciklama || 
+                       announcementData.icerik || 
+                       'Duyuru detayları yükleniyor...';
+              }
+            })()}
           </Text>
         </View>
       </ScrollView>
@@ -326,6 +402,18 @@ const styles = StyleSheet.create({
     color: '#8B4513',
     marginLeft: 8,
     fontWeight: '500',
+    fontFamily: 'System',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#8B4513',
+    marginLeft: 8,
     fontFamily: 'System',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -9,10 +9,11 @@ import {
   Alert,
   Image,
   Modal,
-  Dimensions
+  Dimensions,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
 import { useAppStore } from '../store/appStore';
@@ -28,117 +29,132 @@ export default function CartScreen() {
   const navigation = useNavigation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+
+  // Animasyon değişkenleri
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+
+  // Sayfa açılış animasyonu
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, []);
+
+  // Sayfa her açıldığında yenile (CartScreen'de özel veri yükleme yok)
+  useFocusEffect(
+    useCallback(() => {
+      // CartScreen'de özel veri yükleme gerekmiyor
+      // Sadece sayfa odaklandığında animasyonu yenile
+    }, [])
+  );
   
   const { 
     items, 
     tableNumber, 
     qrToken, 
+    tableId, // Seçilen masa'nın id'si
     updateQuantity, 
+    updateItemNotes,
     removeItem, 
+    addItem,
     clearCart, 
     getTotalPrice, 
-    getTotalItems 
+    getTotalItems,
+    createOrder,
+    dispatch
   } = useCartStore();
   
-  const { setCurrentOrder } = useAppStore();
+  const { setCurrentOrder, phoneToken } = useAppStore();
 
   const formatPrice = (price) => {
-    return `₺${parseFloat(price).toFixed(2)}`;
+    const numPrice = parseFloat(price);
+    if (isNaN(numPrice)) return '₺0.00';
+    return `₺${numPrice.toFixed(2)}`;
+  };
+
+  // Resim URL'sini Supabase Storage'dan al
+  const getImageUri = (resimPath) => {
+    const STORAGE_BUCKET = 'images';
+    
+    if (!resimPath) return null;
+    
+    // Eğer zaten tam URL ise direkt kullan
+    if (typeof resimPath === 'string' && /^https?:\/\//i.test(resimPath)) {
+      return resimPath;
+    }
+    
+    // Supabase Storage'dan public URL oluştur
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(resimPath);
+    return data?.publicUrl || null;
   };
 
   const handleQuantityChange = (item, customizations, newQuantity) => {
     if (newQuantity === 0) {
-      removeItem(item.id, customizations);
+      setItemToDelete({ item, customizations });
+      setShowDeleteModal(true);
     } else {
       updateQuantity(item.id, customizations, newQuantity);
     }
   };
 
-  const handleRemoveItem = (item, customizations) => {
-    Alert.alert(
-      'Ürünü Kaldır',
-      `${item.name} sepetten kaldırılsın mı?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        { 
-          text: 'Kaldır', 
-          style: 'destructive',
-          onPress: () => removeItem(item.id, customizations)
-        }
-      ]
-    );
+  const handleEditItem = (item) => {
+    navigation.navigate('EditCartItem', { item });
   };
 
-  const generateOrderNumber = () => {
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `SIP${timestamp}${random}`;
+
+  const handleRemoveItem = (item, customizations) => {
+    setItemToDelete({ item, customizations });
+    setShowDeleteModal(true);
   };
+
+  const handleConfirmDelete = () => {
+    if (itemToDelete) {
+      removeItem(itemToDelete.item.id, itemToDelete.customizations || {});
+      setShowDeleteModal(false);
+      setItemToDelete(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setItemToDelete(null);
+  };
+
+
 
   const handleCheckout = async () => {
-    if (!tableNumber) {
-      Alert.alert('Hata', 'Masa bilgisi bulunamadı. Lütfen QR kodu tekrar tarayın.');
-      return;
-    }
-
-    if (items.length === 0) {
-      Alert.alert('Hata', 'Sepetiniz boş.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      const orderNumber = generateOrderNumber();
-      const totalAmount = getTotalPrice();
+      console.log('Sipariş oluşturuluyor, phoneToken:', phoneToken);
+      
+      // CartStore'daki createOrder fonksiyonunu kullan
+      const orderData = await createOrder(phoneToken);
+      
+      console.log('Sipariş başarıyla oluşturuldu:', orderData);
 
-      // Sipariş oluştur
-      const { data: orderData, error: orderError } = await supabase
-        .from(TABLES.SIPARISLER)
-        .insert({
-          qr_token: qrToken,
-          siparis_no: orderNumber,
-          toplam_tutar: totalAmount,
-          durum: 'beklemede',
-          notlar: 'Müşteri siparişi'
-        })
-        .select()
-        .single();
-
-      if (orderError) throw orderError;
-
-      // Sipariş detaylarını oluştur
-      const orderDetails = items.map(item => ({
-        siparis_id: orderData.id,
-        urun_id: item.id,
-        adet: item.quantity,
-        birim_fiyat: item.price,
-        toplam_fiyat: item.price * item.quantity,
-        ozellestirmeler: item.customizations,
-        notlar: item.notes
-      }));
-
-      const { error: detailsError } = await supabase
-        .from(TABLES.SIPARIS_DETAYLARI)
-        .insert(orderDetails);
-
-      if (detailsError) throw detailsError;
-
-      // Siparişi store'a kaydet
-      setCurrentOrder({
-        ...orderData,
-        siparis_detaylari: orderDetails
-      });
-
-      // Sepeti temizle
-      clearCart();
+      // Siparişi app store'a kaydet
+      setCurrentOrder(orderData);
 
       Alert.alert(
-        'Sipariş Alındı! 🎉',
-        `Sipariş numaranız: ${orderNumber}\nToplam tutar: ${formatPrice(totalAmount)}`,
+        'Siparişiniz Verilmiştir! 🎉',
+        `Sipariş numaranız: ${orderData.siparis_no}\nToplam tutar: ${formatPrice(orderData.toplam_tutar)}`,
         [
           {
-            text: 'Sipariş Durumunu Görüntüle',
+            text: 'Siparişlerim',
             onPress: () => navigation.navigate('OrderStatus', { orderId: orderData.id })
           },
           {
@@ -150,22 +166,25 @@ export default function CartScreen() {
 
     } catch (error) {
       console.error('Sipariş oluşturma hatası:', error);
-      Alert.alert('Hata', 'Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+      Alert.alert('Hata', error.message || 'Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const renderCartItem = (item, index) => {
-    const customizationsText = Object.values(item.customizations)
-      .map(customization => customization.name)
-      .join(', ');
+    const customizationsText = item.customizations && Object.values(item.customizations).length > 0 
+      ? Object.values(item.customizations)
+          .map(customization => customization?.name || '')
+          .filter(name => name)
+          .join(', ')
+      : '';
 
     return (
       <View key={`${item.id}-${index}`} style={styles.cartItem}>
         <View style={styles.itemImage}>
-          {item.image ? (
-            <Image source={{ uri: item.image }} style={styles.image} />
+          {getImageUri(item.image) ? (
+            <Image source={{ uri: getImageUri(item.image) }} style={styles.image} />
           ) : (
             <View style={styles.placeholderImage}>
               <Ionicons name="cafe" size={24} color="#8B4513" />
@@ -174,38 +193,58 @@ export default function CartScreen() {
         </View>
 
         <View style={styles.itemContent}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          
-          {customizationsText && (
-            <Text style={styles.customizations}>
-              {customizationsText}
-            </Text>
-          )}
-          
-          {item.notes && (
-            <Text style={styles.notes}>
-              Not: {item.notes}
-            </Text>
-          )}
+          <View style={styles.itemHeader}>
+            <View style={styles.itemInfo}>
+              <Text style={styles.itemName}>{item.name}</Text>
+              
+              {customizationsText && (
+                <Text style={styles.customizations}>
+                  {customizationsText}
+                </Text>
+              )}
+              
+              {item.notes && (
+                <Text style={styles.notes}>
+                  Not: {item.notes}
+                </Text>
+              )}
+            </View>
+            
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => handleEditItem(item)}
+              >
+                <Ionicons name="create-outline" size={16} color="#8B4513" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => handleRemoveItem(item, item.customizations || {})}
+              >
+                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          </View>
 
           <View style={styles.itemFooter}>
             <Text style={styles.itemPrice}>
-              {formatPrice(item.price * item.quantity)}
+              {formatPrice((item.price || 0) * (item.quantity || 1))}
             </Text>
             
             <View style={styles.quantityControls}>
               <TouchableOpacity
                 style={styles.quantityButton}
-                onPress={() => handleQuantityChange(item, item.customizations, item.quantity - 1)}
+                onPress={() => handleQuantityChange(item, item.customizations, (item.quantity || 1) - 1)}
               >
                 <Ionicons name="remove" size={16} color="#8B4513" />
               </TouchableOpacity>
               
-              <Text style={styles.quantityText}>{item.quantity}</Text>
+              <Text style={styles.quantityText}>{item.quantity || 1}</Text>
               
               <TouchableOpacity
                 style={styles.quantityButton}
-                onPress={() => handleQuantityChange(item, item.customizations, item.quantity + 1)}
+                onPress={() => handleQuantityChange(item, item.customizations, (item.quantity || 1) + 1)}
               >
                 <Ionicons name="add" size={16} color="#8B4513" />
               </TouchableOpacity>
@@ -213,12 +252,6 @@ export default function CartScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.removeButton}
-          onPress={() => handleRemoveItem(item, item.customizations)}
-        >
-          <Ionicons name="trash-outline" size={20} color="#EF4444" />
-        </TouchableOpacity>
       </View>
     );
   };
@@ -228,7 +261,13 @@ export default function CartScreen() {
       <SafeAreaView style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
-        <View style={styles.emptyContainer}>
+        <Animated.View style={[
+          styles.emptyContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}>
           <Ionicons name="cart-outline" size={80} color="#D1D5DB" />
           <Text style={styles.emptyTitle}>Sepetiniz Boş</Text>
           <Text style={styles.emptyDescription}>
@@ -240,7 +279,7 @@ export default function CartScreen() {
           >
             <Text style={styles.shopButtonText}>Alışverişe Başla</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </SafeAreaView>
@@ -251,16 +290,22 @@ export default function CartScreen() {
     <SafeAreaView style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView style={[
+        styles.scrollView,
+        {
+          opacity: fadeAnim,
+          transform: [{ scale: scaleAnim }]
+        }
+      ]} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           <View style={styles.tableInfo}>
             <Ionicons name="restaurant" size={20} color="#8B4513" />
-            <Text style={styles.tableText}>Masa {tableNumber}</Text>
+            <Text style={styles.tableText}>{tableNumber}</Text>
           </View>
 
           {items.map((item, index) => renderCartItem(item, index))}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       <View style={styles.bottomBar}>
         <View style={styles.summary}>
@@ -291,6 +336,44 @@ export default function CartScreen() {
       </View>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelDelete}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <Ionicons name="warning" size={32} color="#EF4444" />
+              <Text style={styles.deleteModalTitle}>Ürünü Sil</Text>
+            </View>
+            
+            <Text style={styles.deleteModalDescription}>
+              {itemToDelete && `${itemToDelete.item.name} ürününü sepetten kaldırmak istediğinizden emin misiniz?`}
+            </Text>
+            
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={styles.deleteModalCancelButton}
+                onPress={handleCancelDelete}
+              >
+                <Text style={styles.deleteModalCancelText}>İptal</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.deleteModalConfirmButton}
+                onPress={handleConfirmDelete}
+              >
+                <Text style={styles.deleteModalConfirmText}>Sil</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -359,6 +442,16 @@ const styles = StyleSheet.create({
   itemContent: {
     flex: 1,
   },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  itemInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
   itemName: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -394,29 +487,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   quantityButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
   },
   quantityText: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginHorizontal: 12,
-    minWidth: 20,
+    marginHorizontal: 6,
+    minWidth: 16,
     textAlign: 'center',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   removeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
   },
   emptyContainer: {
     flex: 1,
@@ -499,5 +604,72 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  // Delete Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteModalContent: {
+    backgroundColor: 'white',
+    borderRadius: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    padding: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    width: '90%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+  },
+  deleteModalTitle: {
+    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    textAlign: 'center',
+  },
+  deleteModalDescription: {
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    marginBottom: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: isLargeScreen ? 16 : isMediumScreen ? 12 : 8,
+  },
+  deleteModalCancelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    alignItems: 'center',
+  },
+  deleteModalCancelText: {
+    color: '#6B7280',
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    fontWeight: '600',
+  },
+  deleteModalConfirmButton: {
+    flex: 1,
+    backgroundColor: '#EF4444',
+    paddingVertical: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    alignItems: 'center',
+  },
+  deleteModalConfirmText: {
+    color: 'white',
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    fontWeight: '600',
   },
 });

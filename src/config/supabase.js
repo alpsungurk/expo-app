@@ -1,16 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
-// Environment variables'ları al (önce .env, sonra app.config.js)
+// Local Supabase bağlantısı
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
                    Constants.expoConfig?.extra?.supabaseUrl || 
-                   'https://your-project.supabase.co';
+                   'http://127.0.0.1:54321';
 
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
                        Constants.expoConfig?.extra?.supabaseAnonKey || 
-                       'your-anon-key';
+                       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Debug: Bağlantı bilgilerini konsola yazdır
+console.log('🔍 Supabase Debug Bilgileri:');
+console.log('📡 Supabase URL:', supabaseUrl);
+console.log('🔑 Anon Key (ilk 50 karakter):', supabaseAnonKey.substring(0, 50) + '...');
+console.log('🌍 Environment URL:', process.env.EXPO_PUBLIC_SUPABASE_URL);
+console.log('⚙️ Config URL:', Constants.expoConfig?.extra?.supabaseUrl);
+
+// Supabase client oluştur
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false
+  }
+});
 
 // Veritabanı tabloları için type definitions
 export const TABLES = {

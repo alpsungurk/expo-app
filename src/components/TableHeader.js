@@ -10,7 +10,7 @@ const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 
-export default function TableHeader({ onQRScan, onSidebarPress }) {
+export default function TableHeader({ onQRScan, onSidebarPress, showBackButton = false, onBackPress }) {
   const { tableNumber, qrToken } = useCartStore();
   const { getSistemAyarı } = useAppStore();
   const { showNotifications } = useNotification();
@@ -20,12 +20,21 @@ export default function TableHeader({ onQRScan, onSidebarPress }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.sidebarButton}
-          onPress={onSidebarPress}
-        >
-          <Ionicons name="menu" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
-        </TouchableOpacity>
+        {showBackButton ? (
+          <TouchableOpacity
+            style={styles.sidebarButton}
+            onPress={onBackPress}
+          >
+            <Ionicons name="arrow-back" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.sidebarButton}
+            onPress={onSidebarPress}
+          >
+            <Ionicons name="menu" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="#8B4513" />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.shopInfo}>
           <View style={styles.shopNameContainer}>

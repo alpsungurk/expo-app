@@ -83,7 +83,7 @@ export default function ProductCard({ product, onPress, onAddToCart, onProductDe
       }
     ]}>
       <TouchableOpacity
-        onPress={() => onPress(product)}
+        onPress={() => onProductDetail ? onProductDetail(product) : onPress(product)}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.9}
@@ -193,11 +193,7 @@ export default function ProductCard({ product, onPress, onAddToCart, onProductDe
               ]}
               onPress={(e) => {
                 e.stopPropagation();
-                if (onProductDetail) {
-                  onProductDetail(product);
-                } else {
-                  onAddToCart(product);
-                }
+                onAddToCart(product);
               }}
               activeOpacity={0.8}
             >

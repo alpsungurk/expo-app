@@ -51,7 +51,7 @@ export default function QRScanner({ visible, onClose, onTableFound }) {
       
       Alert.alert(
         'Masa Bulundu! 🎉',
-        `Masa ${demoTableData.masa_no} için menüye yönlendiriliyorsunuz.`,
+        ` ${demoTableData.masa_no} için menüye yönlendiriliyorsunuz.`,
         [
           {
             text: 'Tamam',

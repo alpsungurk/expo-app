@@ -9,10 +9,14 @@ import {
   FlatList,
   Alert,
   Dimensions,
-  Animated
+  Animated,
+  TextInput,
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 import { supabase, TABLES } from '../config/supabase';
 import { useAppStore } from '../store/appStore';
 import { useCartStore } from '../store/cartStore';
@@ -28,6 +32,40 @@ const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 const isTablet = width >= 1024;
+
+// Sipariş durumları (OrderStatusScreen'den alındı)
+const ORDER_STATUSES = {
+  beklemede: { 
+    label: 'Beklemede', 
+    color: '#F59E0B', 
+    icon: 'time-outline',
+    description: 'Siparişiniz alındı ve hazırlanmaya başlanacak'
+  },
+  hazirlaniyor: { 
+    label: 'Hazırlanıyor', 
+    color: '#3B82F6', 
+    icon: 'cafe-outline',
+    description: 'Siparişiniz hazırlanıyor, lütfen bekleyin'
+  },
+  hazir: { 
+    label: 'Hazır', 
+    color: '#10B981', 
+    icon: 'checkmark-circle-outline',
+    description: 'Siparişiniz hazır! Masanıza getirilecek'
+  },
+  teslim_edildi: { 
+    label: 'Teslim Edildi', 
+    color: '#059669', 
+    icon: 'checkmark-done-outline',
+    description: 'Siparişiniz teslim edildi. Afiyet olsun!'
+  },
+  iptal: { 
+    label: 'İptal Edildi', 
+    color: '#EF4444', 
+    icon: 'close-circle-outline',
+    description: 'Siparişiniz iptal edildi'
+  }
+};
 
 // Responsive değerler
 const getResponsiveValue = (small, medium, large, tablet = large) => {
@@ -46,13 +84,16 @@ export default function HomeScreen() {
   const [productsLoading, setProductsLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productModalVisible, setProductModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [ordersDropdownVisible, setOrdersDropdownVisible] = useState(false);
+  const [orders, setOrders] = useState([]);
   const modalSlideAnim = useRef(new Animated.Value(0)).current;
 
   // Animation refs
   const scrollY = useRef(new Animated.Value(0)).current;
   const categoryScrollX = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
 
   const {
     categories,
@@ -68,38 +109,65 @@ export default function HomeScreen() {
     setProductModalOpen
   } = useAppStore();
 
-  const { tableNumber, addItem } = useCartStore();
-  const { activeOrder, setActiveOrder } = useAppStore();
+  const { tableNumber, tableId, phoneToken, addItem } = useCartStore();
+  const { activeOrder, setActiveOrder, setAllOrders } = useAppStore();
 
   useEffect(() => {
     loadData();
+    loadOrdersData();
 
     // Staggered animation entrance
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 600,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 100,
-        friction: 8,
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
         useNativeDriver: true,
       })
     ]).start();
   }, []);
 
+  // Sayfa her açıldığında verileri yenile
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+      loadOrdersData();
+    }, [phoneToken])
+  );
+
   useEffect(() => {
+    let filtered = products.filter(product => product.aktif);
+    
+    // Kategori filtresi
     if (selectedCategory) {
-      const filtered = products.filter(product =>
-        product.kategori_id === selectedCategory.id && product.aktif
-      );
-      setFilteredProducts(filtered);
-    } else {
-      setFilteredProducts(products.filter(product => product.aktif));
+      filtered = filtered.filter(product => product.kategori_id === selectedCategory.id);
     }
-  }, [selectedCategory, products]);
+    
+    // Arama filtresi
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(product => 
+        product.ad.toLowerCase().includes(query) ||
+        product.aciklama?.toLowerCase().includes(query)
+      );
+    }
+    
+    setFilteredProducts(filtered);
+  }, [selectedCategory, products, searchQuery]);
+
+  // Phone token değiştiğinde siparişleri yeniden yükle
+  useEffect(() => {
+    if (phoneToken) {
+      loadOrdersData();
+    } else {
+      setOrders([]);
+      setActiveOrder(null);
+    }
+  }, [phoneToken]);
 
   // Modal açılırken animasyon
   useEffect(() => {
@@ -138,6 +206,9 @@ export default function HomeScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
+      console.log('🔄 Veri yükleniyor...');
+      console.log('📊 Supabase URL:', supabase.supabaseUrl);
+      
       // Kategorileri yükle
       const { data: categoriesData, error: categoriesError } = await supabase
         .from(TABLES.KATEGORILER)
@@ -145,7 +216,12 @@ export default function HomeScreen() {
         .eq('aktif', true)
         .order('sira_no', { ascending: true });
 
-      if (categoriesError) throw categoriesError;
+      if (categoriesError) {
+        console.error('❌ Kategoriler hatası:', categoriesError);
+        throw categoriesError;
+      }
+      
+      console.log('✅ Kategoriler yüklendi:', categoriesData?.length || 0, 'kayıt');
 
       // Ürünleri yükle
       const { data: productsData, error: productsError } = await supabase
@@ -228,6 +304,56 @@ export default function HomeScreen() {
     }
   };
 
+  const loadOrdersData = async () => {
+    if (!phoneToken) return;
+
+    try {
+      console.log('🔄 Siparişler yükleniyor...');
+      console.log('📊 Phone Token:', phoneToken);
+      
+      // Telefon token'a göre siparişleri yükle (OrderStatusScreen ile aynı mantık)
+      const { data: ordersData, error: ordersError } = await supabase
+        .from(TABLES.SIPARISLER)
+        .select(`
+          *,
+          siparis_detaylari (
+            id,
+            adet,
+            toplam_fiyat,
+            urunler (
+              ad,
+              fiyat
+            )
+          )
+        `)
+        .eq('telefon_token', phoneToken)
+        .order('olusturma_tarihi', { ascending: false });
+
+      if (ordersError) throw ordersError;
+
+      console.log('✅ Siparişler yüklendi:', ordersData?.length || 0, 'kayıt');
+      setOrders(ordersData || []);
+      
+      // Tüm siparişleri AppStore'a kaydet
+      setAllOrders(ordersData || []);
+
+      // Aktif siparişi güncelle
+      const activeOrderData = ordersData?.find(o =>
+        ['beklemede', 'hazirlaniyor', 'hazir'].includes(o.durum)
+      );
+
+      if (activeOrderData) {
+        setActiveOrder(activeOrderData);
+      } else {
+        setActiveOrder(null);
+      }
+
+    } catch (error) {
+      console.error('Siparişler yükleme hatası:', error);
+      setOrders([]);
+    }
+  };
+
   const handleQRScan = () => {
     navigation.navigate('Sipariş Ver');
   };
@@ -253,32 +379,53 @@ export default function HomeScreen() {
 
 
   const handleAddToCart = (product) => {
-    if (!tableNumber) {
-      Alert.alert(
-        'Masa Seçilmedi',
-        'Ürün eklemek için önce masa QR kodunu tarayın.',
-        [{ text: 'Tamam' }]
-      );
+    if (!tableId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Masa Seçilmedi',
+        text2: 'Ürün eklemek için önce masa QR kodunu tarayın.',
+        position: 'top',
+        visibilityTime: 3000,
+      });
       return;
     }
 
     addItem(product);
-    Alert.alert('Başarılı', `${product.ad} sepete eklendi!`);
+    
+    // Önce mevcut toast'ı gizle
+    Toast.hide();
+    
+    // Kısa bir gecikme sonra yeni toast'ı göster
+    setTimeout(() => {
+      Toast.show({
+        type: 'success',
+        text1: 'Başarılı',
+        text2: `${product.ad} sepete eklendi!`,
+        position: 'top',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 60,
+      });
+    }, 100);
   };
 
-  // Test fonksiyonları
-  const setTestOrder = (status) => {
-    if (status === null) {
-      setActiveOrder(null);
-    } else {
-      setActiveOrder({
-        id: 1,
-        siparis_no: 'TEST-001',
-        durum: status,
-        olusturma_tarihi: new Date().toISOString(),
-        qr_token: 'test-table'
-      });
-    }
+  const formatPrice = (price) => {
+    return `₺${parseFloat(price).toFixed(2)}`;
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('tr-TR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getStatusInfo = (status) => {
+    return ORDER_STATUSES[status] || ORDER_STATUSES.beklemede;
   };
 
   const numCols = getResponsiveValue(2, 2, 3, 4);
@@ -289,7 +436,7 @@ export default function HomeScreen() {
       <View style={{ flex: 1, maxWidth: `${100 / numCols}%` }}>
         <ProductCard
           product={item}
-          onPress={handleAddToCart}
+          onPress={handleProductPress}
           onAddToCart={handleAddToCart}
           onProductDetail={handleProductPress}
         />
@@ -304,32 +451,78 @@ export default function HomeScreen() {
         onSidebarPress={() => setSidebarVisible(true)}
       />
 
-      {/* Test Butonları - Geliştirme için */}
-      <View style={styles.testButtonsContainer}>
-        <TouchableOpacity 
-          style={[styles.testButton, { backgroundColor: '#FEF3C7' }]}
-          onPress={() => setTestOrder('hazirlaniyor')}
-        >
-          <Text style={[styles.testButtonText, { color: '#8B4513' }]}></Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.testButton, { backgroundColor: '#DCFCE7' }]}
-          onPress={() => setTestOrder('hazir')}
-        >
-          <Text style={[styles.testButtonText, { color: '#166534' }]}>Hazırlandı</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.testButton, { backgroundColor: '#F3F4F6' }]}
-          onPress={() => setTestOrder(null)}
-        >
-          <Text style={[styles.testButtonText, { color: '#6B7280' }]}>Sipariş Yok</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Siparişler Dropdown - Sadece sipariş varsa göster */}
+      {orders.length > 0 && (
+        <View style={styles.ordersDropdownContainer}>
+          <View style={styles.ordersDropdownWrapper}>
+            <TouchableOpacity 
+              style={styles.ordersDropdownButton}
+              onPress={() => setOrdersDropdownVisible(!ordersDropdownVisible)}
+            >
+              <View style={styles.ordersDropdownContent}>
+                <Ionicons name="list-outline" size={20} color="#8B4513" />
+                <Text style={styles.ordersDropdownText}>
+                  Siparişlerim
+                </Text>
+              </View>
+              <Ionicons 
+                name={ordersDropdownVisible ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color="#8B4513" 
+              />
+            </TouchableOpacity>
+            
+            {/* Sipariş Sayısı Badge - Sadece sipariş varsa göster */}
+            {orders.length > 0 && (
+              <View style={styles.ordersBadge}>
+                <Text style={styles.ordersBadgeText}>{orders.length}</Text>
+              </View>
+            )}
+          </View>
+
+          {ordersDropdownVisible && (
+            <View style={styles.ordersDropdownList}>
+              {orders.map((order) => {
+                const statusInfo = getStatusInfo(order.durum);
+                return (
+                  <TouchableOpacity 
+                    key={order.id}
+                    style={styles.orderDropdownItem}
+                    onPress={() => {
+                      setOrdersDropdownVisible(false);
+                      navigation.navigate('OrderDetail', { 
+                        order, 
+                        orderDetails: order.siparis_detaylari 
+                      });
+                    }}
+                  >
+                    <View style={styles.orderDropdownLeft}>
+                      <Ionicons 
+                        name={statusInfo.icon} 
+                        size={16} 
+                        color={statusInfo.color} 
+                      />
+                      <View style={styles.orderDropdownInfo}>
+                        <Text style={styles.orderDropdownNumber}>#{order.siparis_no}</Text>
+                        <Text style={styles.orderDropdownDate}>{formatDate(order.olusturma_tarihi)}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.orderDropdownRight}>
+                      <View style={[styles.orderDropdownBadge, { backgroundColor: statusInfo.color }]}>
+                        <Text style={styles.orderDropdownBadgeText}>{statusInfo.label}</Text>
+                      </View>
+                      <Text style={styles.orderDropdownPrice}>{formatPrice(order.toplam_tutar)}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
 
       <Animated.ScrollView
-        style={[styles.scrollView, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}
+        style={[styles.scrollView, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -437,16 +630,35 @@ export default function HomeScreen() {
             </Text>
           </View>
 
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={20} color="#8B4513" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Ürün ara..."
+                placeholderTextColor="#9CA3AF"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
           {productsLoading ? (
             <Animated.View style={[
               styles.loadingContainer,
               {
                 opacity: fadeAnim,
-                transform: [{ scale: scaleAnim }]
+                transform: [{ translateY: slideAnim }]
               }
             ]}>
-              <Ionicons name="cafe" size={getResponsiveValue(40, 45, 50, 55)} color="#8B4513" />
-              <Text style={styles.loadingText}>Ürünler yükleniyor...</Text>
+              <ActivityIndicator size="large" color="#8B4513" />
             </Animated.View>
           ) : (
             <View style={styles.productsGrid}>
@@ -464,7 +676,7 @@ export default function HomeScreen() {
                 >
                   <ProductCard
                     product={item}
-                    onPress={handleAddToCart}
+                    onPress={handleProductPress}
                     onAddToCart={handleAddToCart}
                     onProductDetail={handleProductPress}
                   />
@@ -537,25 +749,128 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  // Test Butonları Stilleri
-  testButtonsContainer: {
+  // Siparişler Dropdown Stilleri
+  ordersDropdownContainer: {
+    marginHorizontal: getResponsiveValue(16, 20, 24, 28),
+    marginTop: getResponsiveValue(20, 24, 28, 32), // Üst bar ile mesafe artırıldı
+    marginBottom: getResponsiveValue(12, 16, 20, 24),
+  },
+  ordersDropdownWrapper: {
+    position: 'relative',
+  },
+  ordersDropdownButton: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
-    paddingVertical: getResponsiveValue(8, 10, 12, 14),
+    backgroundColor: 'white',
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
+    paddingVertical: getResponsiveValue(12, 14, 16, 18),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  ordersDropdownContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: getResponsiveValue(8, 10, 12, 14),
   },
-  testButton: {
-    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
-    paddingVertical: getResponsiveValue(6, 8, 10, 12),
-    borderRadius: getResponsiveValue(8, 10, 12, 14),
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  testButtonText: {
-    fontSize: getResponsiveValue(12, 13, 14, 16),
+  ordersDropdownText: {
+    fontSize: getResponsiveValue(14, 15, 16, 18),
     fontWeight: '600',
+    color: '#8B4513',
+    fontFamily: 'System',
+  },
+  ordersDropdownList: {
+    backgroundColor: 'white',
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    marginTop: getResponsiveValue(4, 6, 8, 10),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    maxHeight: getResponsiveValue(200, 250, 300, 350),
+  },
+  orderDropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
+    paddingVertical: getResponsiveValue(12, 14, 16, 18),
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  orderDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveValue(8, 10, 12, 14),
+    flex: 1,
+  },
+  orderDropdownInfo: {
+    gap: 2,
+  },
+  orderDropdownNumber: {
+    fontSize: getResponsiveValue(13, 14, 15, 16),
+    fontWeight: '600',
+    color: '#1F2937',
+    fontFamily: 'System',
+  },
+  orderDropdownDate: {
+    fontSize: getResponsiveValue(11, 12, 13, 14),
+    color: '#6B7280',
+    fontFamily: 'System',
+  },
+  orderDropdownRight: {
+    alignItems: 'flex-end',
+    gap: getResponsiveValue(4, 6, 8, 10),
+  },
+  orderDropdownBadge: {
+    paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
+    paddingVertical: getResponsiveValue(4, 5, 6, 8),
+    borderRadius: getResponsiveValue(8, 10, 12, 14),
+  },
+  orderDropdownBadgeText: {
+    fontSize: getResponsiveValue(10, 11, 12, 13),
+    fontWeight: '600',
+    color: 'white',
+    fontFamily: 'System',
+  },
+  orderDropdownPrice: {
+    fontSize: getResponsiveValue(12, 13, 14, 15),
+    fontWeight: '600',
+    color: '#8B4513',
+    fontFamily: 'System',
+  },
+  // Sipariş Sayısı Badge Stilleri
+  ordersBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#EF4444',
+    borderRadius: getResponsiveValue(10, 12, 14, 16),
+    minWidth: getResponsiveValue(20, 22, 24, 26),
+    height: getResponsiveValue(20, 22, 24, 26),
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  ordersBadgeText: {
+    color: 'white',
+    fontSize: getResponsiveValue(10, 11, 12, 13),
+    fontWeight: 'bold',
     fontFamily: 'System',
   },
   sectionTitle: {
@@ -651,5 +966,40 @@ const styles = StyleSheet.create({
   },
   productWrapper: {
     // width will be set dynamically based on numCols
+  },
+  // Search Bar Stilleri
+  searchContainer: {
+    paddingHorizontal: getResponsiveValue(8, 12, 16, 20),
+    marginBottom: getResponsiveValue(16, 20, 24, 28),
+    marginTop: getResponsiveValue(8, 10, 12, 14),
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
+    paddingVertical: getResponsiveValue(10, 12, 14, 16),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchIcon: {
+    marginRight: getResponsiveValue(8, 10, 12, 14),
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: getResponsiveValue(14, 15, 16, 18),
+    color: '#1F2937',
+    fontFamily: 'System',
+    padding: 0,
+  },
+  clearButton: {
+    padding: getResponsiveValue(4, 5, 6, 8),
+    marginLeft: getResponsiveValue(8, 10, 12, 14),
   },
 });
