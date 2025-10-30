@@ -77,7 +77,7 @@ export default function LoginScreen() {
           >
             <Ionicons name="arrow-back" size={24} color="#8B4513" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Kasa Girişi</Text>
+          <Text style={styles.headerTitle}>Giriş</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -101,7 +101,7 @@ export default function LoginScreen() {
             styles.logoText,
             { fontSize: getResponsiveValue(24, 26, 28, 30) }
           ]}>
-            Kasa Sistemi
+            Sipariş Sistemi
           </Text>
           <Text style={[
             styles.logoSubtext,

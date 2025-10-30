@@ -112,7 +112,16 @@ export default function OrderStatusScreen() {
             table: TABLES.SIPARISLER
           }, 
           (payload) => {
-            loadOrdersData();
+            console.log('OrderStatusScreen realtime güncelleme:', payload);
+            
+            // Sadece bu telefon token'ına ait siparişleri güncelle
+            if (payload.new && payload.new.telefon_token === phoneToken) {
+              console.log('Bu telefon token\'ına ait sipariş güncellendi:', payload.new);
+              loadOrdersData();
+            } else if (payload.old && payload.old.telefon_token === phoneToken) {
+              console.log('Bu telefon token\'ına ait sipariş silindi:', payload.old);
+              loadOrdersData();
+            }
           }
         )
         .subscribe();
