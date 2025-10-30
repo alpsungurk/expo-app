@@ -137,9 +137,7 @@ export const AppProvider = ({ children }) => {
           // Benzersiz token oluştur
           token = `PHONE_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
           await AsyncStorage.setItem('phoneToken', token);
-          console.log('Yeni phone token oluşturuldu:', token);
         } else {
-          console.log('Mevcut phone token yüklendi:', token);
         }
         setPhoneToken(token);
       } catch (error) {

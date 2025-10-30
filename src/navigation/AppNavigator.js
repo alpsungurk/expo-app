@@ -15,6 +15,9 @@ import OrderDetailScreen from '../screens/OrderDetailScreen';
 import QRScanScreen from '../screens/QRScanScreen';
 import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import AnnouncementDetailScreen from '../screens/AnnouncementDetailScreen';
+import LoginScreen from '../screens/LoginScreen';
+import KasaScreen from '../screens/KasaScreen';
+import KasaOrderDetailScreen from '../screens/KasaOrderDetailScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -23,49 +26,6 @@ function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="HomeMain" component={HomeScreen} />
-      <Stack.Screen 
-        name="OrderDetail" 
-        component={OrderDetailScreen}
-        options={{
-          presentation: 'modal',
-          gestureEnabled: true,
-          gestureDirection: 'vertical',
-          cardStyleInterpolator: ({ current, layouts }) => {
-            return {
-              cardStyle: {
-                transform: [
-                  {
-                    translateY: current.progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [layouts.screen.height, 0],
-                    }),
-                  },
-                ],
-                opacity: current.progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 1],
-                }),
-              },
-            };
-          },
-          transitionSpec: {
-            open: {
-              animation: 'timing',
-              config: {
-                duration: 350,
-                useNativeDriver: true,
-              },
-            },
-            close: {
-              animation: 'timing',
-              config: {
-                duration: 350,
-                useNativeDriver: true,
-              },
-            },
-          },
-        }}
-      />
     </Stack.Navigator>
   );
 }
@@ -76,49 +36,6 @@ function CartStack() {
       <Stack.Screen name="CartMain" component={CartScreen} />
       <Stack.Screen name="EditCartItem" component={EditCartItemScreen} />
       <Stack.Screen name="OrderStatus" component={OrderStatusScreen} />
-      <Stack.Screen 
-        name="OrderDetail" 
-        component={OrderDetailScreen}
-        options={{
-          presentation: 'modal',
-          gestureEnabled: true,
-          gestureDirection: 'vertical',
-          cardStyleInterpolator: ({ current, layouts }) => {
-            return {
-              cardStyle: {
-                transform: [
-                  {
-                    translateY: current.progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [layouts.screen.height, 0],
-                    }),
-                  },
-                ],
-                opacity: current.progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 1],
-                }),
-              },
-            };
-          },
-          transitionSpec: {
-            open: {
-              animation: 'timing',
-              config: {
-                duration: 350,
-                useNativeDriver: true,
-              },
-            },
-            close: {
-              animation: 'timing',
-              config: {
-                duration: 350,
-                useNativeDriver: true,
-              },
-            },
-          },
-        }}
-      />
     </Stack.Navigator>
   );
 }
@@ -250,6 +167,57 @@ function AnnouncementsStack() {
   );
 }
 
+function KasaStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="KasaMain" component={KasaScreen} />
+      <Stack.Screen 
+        name="KasaOrderDetail" 
+        component={KasaOrderDetailScreen}
+        options={{
+          presentation: 'modal',
+          gestureEnabled: true,
+          gestureDirection: 'vertical',
+          cardStyleInterpolator: ({ current, layouts }) => {
+            return {
+              cardStyle: {
+                transform: [
+                  {
+                    translateY: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.height, 0],
+                    }),
+                  },
+                ],
+                opacity: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1],
+                }),
+              },
+            };
+          },
+          transitionSpec: {
+            open: {
+              animation: 'timing',
+              config: {
+                duration: 350,
+                useNativeDriver: true,
+              },
+            },
+            close: {
+              animation: 'timing',
+              config: {
+                duration: 350,
+                useNativeDriver: true,
+              },
+            },
+          },
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 export default function AppNavigator() {
   const { getTotalItems } = useCartStore();
   const { isProductModalOpen, getActiveOrdersCount } = useAppStore();
@@ -257,7 +225,22 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      <Tab.Navigator
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+        <Stack.Screen name="LoginScreen" component={LoginScreen} />
+        <Stack.Screen name="KasaScreen" component={KasaStack} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+function MainTabNavigator() {
+  const { getTotalItems } = useCartStore();
+  const { isProductModalOpen, getActiveOrdersCount } = useAppStore();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
@@ -339,9 +322,14 @@ export default function AppNavigator() {
             tabBarBadgeStyle: {
               backgroundColor: '#EF4444',
               color: 'white',
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: 'bold',
               fontFamily: 'System',
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
+              textAlign: 'center',
+              lineHeight: 18,
             },
             tabBarStyle: ((route) => {
               const routeName = getFocusedRouteNameFromRoute(route) ?? 'CartMain';
@@ -383,9 +371,14 @@ export default function AppNavigator() {
             tabBarBadgeStyle: {
               backgroundColor: '#F59E0B', // Turuncu - beklemede/hazırlanıyor rengi
               color: 'white',
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: 'bold',
               fontFamily: 'System',
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
+              textAlign: 'center',
+              lineHeight: 18,
             },
             tabBarStyle: ((route) => {
               const routeName = getFocusedRouteNameFromRoute(route) ?? 'OrderStatusMain';
@@ -443,7 +436,6 @@ export default function AppNavigator() {
           })}
         />
       </Tab.Navigator>
-    </NavigationContainer>
   );
 }
 

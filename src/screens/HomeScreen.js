@@ -206,9 +206,7 @@ export default function HomeScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
-      console.log('🔄 Veri yükleniyor...');
-      console.log('📊 Supabase URL:', supabase.supabaseUrl);
-      
+
       // Kategorileri yükle
       const { data: categoriesData, error: categoriesError } = await supabase
         .from(TABLES.KATEGORILER)
@@ -221,7 +219,6 @@ export default function HomeScreen() {
         throw categoriesError;
       }
       
-      console.log('✅ Kategoriler yüklendi:', categoriesData?.length || 0, 'kayıt');
 
       // Ürünleri yükle
       const { data: productsData, error: productsError } = await supabase
@@ -308,8 +305,7 @@ export default function HomeScreen() {
     if (!phoneToken) return;
 
     try {
-      console.log('🔄 Siparişler yükleniyor...');
-      console.log('📊 Phone Token:', phoneToken);
+
       
       // Telefon token'a göre siparişleri yükle (OrderStatusScreen ile aynı mantık)
       const { data: ordersData, error: ordersError } = await supabase
@@ -331,7 +327,6 @@ export default function HomeScreen() {
 
       if (ordersError) throw ordersError;
 
-      console.log('✅ Siparişler yüklendi:', ordersData?.length || 0, 'kayıt');
       setOrders(ordersData || []);
       
       // Tüm siparişleri AppStore'a kaydet
@@ -482,40 +477,50 @@ export default function HomeScreen() {
 
           {ordersDropdownVisible && (
             <View style={styles.ordersDropdownList}>
-              {orders.map((order) => {
-                const statusInfo = getStatusInfo(order.durum);
-                return (
-                  <TouchableOpacity 
-                    key={order.id}
-                    style={styles.orderDropdownItem}
-                    onPress={() => {
-                      setOrdersDropdownVisible(false);
-                      navigation.navigate('OrderDetail', { 
-                        order, 
-                        orderDetails: order.siparis_detaylari 
-                      });
-                    }}
-                  >
-                    <View style={styles.orderDropdownLeft}>
-                      <Ionicons 
-                        name={statusInfo.icon} 
-                        size={16} 
-                        color={statusInfo.color} 
-                      />
-                      <View style={styles.orderDropdownInfo}>
-                        <Text style={styles.orderDropdownNumber}>#{order.siparis_no}</Text>
-                        <Text style={styles.orderDropdownDate}>{formatDate(order.olusturma_tarihi)}</Text>
+              <ScrollView 
+                style={styles.ordersDropdownScrollView}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                nestedScrollEnabled={true}
+              >
+                {orders.map((order) => {
+                  const statusInfo = getStatusInfo(order.durum);
+                  return (
+                    <TouchableOpacity 
+                      key={order.id}
+                      style={styles.orderDropdownItem}
+                      onPress={() => {
+                        setOrdersDropdownVisible(false);
+                        navigation.navigate('Siparişlerim', {
+                          screen: 'OrderDetail',
+                          params: { 
+                            order, 
+                            orderDetails: order.siparis_detaylari
+                          }
+                        });
+                      }}
+                    >
+                      <View style={styles.orderDropdownLeft}>
+                        <Ionicons 
+                          name={statusInfo.icon} 
+                          size={16} 
+                          color={statusInfo.color} 
+                        />
+                        <View style={styles.orderDropdownInfo}>
+                          <Text style={styles.orderDropdownNumber}>#{order.siparis_no}</Text>
+                          <Text style={styles.orderDropdownDate}>{formatDate(order.olusturma_tarihi)}</Text>
+                        </View>
                       </View>
-                    </View>
-                    <View style={styles.orderDropdownRight}>
-                      <View style={[styles.orderDropdownBadge, { backgroundColor: statusInfo.color }]}>
-                        <Text style={styles.orderDropdownBadgeText}>{statusInfo.label}</Text>
+                      <View style={styles.orderDropdownRight}>
+                        <View style={[styles.orderDropdownBadge, { backgroundColor: statusInfo.color }]}>
+                          <Text style={styles.orderDropdownBadgeText}>{statusInfo.label}</Text>
+                        </View>
+                        <Text style={styles.orderDropdownPrice}>{formatPrice(order.toplam_tutar)}</Text>
                       </View>
-                      <Text style={styles.orderDropdownPrice}>{formatPrice(order.toplam_tutar)}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
           )}
         </View>
@@ -796,6 +801,9 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    maxHeight: getResponsiveValue(200, 250, 300, 350),
+  },
+  ordersDropdownScrollView: {
     maxHeight: getResponsiveValue(200, 250, 300, 350),
   },
   orderDropdownItem: {

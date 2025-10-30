@@ -254,7 +254,7 @@ export const CartProvider = ({ children }) => {
           siparis_no: orderNumber,
           toplam_tutar: totalAmount,
           durum: 'beklemede',
-          aciklama: 'Müşteri siparişi',
+          aciklama: null,
           telefon_token: phoneToken
         })
         .select()

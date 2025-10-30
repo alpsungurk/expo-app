@@ -18,7 +18,7 @@ import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/nativ
 import { supabase, TABLES } from '../config/supabase';
 import { useAppStore } from '../store/appStore';
 import TableHeader from '../components/TableHeader';
-import Sidebar from '../components/Sidebar';
+import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -90,7 +90,6 @@ export default function OrderStatusScreen() {
     const getPhoneToken = async () => {
       try {
         const token = await AsyncStorage.getItem('phoneToken');
-        console.log('Phone Token:', token);
         setPhoneToken(token);
       } catch (error) {
         console.error('Phone token alma hatası:', error);
@@ -153,13 +152,11 @@ export default function OrderStatusScreen() {
   const loadOrdersData = async () => {
     try {
       if (!phoneToken) {
-        console.log('Phone token bulunamadı, siparişler yüklenemiyor');
         setIsLoading(false);
         setIsRefreshing(false);
         return;
       }
 
-      console.log('Siparişler yükleniyor, token:', phoneToken);
 
       // Telefon token'a göre tüm siparişleri yükle
       const { data: ordersData, error: ordersError } = await supabase
@@ -181,8 +178,6 @@ export default function OrderStatusScreen() {
 
       if (ordersError) throw ordersError;
 
-      console.log('Bulunan sipariş sayısı:', ordersData?.length || 0);
-      console.log('Siparişler:', ordersData);
 
       setOrders(ordersData || []);
       
@@ -195,10 +190,8 @@ export default function OrderStatusScreen() {
       );
       
       if (activeOrderData) {
-        console.log('Aktif sipariş bulundu:', activeOrderData.siparis_no);
         setActiveOrder(activeOrderData);
       } else {
-        console.log('Aktif sipariş bulunamadı');
         setActiveOrder(null);
       }
 
@@ -253,7 +246,7 @@ export default function OrderStatusScreen() {
           <ActivityIndicator size="large" color="#8B4513" />
         </View>
 
-        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </SafeAreaView>
     );
   }
@@ -364,7 +357,7 @@ export default function OrderStatusScreen() {
           </TouchableOpacity>
         </View>
 
-        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+        <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       </SafeAreaView>
     );
   }
@@ -382,10 +375,13 @@ export default function OrderStatusScreen() {
             transform: [{ scale: scaleAnim }]
           }
         ]}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
+        bounces={true}
+        alwaysBounceVertical={false}
       >
         {/* Aktif Sipariş Durumu Göstergesi - Kaldırıldı */}
 
@@ -404,7 +400,7 @@ export default function OrderStatusScreen() {
         <View style={{ height: 20 }} />
       </Animated.ScrollView>
 
-      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -416,6 +412,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -747,8 +747,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     marginTop: 10,
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   ordersTitle: {
     fontSize: 20,
@@ -763,18 +772,19 @@ const styles = StyleSheet.create({
   },
   ordersContainer: {
     paddingHorizontal: 20,
+    flex: 1,
   },
   orderCard: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    minHeight: 160, // Kart boyutunu büyüttük
+    shadowRadius: 4,
+    elevation: 2,
+    minHeight: 120,
   },
   orderCardHeader: {
     flexDirection: 'row',
@@ -815,7 +825,7 @@ const styles = StyleSheet.create({
   orderCardBody: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 16,
+    gap: 12,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',

@@ -139,12 +139,10 @@ export default function CartScreen() {
     setIsSubmitting(true);
 
     try {
-      console.log('Sipariş oluşturuluyor, phoneToken:', phoneToken);
       
       // CartStore'daki createOrder fonksiyonunu kullan
       const orderData = await createOrder(phoneToken);
       
-      console.log('Sipariş başarıyla oluşturuldu:', orderData);
 
       // Siparişi app store'a kaydet
       setCurrentOrder(orderData);
@@ -155,7 +153,7 @@ export default function CartScreen() {
         [
           {
             text: 'Siparişlerim',
-            onPress: () => navigation.navigate('OrderStatus', { orderId: orderData.id })
+            onPress: () => navigation.navigate('Siparişlerim', { orderId: orderData.id })
           },
           {
             text: 'Ana Sayfaya Dön',
@@ -173,10 +171,19 @@ export default function CartScreen() {
   };
 
   const renderCartItem = (item, index) => {
+    // Debug için item verilerini kontrol et
+    console.log('Cart item data:', {
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      customizations: item.customizations
+    });
+
     const customizationsText = item.customizations && Object.values(item.customizations).length > 0 
       ? Object.values(item.customizations)
           .map(customization => customization?.name || '')
-          .filter(name => name)
+          .filter(name => name && name.trim())
           .join(', ')
       : '';
 
@@ -195,15 +202,15 @@ export default function CartScreen() {
         <View style={styles.itemContent}>
           <View style={styles.itemHeader}>
             <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemName}>{item.name || 'Ürün'}</Text>
               
-              {customizationsText && (
+              {customizationsText && customizationsText.trim() && (
                 <Text style={styles.customizations}>
                   {customizationsText}
                 </Text>
               )}
               
-              {item.notes && (
+              {item.notes && item.notes.trim() && (
                 <Text style={styles.notes}>
                   Not: {item.notes}
                 </Text>

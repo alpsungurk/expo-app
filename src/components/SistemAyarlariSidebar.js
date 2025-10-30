@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -222,6 +223,13 @@ const SistemAyarlariListesi = () => {
 
 // Ana Sidebar Component
 const SistemAyarlariSidebar = ({ visible, onClose }) => {
+  const navigation = useNavigation();
+
+  const handleLoginPress = () => {
+    onClose(); // Sidebar'ı kapat
+    navigation.navigate('LoginScreen');
+  };
+
   return (
     <Modal
       visible={visible}
@@ -255,6 +263,48 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
           </TouchableOpacity>
 
           <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
+            {/* Giriş Yap Butonu */}
+            <TouchableOpacity
+              style={[
+                styles.loginButton,
+                {
+                  paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                  paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
+                  marginBottom: getResponsiveValue(20, 24, 28, 32),
+                  borderRadius: getResponsiveValue(12, 14, 16, 18),
+                }
+              ]}
+              onPress={handleLoginPress}
+            >
+              <View style={styles.loginButtonContent}>
+                <View style={[
+                  styles.loginIcon,
+                  {
+                    width: getResponsiveValue(40, 44, 48, 52),
+                    height: getResponsiveValue(40, 44, 48, 52),
+                    borderRadius: getResponsiveValue(20, 22, 24, 26),
+                  }
+                ]}>
+                  <Ionicons 
+                    name="log-in" 
+                    size={getResponsiveValue(20, 22, 24, 26)} 
+                    color="white" 
+                  />
+                </View>
+                <Text style={[
+                  styles.loginButtonText,
+                  { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                ]}>
+                  Kasa Girişi
+                </Text>
+                <Ionicons 
+                  name="chevron-forward" 
+                  size={getResponsiveValue(16, 18, 20, 22)} 
+                  color="white" 
+                />
+              </View>
+            </TouchableOpacity>
+
             <SistemAyarlariListesi />
           </ScrollView>
         </View>
@@ -387,6 +437,33 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   tabContent: {
+    flex: 1,
+  },
+  
+  // Login Button Stilleri
+  loginButton: {
+    backgroundColor: '#8B4513',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loginButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  loginIcon: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: getResponsiveValue(12, 14, 16, 18),
+  },
+  loginButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontFamily: 'System',
     flex: 1,
   },
 });
