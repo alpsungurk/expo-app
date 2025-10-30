@@ -295,7 +295,7 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                   styles.loginButtonText,
                   { fontSize: getResponsiveValue(16, 17, 18, 20) }
                 ]}>
-                  Kasa Girişi
+                  Giriş
                 </Text>
                 <Ionicons 
                   name="chevron-forward" 

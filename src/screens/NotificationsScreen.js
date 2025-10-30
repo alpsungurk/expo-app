@@ -9,6 +9,7 @@ import {
   StatusBar,
   Animated,
   RefreshControl,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../config/supabase';
@@ -159,22 +160,23 @@ const NotificationsScreen = ({ onClose }) => {
   );
 
   return (
-    <Animated.View 
-      style={[
-        styles.container,
-        {
-          transform: [
-            {
-              translateY: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, Dimensions.get('window').height],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
+    <SafeAreaView style={styles.safeArea}>
+      <Animated.View 
+        style={[
+          styles.container,
+          {
+            transform: [
+              {
+                translateY: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, Dimensions.get('window').height],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
       
       {/* Header */}
       <View style={styles.header}>
@@ -219,11 +221,16 @@ const NotificationsScreen = ({ onClose }) => {
           </View>
         )}
       </ScrollView>
-    </Animated.View>
+      </Animated.View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#8B4513',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',

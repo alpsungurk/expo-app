@@ -10,7 +10,9 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
-  RefreshControl
+  RefreshControl,
+  Modal,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -68,10 +70,10 @@ export default function KasaScreen() {
   const navigation = useNavigation();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
-  const [selectedFilter, setSelectedFilter] = useState('tumu');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [newOrderNotification, setNewOrderNotification] = useState(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -79,7 +81,7 @@ export default function KasaScreen() {
 
   useEffect(() => {
     filterOrders();
-  }, [orders, selectedFilter]);
+  }, [orders]);
 
   const loadOrders = async () => {
     try {
@@ -131,13 +133,17 @@ export default function KasaScreen() {
   };
 
   const filterOrders = () => {
-    let filtered = [...orders];
+    // Her masadan sadece 1 tane göster (en son sipariş)
+    const uniqueMasaOrders = {};
+    orders.forEach(order => {
+      const masaNo = order.masalar?.masa_no || order.masa_no;
+      if (!uniqueMasaOrders[masaNo] || 
+          new Date(order.olusturma_tarihi) > new Date(uniqueMasaOrders[masaNo].olusturma_tarihi)) {
+        uniqueMasaOrders[masaNo] = order;
+      }
+    });
     
-    if (selectedFilter !== 'tumu') {
-      filtered = filtered.filter(order => order.durum === selectedFilter);
-    }
-    
-    setFilteredOrders(filtered);
+    setFilteredOrders(Object.values(uniqueMasaOrders));
   };
 
   const onRefresh = () => {
@@ -146,9 +152,17 @@ export default function KasaScreen() {
   };
 
   const handleOrderPress = (order) => {
+    const masaNo = order.masalar?.masa_no || order.masa_no;
+    
+    // Bu masanın tüm siparişlerini bul
+    const masaOrders = orders.filter(o => 
+      (o.masalar?.masa_no || o.masa_no) === masaNo
+    );
+    
     navigation.navigate('KasaOrderDetail', { 
-      order, 
-      orderDetails: order.siparis_detaylari 
+      masaNo,
+      masaOrders,
+      currentOrder: order
     });
   };
 
@@ -157,14 +171,17 @@ export default function KasaScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Çıkış Yap',
-      'Kasa sisteminden çıkmak istediğinizden emin misiniz?',
-      [
-        { text: 'İptal', style: 'cancel' },
-        { text: 'Çıkış Yap', onPress: () => navigation.goBack() }
-      ]
-    );
+    console.log('Çıkış butonuna basıldı!');
+    setShowLogoutModal(true);
+  };
+
+  const handleCancelLogout = () => {
+    setShowLogoutModal(false);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    navigation.navigate('MainTabs');
   };
 
   const formatPrice = (price) => {
@@ -193,71 +210,66 @@ export default function KasaScreen() {
     return summary.length > 50 ? summary.substring(0, 50) + '...' : summary;
   };
 
+  const getMasaOrderStatusSummary = (masaNo) => {
+    const masaOrders = orders.filter(order => 
+      (order.masalar?.masa_no || order.masa_no) === masaNo
+    );
+    
+    const statusCounts = {};
+    masaOrders.forEach(order => {
+      const status = order.durum;
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    
+    const statusLabels = {
+      beklemede: 'bekleyen',
+      hazirlaniyor: 'hazırlanan',
+      hazir: 'hazır',
+      teslim_edildi: 'onaylanan',
+      iptal: 'iptal'
+    };
+    
+    const summaryParts = [];
+    Object.entries(statusCounts).forEach(([status, count]) => {
+      if (count > 0) {
+        const label = statusLabels[status] || status;
+        summaryParts.push(`${count} ${label}`);
+      }
+    });
+    
+    return summaryParts.join(', ');
+  };
+
   const renderOrderItem = ({ item }) => {
     const statusInfo = getStatusInfo(item.durum);
+    const masaNo = item.masalar?.masa_no || item.masa_no;
+    const statusSummary = getMasaOrderStatusSummary(masaNo);
     
     return (
       <TouchableOpacity
-        style={[
-          styles.orderCard,
-          { backgroundColor: statusInfo.bgColor }
-        ]}
+        style={styles.orderCard}
         onPress={() => handleOrderPress(item)}
       >
         <View style={styles.orderHeader}>
-          <Text style={styles.orderTableText}>Masa {item.masalar?.masa_no || item.masa_no}</Text>
-          <View style={[
-            styles.statusBadge,
-            { backgroundColor: statusInfo.color }
-          ]}>
-            <Text style={styles.statusBadgeText}>{statusInfo.label}</Text>
-          </View>
+          <Text style={styles.orderTableText}> {masaNo}</Text>
         </View>
         
-        <Text style={[
-          styles.orderSummary,
-          { color: statusInfo.color }
-        ]}>
-          {getOrderSummary(item.siparis_detaylari)}
+        <Text style={styles.orderStatusSummary}>
+          {statusSummary || 'Sipariş yok'}
         </Text>
         
         <View style={styles.orderFooter}>
           <Text style={styles.orderTime}>{formatTime(item.olusturma_tarihi)}</Text>
-          <TouchableOpacity style={styles.detailButton}>
-            <Text style={styles.detailButtonText}>Detaya Git</Text>
-          </TouchableOpacity>
+          <Ionicons 
+            name="chevron-forward" 
+            size={getResponsiveValue(16, 18, 20, 22)} 
+            color="#9CA3AF" 
+          />
         </View>
       </TouchableOpacity>
     );
   };
 
-  const renderFilterButton = (key, label) => {
-    const isActive = selectedFilter === key;
-    
-    return (
-      <TouchableOpacity
-        key={key}
-        style={[
-          styles.filterButton,
-          isActive && styles.filterButtonActive,
-          {
-            paddingVertical: getResponsiveValue(8, 10, 12, 14),
-            paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
-            borderRadius: getResponsiveValue(8, 10, 12, 14),
-          }
-        ]}
-        onPress={() => setSelectedFilter(key)}
-      >
-        <Text style={[
-          styles.filterButtonText,
-          isActive && styles.filterButtonTextActive,
-          { fontSize: getResponsiveValue(12, 13, 14, 16) }
-        ]}>
-          {label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
 
   if (isLoading) {
     return (
@@ -283,7 +295,7 @@ export default function KasaScreen() {
         <View style={styles.headerRight}>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>Ahmet Y.</Text>
-            <Text style={styles.userRole}>Kasa</Text>
+            <Text style={styles.userRole}>Yönetici</Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Ionicons name="log-out-outline" size={getResponsiveValue(18, 20, 22, 24)} color="#8B4513" />
@@ -291,13 +303,16 @@ export default function KasaScreen() {
         </View>
       </View>
 
+      {/* Spacer */}
+      <View style={styles.spacer} />
+
       {/* Yeni Sipariş Bildirimi */}
       {newOrderNotification && (
         <View style={styles.notificationCard}>
           <View style={styles.notificationContent}>
             <Ionicons name="notifications" size={20} color="#F59E0B" />
             <Text style={styles.notificationText}>Yeni sipariş geldi</Text>
-            <Text style={styles.notificationTable}>Masa {newOrderNotification.masalar?.masa_no || newOrderNotification.masa_no}</Text>
+            <Text style={styles.notificationTable}>{newOrderNotification.masalar?.masa_no || newOrderNotification.masa_no}</Text>
           </View>
           <View style={styles.notificationActions}>
             <Ionicons name="notifications" size={20} color="#F59E0B" />
@@ -305,6 +320,9 @@ export default function KasaScreen() {
           </View>
         </View>
       )}
+
+      {/* Spacer */}
+      <View style={styles.spacer} />
 
       {/* Sipariş Listesi */}
       <FlatList
@@ -327,40 +345,51 @@ export default function KasaScreen() {
               <Ionicons name="receipt-outline" size={getResponsiveValue(64, 72, 80, 88)} color="#9CA3AF" />
             </View>
             <Text style={styles.emptyText}>
-              {selectedFilter === 'tumu' 
-                ? 'Henüz sipariş yok' 
-                : 'Bu durumda sipariş yok'
-              }
+              Henüz sipariş yok
             </Text>
             <Text style={styles.emptySubtext}>
-              {selectedFilter === 'tumu' 
-                ? 'Yeni siparişler geldiğinde burada görünecek' 
-                : 'Farklı bir durum seçerek arama yapabilirsiniz'
-              }
+              Yeni siparişler geldiğinde burada görünecek
             </Text>
-            {selectedFilter !== 'tumu' && (
-              <TouchableOpacity 
-                style={styles.clearFilterButton}
-                onPress={() => setSelectedFilter('tumu')}
-              >
-                <Text style={styles.clearFilterButtonText}>Tüm Siparişleri Görüntüle</Text>
-              </TouchableOpacity>
-            )}
           </View>
         }
       />
 
-      {/* Filtre Butonları */}
-      <View style={styles.filterContainer}>
-        <View style={styles.filterButtons}>
-          {renderFilterButton('tumu', 'Tümü')}
-          {renderFilterButton('beklemede', 'Bekle')}
-          {renderFilterButton('hazirlaniyor', 'Hazırla')}
-          {renderFilterButton('hazir', 'Hazır')}
-          {renderFilterButton('teslim_edildi', 'Teslim')}
-          {renderFilterButton('iptal', 'İptal')}
+      {/* Çıkış Onay Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelLogout}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.logoutModalContent}>
+            <View style={styles.logoutModalHeader}>
+              <Ionicons name="log-out-outline" size={32} color="#8B4513" />
+              <Text style={styles.logoutModalTitle}>Çıkış Yap</Text>
+            </View>
+            
+            <Text style={styles.logoutModalDescription}>
+              Sistemden çıkmak istediğinizden emin misiniz?
+            </Text>
+            
+            <View style={styles.logoutModalButtons}>
+              <TouchableOpacity
+                style={styles.logoutModalCancelButton}
+                onPress={handleCancelLogout}
+              >
+                <Text style={styles.logoutModalCancelText}>İptal</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.logoutModalConfirmButton}
+                onPress={handleConfirmLogout}
+              >
+                <Text style={styles.logoutModalConfirmText}>Çıkış Yap</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -390,6 +419,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+  },
+  spacer: {
+    height: getResponsiveValue(8, 10, 12, 14),
   },
   headerLeft: {
     flexDirection: 'row',
@@ -431,12 +463,14 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   logoutButton: {
-    width: getResponsiveValue(36, 40, 44, 48),
-    height: getResponsiveValue(36, 40, 44, 48),
-    borderRadius: getResponsiveValue(18, 20, 22, 24),
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
+    width: getResponsiveValue(44, 48, 52, 56),
+    height: getResponsiveValue(44, 48, 52, 56),
+    borderRadius: getResponsiveValue(22, 24, 26, 28),
+    backgroundColor: 'rgba(139, 69, 19, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 69, 19, 0.3)',
   },
   notificationCard: {
     flexDirection: 'row',
@@ -475,41 +509,45 @@ const styles = StyleSheet.create({
   },
   ordersList: {
     paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
-    paddingBottom: getResponsiveValue(100, 120, 140, 160),
+    paddingBottom: getResponsiveValue(20, 24, 28, 32),
   },
   orderCard: {
     backgroundColor: 'white',
-    borderRadius: getResponsiveValue(12, 14, 16, 18),
-    padding: getResponsiveValue(16, 18, 20, 22),
-    marginBottom: getResponsiveValue(12, 14, 16, 18),
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    padding: getResponsiveValue(20, 22, 24, 26),
+    marginBottom: getResponsiveValue(16, 18, 20, 22),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: getResponsiveValue(8, 10, 12, 14),
+    marginBottom: getResponsiveValue(12, 14, 16, 18),
   },
   orderTableText: {
-    fontSize: getResponsiveValue(16, 17, 18, 20),
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: getResponsiveValue(18, 20, 22, 24),
+    fontWeight: '800',
+    color: '#111827',
     fontFamily: 'System',
+    letterSpacing: 0.5,
   },
   statusBadge: {
-    paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
-    paddingVertical: getResponsiveValue(4, 5, 6, 8),
-    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
+    paddingVertical: getResponsiveValue(6, 8, 10, 12),
+    borderRadius: getResponsiveValue(20, 22, 24, 26),
   },
   statusBadgeText: {
-    fontSize: getResponsiveValue(10, 11, 12, 13),
-    fontWeight: '600',
+    fontSize: getResponsiveValue(11, 12, 13, 14),
+    fontWeight: '700',
     color: 'white',
     fontFamily: 'System',
+    letterSpacing: 0.3,
   },
   orderSummary: {
     fontSize: getResponsiveValue(14, 15, 16, 18),
@@ -522,79 +560,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   orderTime: {
-    fontSize: getResponsiveValue(12, 13, 14, 16),
+    fontSize: getResponsiveValue(13, 14, 15, 16),
+    color: '#9CA3AF',
+    fontFamily: 'System',
+    fontWeight: '500',
+  },
+  orderStatusSummary: {
+    fontSize: getResponsiveValue(13, 14, 15, 16),
     color: '#6B7280',
     fontFamily: 'System',
-  },
-  detailButton: {
-    backgroundColor: '#F97316',
-    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
-    paddingVertical: getResponsiveValue(6, 8, 10, 12),
-    borderRadius: getResponsiveValue(8, 10, 12, 14),
-  },
-  detailButtonText: {
-    color: 'white',
-    fontSize: getResponsiveValue(12, 13, 14, 16),
-    fontWeight: '600',
-    fontFamily: 'System',
-  },
-  filterContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingVertical: getResponsiveValue(12, 14, 16, 18),
-    paddingBottom: getResponsiveValue(20, 24, 28, 32), // Alt boşluk artırıldı
-  },
-  filterButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: getResponsiveValue(8, 12, 16, 20),
-    gap: getResponsiveValue(4, 6, 8, 10),
-  },
-  filterButton: {
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    flex: 1,
-    minWidth: getResponsiveValue(80, 90, 100, 110),
-    maxWidth: getResponsiveValue(120, 130, 140, 150),
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: getResponsiveValue(4, 6, 8, 10),
-    paddingVertical: getResponsiveValue(8, 10, 12, 14),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  filterButtonActive: {
-    backgroundColor: '#8B4513',
-    borderColor: '#8B4513',
-    shadowColor: '#8B4513',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  filterButtonText: {
-    color: '#6B7280',
-    fontWeight: '600',
-    fontFamily: 'System',
-    textAlign: 'center',
-    fontSize: getResponsiveValue(10, 11, 12, 13),
-    lineHeight: getResponsiveValue(12, 14, 16, 18),
-    numberOfLines: 1,
-  },
-  filterButtonTextActive: {
-    color: 'white',
-    fontWeight: '700',
+    fontWeight: '500',
+    marginBottom: getResponsiveValue(8, 10, 12, 14),
+    lineHeight: getResponsiveValue(18, 20, 22, 24),
   },
   emptyContainer: {
     flex: 1,
@@ -643,6 +620,75 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: getResponsiveValue(14, 15, 16, 18),
     fontWeight: '600',
+    fontFamily: 'System',
+  },
+  // Modal Stilleri
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+  },
+  logoutModalContent: {
+    backgroundColor: 'white',
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    padding: getResponsiveValue(24, 28, 32, 36),
+    width: '100%',
+    maxWidth: getResponsiveValue(320, 360, 400, 440),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  logoutModalHeader: {
+    alignItems: 'center',
+    marginBottom: getResponsiveValue(16, 18, 20, 22),
+  },
+  logoutModalTitle: {
+    fontSize: getResponsiveValue(20, 22, 24, 26),
+    fontWeight: '700',
+    color: '#1F2937',
+    marginTop: getResponsiveValue(8, 10, 12, 14),
+    fontFamily: 'System',
+  },
+  logoutModalDescription: {
+    fontSize: getResponsiveValue(16, 17, 18, 20),
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: getResponsiveValue(22, 24, 26, 28),
+    marginBottom: getResponsiveValue(24, 28, 32, 36),
+    fontFamily: 'System',
+  },
+  logoutModalButtons: {
+    flexDirection: 'row',
+    gap: getResponsiveValue(12, 14, 16, 18),
+  },
+  logoutModalCancelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: getResponsiveValue(12, 14, 16, 18),
+    borderRadius: getResponsiveValue(8, 10, 12, 14),
+    alignItems: 'center',
+  },
+  logoutModalCancelText: {
+    fontSize: getResponsiveValue(16, 17, 18, 20),
+    fontWeight: '600',
+    color: '#6B7280',
+    fontFamily: 'System',
+  },
+  logoutModalConfirmButton: {
+    flex: 1,
+    backgroundColor: '#8B4513',
+    paddingVertical: getResponsiveValue(12, 14, 16, 18),
+    borderRadius: getResponsiveValue(8, 10, 12, 14),
+    alignItems: 'center',
+  },
+  logoutModalConfirmText: {
+    fontSize: getResponsiveValue(16, 17, 18, 20),
+    fontWeight: '600',
+    color: 'white',
     fontFamily: 'System',
   },
 });

@@ -10,6 +10,7 @@ import {
   Animated,
   TextInput,
   Alert,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -524,22 +525,23 @@ const OrderDetailScreen = ({ route }) => {
   };
 
   return (
-    <Animated.View 
-      style={[
-        styles.container,
-        {
-          transform: [
-            {
-              translateY: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, Dimensions.get('window').height],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
+    <SafeAreaView style={styles.safeArea}>
+      <Animated.View 
+        style={[
+          styles.container,
+          {
+            transform: [
+              {
+                translateY: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, Dimensions.get('window').height],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
       
       {/* Header */}
       <View style={styles.header}>
@@ -644,13 +646,30 @@ const OrderDetailScreen = ({ route }) => {
             </View>
           ) : (
             <TouchableOpacity 
-              style={styles.notesDisplayContainer}
-              onPress={() => setIsEditingNotes(true)}
+              style={[
+                styles.notesDisplayContainer,
+                currentOrder.durum !== 'beklemede' && styles.notesDisplayContainerDisabled
+              ]}
+              onPress={() => {
+                if (currentOrder.durum !== 'beklemede') {
+                  Alert.alert('Uyarı', 'Sadece beklemede olan siparişlerin notları değiştirilebilir.');
+                  return;
+                }
+                setIsEditingNotes(true);
+              }}
+              disabled={currentOrder.durum !== 'beklemede'}
             >
-              <Text style={styles.notesText}>
-                {currentOrder.aciklama || 'Not eklemek için dokunun...'}
+              <Text style={[
+                styles.notesText,
+                currentOrder.durum !== 'beklemede' && styles.notesTextDisabled
+              ]}>
+                {currentOrder.aciklama || (currentOrder.durum === 'beklemede' ? 'Not eklemek için dokunun...' : 'Notlar düzenlenemez')}
               </Text>
-              <Ionicons name="create-outline" size={20} color="#9CA3AF" />
+              <Ionicons 
+                name="create-outline" 
+                size={20} 
+                color={currentOrder.durum === 'beklemede' ? "#9CA3AF" : "#D1D5DB"} 
+              />
             </TouchableOpacity>
           )}
         </View>
@@ -799,11 +818,16 @@ const OrderDetailScreen = ({ route }) => {
           </Animated.View>
         </Animated.View>
       )}
-    </Animated.View>
+      </Animated.View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#8B4513',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
@@ -1012,6 +1036,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 20,
     fontFamily: 'System',
+  },
+  notesTextDisabled: {
+    color: '#D1D5DB',
+  },
+  notesDisplayContainerDisabled: {
+    opacity: 0.6,
   },
   notesHeader: {
     flexDirection: 'row',
