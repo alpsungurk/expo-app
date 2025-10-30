@@ -29,11 +29,8 @@ export default function AnnouncementsScreen() {
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
-
-  // Animation refs
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const [showAllAnnouncements, setShowAllAnnouncements] = useState(false);
+  const [showAllCampaigns, setShowAllCampaigns] = useState(false);
 
   const { 
     campaigns, 
@@ -47,22 +44,8 @@ export default function AnnouncementsScreen() {
 
   useEffect(() => {
     loadData();
-
-    // Staggered entrance animation
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      })
-    ]).start();
   }, []);
+
 
   const loadData = async () => {
     try {
@@ -168,7 +151,7 @@ export default function AnnouncementsScreen() {
 
     return (
       <TouchableOpacity 
-        key={campaign.id} 
+        key={campaign.id}
         style={styles.campaignCard} 
         activeOpacity={0.7}
         onPress={() => navigation.navigate('AnnouncementDetail', { announcement: { ...campaign, tur: 'kampanya' } })}
@@ -210,7 +193,7 @@ export default function AnnouncementsScreen() {
           </View>
         </View>
       </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
     );
   };
 
@@ -228,9 +211,9 @@ export default function AnnouncementsScreen() {
     let badgeTextColor = '#8B4513';
 
     if (isCurrentlyActive) {
-      badgeText = 'Aktif';
-      badgeColor = '#DCFCE7';
-      badgeTextColor = '#166534';
+      badgeText = 'Duyuru';
+      badgeColor = '#FEF3C7';
+      badgeTextColor = '#8B4513';
     } else if (isOngoing) {
       badgeText = 'Sürekli';
       badgeColor = '#E0E7FF';
@@ -264,7 +247,7 @@ export default function AnnouncementsScreen() {
 
     return (
       <TouchableOpacity 
-        key={announcement.id} 
+        key={announcement.id}
         style={styles.announcementCard}
         onPress={() => navigation.navigate('AnnouncementDetail', { announcement: { ...announcement, tur: 'duyuru' } })}
         activeOpacity={0.7}
@@ -313,28 +296,25 @@ export default function AnnouncementsScreen() {
 
   const activeCampaigns = getActiveCampaigns();
   const activeAnnouncements = getActiveAnnouncements();
+  
+  // İlk 4'ü göster, daha fazlası varsa "Daha Fazla Yükle" butonu ekle
+  const displayedCampaigns = showAllCampaigns ? activeCampaigns : activeCampaigns.slice(0, 4);
+  const displayedAnnouncements = showAllAnnouncements ? activeAnnouncements : activeAnnouncements.slice(0, 4);
+  
+  const hasMoreCampaigns = activeCampaigns.length > 4;
+  const hasMoreAnnouncements = activeAnnouncements.length > 4;
 
 
   return (
     <SafeAreaView style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
-      <Animated.ScrollView
-        style={[
-          styles.scrollView,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
-          }
-        ]}
+      <ScrollView
+        style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
       >
         {/* Kampanyalar */}
         {activeCampaigns.length > 0 && (
@@ -343,7 +323,33 @@ export default function AnnouncementsScreen() {
               <Ionicons name="gift" size={20} color="#8B4513" />
               <Text style={styles.sectionTitle}>Aktif Kampanyalar</Text>
             </View>
-            {activeCampaigns.map(renderCampaign)}
+            {displayedCampaigns.map(renderCampaign)}
+            
+            {/* Daha Fazla Kampanya Butonu */}
+            {hasMoreCampaigns && !showAllCampaigns && (
+              <TouchableOpacity 
+                style={styles.loadMoreButton}
+                onPress={() => setShowAllCampaigns(true)}
+              >
+                <Text style={styles.loadMoreButtonText}>
+                  Tüm Kampanyaları Gör ({activeCampaigns.length - 4} daha)
+                </Text>
+                <Ionicons name="chevron-down" size={16} color="#8B4513" />
+              </TouchableOpacity>
+            )}
+            
+            {/* Daha Az Göster Butonu */}
+            {hasMoreCampaigns && showAllCampaigns && (
+              <TouchableOpacity 
+                style={styles.loadMoreButton}
+                onPress={() => setShowAllCampaigns(false)}
+              >
+                <Text style={styles.loadMoreButtonText}>
+                  Daha Az Göster
+                </Text>
+                <Ionicons name="chevron-up" size={16} color="#8B4513" />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -354,7 +360,33 @@ export default function AnnouncementsScreen() {
               <Ionicons name="megaphone" size={20} color="#8B4513" />
               <Text style={styles.sectionTitle}>Duyurular</Text>
             </View>
-            {activeAnnouncements.map(renderAnnouncement)}
+            {displayedAnnouncements.map(renderAnnouncement)}
+            
+            {/* Daha Fazla Duyuru Butonu */}
+            {hasMoreAnnouncements && !showAllAnnouncements && (
+              <TouchableOpacity 
+                style={styles.loadMoreButton}
+                onPress={() => setShowAllAnnouncements(true)}
+              >
+                <Text style={styles.loadMoreButtonText}>
+                  Tüm Duyuruları Gör ({activeAnnouncements.length - 4} daha)
+                </Text>
+                <Ionicons name="chevron-down" size={16} color="#8B4513" />
+              </TouchableOpacity>
+            )}
+            
+            {/* Daha Az Göster Butonu */}
+            {hasMoreAnnouncements && showAllAnnouncements && (
+              <TouchableOpacity 
+                style={styles.loadMoreButton}
+                onPress={() => setShowAllAnnouncements(false)}
+              >
+                <Text style={styles.loadMoreButtonText}>
+                  Daha Az Göster
+                </Text>
+                <Ionicons name="chevron-up" size={16} color="#8B4513" />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -368,7 +400,7 @@ export default function AnnouncementsScreen() {
             </Text>
           </View>
         )}
-      </Animated.ScrollView>
+      </ScrollView>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </SafeAreaView>
@@ -584,5 +616,25 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: isSmallScreen ? 20 : 24,
+  },
+  loadMoreButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: isSmallScreen ? 16 : 20,
+    marginTop: isSmallScreen ? 8 : 12,
+    paddingVertical: isSmallScreen ? 12 : 14,
+    paddingHorizontal: isSmallScreen ? 16 : 20,
+    borderRadius: isSmallScreen ? 8 : 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  loadMoreButtonText: {
+    fontSize: isSmallScreen ? 14 : 15,
+    fontWeight: '600',
+    color: '#8B4513',
+    marginRight: isSmallScreen ? 6 : 8,
+    fontFamily: 'System',
   },
 });

@@ -216,7 +216,6 @@ export default function QRScanScreen() {
   };
 
   const handleDeleteTable = () => {
-    console.log('Delete table button pressed');
     setShowDeleteModal(true);
   };
 

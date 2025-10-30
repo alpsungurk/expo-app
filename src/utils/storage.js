@@ -16,7 +16,6 @@ const BUCKET_NAME = 'images';
  */
 export const uploadImage = async (file, path) => {
   try {
-    console.log('📤 Resim yükleniyor:', path);
     
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
@@ -30,7 +29,6 @@ export const uploadImage = async (file, path) => {
       return { data: null, error };
     }
 
-    console.log('✅ Resim başarıyla yüklendi:', data);
     return { data, error: null };
   } catch (error) {
     console.error('❌ Beklenmeyen hata:', error);
@@ -60,7 +58,6 @@ export const getImageUrl = (path) => {
  */
 export const deleteImage = async (path) => {
   try {
-    console.log('🗑️ Resim siliniyor:', path);
     
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
@@ -71,7 +68,6 @@ export const deleteImage = async (path) => {
       return { data: null, error };
     }
 
-    console.log('✅ Resim başarıyla silindi:', data);
     return { data, error: null };
   } catch (error) {
     console.error('❌ Beklenmeyen hata:', error);
