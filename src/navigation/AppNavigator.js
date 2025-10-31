@@ -3,7 +3,6 @@ import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-naviga
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartStore } from '../store/cartStore';
 import { useAppStore } from '../store/appStore';
 
@@ -15,6 +14,7 @@ import OrderDetailScreen from '../screens/OrderDetailScreen';
 import QRScanScreen from '../screens/QRScanScreen';
 import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import AnnouncementDetailScreen from '../screens/AnnouncementDetailScreen';
+import ProductDetailScreen from '../screens/ProductDetailScreen';
 import LoginScreen from '../screens/LoginScreen';
 import KasaScreen from '../screens/KasaScreen';
 import KasaOrderDetailScreen from '../screens/KasaOrderDetailScreen';
@@ -26,6 +26,33 @@ function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="HomeMain" component={HomeScreen} />
+      <Stack.Screen 
+        name="ProductDetail" 
+        component={ProductDetailScreen}
+        options={{
+          presentation: 'modal',
+          gestureEnabled: true,
+          gestureDirection: 'vertical',
+          cardStyleInterpolator: ({ current, layouts }) => {
+            return {
+              cardStyle: {
+                transform: [
+                  {
+                    translateY: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.height, 0],
+                    }),
+                  },
+                ],
+                opacity: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1],
+                }),
+              },
+            };
+          },
+        }}
+      />
     </Stack.Navigator>
   );
 }
@@ -221,7 +248,6 @@ function KasaStack() {
 export default function AppNavigator() {
   const { getTotalItems } = useCartStore();
   const { isProductModalOpen, getActiveOrdersCount } = useAppStore();
-  const insets = useSafeAreaInsets();
 
   return (
     <NavigationContainer>
@@ -229,6 +255,36 @@ export default function AppNavigator() {
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
         <Stack.Screen name="KasaScreen" component={KasaStack} />
+        <Stack.Screen 
+          name="AnnouncementDetail" 
+          component={AnnouncementDetailScreen}
+          options={{
+            presentation: 'transparentModal',
+            cardOverlayEnabled: true,
+            gestureEnabled: true,
+            gestureDirection: 'vertical',
+            cardStyleInterpolator: ({ current, layouts }) => {
+              return {
+                cardStyle: {
+                  transform: [
+                    {
+                      translateY: current.progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [layouts.screen.height, 0],
+                      }),
+                    },
+                  ],
+                },
+                overlayStyle: {
+                  opacity: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 0.5],
+                  }),
+                },
+              };
+            },
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -237,7 +293,6 @@ export default function AppNavigator() {
 function MainTabNavigator() {
   const { getTotalItems } = useCartStore();
   const { isProductModalOpen, getActiveOrdersCount } = useAppStore();
-  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -264,9 +319,9 @@ function MainTabNavigator() {
           tabBarActiveTintColor: '#8B4513',
           tabBarInactiveTintColor: '#9CA3AF',
           tabBarStyle: {
-            paddingBottom: Math.max(insets.bottom, 10),
+            paddingBottom: 10,
             paddingTop: 10,
-            height: 70 + Math.max(insets.bottom, 0),
+            height: 70,
             borderTopWidth: 1,
             borderTopColor: '#E5E7EB',
             backgroundColor: '#FFFFFF',
@@ -299,9 +354,9 @@ function MainTabNavigator() {
               
               // Diğer durumlarda normal tab bar
               return {
-                paddingBottom: Math.max(insets.bottom, 10),
+                paddingBottom: 10,
                 paddingTop: 10,
-                height: 70 + Math.max(insets.bottom, 0),
+                height: 70,
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 backgroundColor: '#FFFFFF',
@@ -341,9 +396,9 @@ function MainTabNavigator() {
               
               // Diğer durumlarda normal tab bar
               return {
-                paddingBottom: Math.max(insets.bottom, 10),
+                paddingBottom: 10,
                 paddingTop: 10,
-                height: 70 + Math.max(insets.bottom, 0),
+                height: 70,
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 backgroundColor: '#FFFFFF',
@@ -390,9 +445,9 @@ function MainTabNavigator() {
               
               // Diğer durumlarda normal tab bar
               return {
-                paddingBottom: Math.max(insets.bottom, 10),
+                paddingBottom: 10,
                 paddingTop: 10,
-                height: 70 + Math.max(insets.bottom, 0),
+                height: 70,
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 backgroundColor: '#FFFFFF',
@@ -420,9 +475,9 @@ function MainTabNavigator() {
               
               // Diğer durumlarda normal tab bar
               return {
-                paddingBottom: Math.max(insets.bottom, 10),
+                paddingBottom: 10,
                 paddingTop: 10,
-                height: 70 + Math.max(insets.bottom, 0),
+                height: 70,
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 backgroundColor: '#FFFFFF',

@@ -6,7 +6,6 @@ import {
   Image,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Modal,
   Dimensions
 } from 'react-native';
@@ -36,7 +35,7 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <ScrollView 
@@ -87,7 +86,7 @@ export default function ProfileScreen() {
       </ScrollView>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -5,7 +5,6 @@ import {
   View, 
   ScrollView, 
   TouchableOpacity,
-  SafeAreaView,
   Alert,
   RefreshControl,
   Dimensions,
@@ -46,7 +45,7 @@ const ORDER_STATUSES = {
   },
   teslim_edildi: { 
     label: 'Teslim Edildi', 
-    color: '#059669', 
+    color: '#8B5CF6', 
     icon: 'checkmark-done-outline',
     description: 'Siparişiniz teslim edildi. Afiyet olsun!'
   },
@@ -102,29 +101,79 @@ export default function OrderStatusScreen() {
     if (phoneToken) {
       loadOrdersData();
       
-      // Gerçek zamanlı güncellemeler için subscription
-      const subscription = supabase
-        .channel('orders-updates')
-        .on('postgres_changes', 
-          { 
-            event: '*', 
-            schema: 'public', 
-            table: TABLES.SIPARISLER
-          }, 
-          (payload) => {
-            console.log('OrderStatusScreen realtime güncelleme:', payload);
-            
-            // Sadece bu telefon token'ına ait siparişleri güncelle
-            if (payload.new && payload.new.telefon_token === phoneToken) {
-              console.log('Bu telefon token\'ına ait sipariş güncellendi:', payload.new);
-              loadOrdersData();
-            } else if (payload.old && payload.old.telefon_token === phoneToken) {
-              console.log('Bu telefon token\'ına ait sipariş silindi:', payload.old);
-              loadOrdersData();
+      // Önceki subscription'ı temizle
+      const channelName = 'orders-updates';
+      supabase.removeChannel(supabase.channel(channelName));
+      
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      const createSubscription = () => {
+        const subscription = supabase
+          .channel(channelName)
+          .on('postgres_changes', 
+            { 
+              event: '*', 
+              schema: 'public', 
+              table: TABLES.SIPARISLER
+            }, 
+            (payload) => {
+              console.log('OrderStatusScreen realtime güncelleme:', payload);
+              
+              // Sadece bu telefon token'ına ait siparişleri güncelle
+              if (payload.new && payload.new.telefon_token === phoneToken) {
+                console.log('Bu telefon token\'ına ait sipariş güncellendi:', payload.new);
+                
+                // İptal durumu özel kontrolü
+                if (payload.new.durum === 'iptal') {
+                  console.log('Sipariş iptal edildi:', payload.new);
+                }
+                
+                // Notlar güncelleme kontrolü
+                if (payload.new.aciklama !== undefined) {
+                  console.log('Sipariş notları güncellendi:', {
+                    orderId: payload.new.id,
+                    newNotes: payload.new.aciklama
+                  });
+                }
+                
+                loadOrdersData();
+              } else if (payload.old && payload.old.telefon_token === phoneToken) {
+                console.log('Bu telefon token\'ına ait sipariş silindi:', payload.old);
+                loadOrdersData();
+              }
             }
-          }
-        )
-        .subscribe();
+          )
+          .subscribe((status) => {
+            console.log('OrderStatusScreen subscription status:', status);
+            if (status === 'SUBSCRIBED') {
+              console.log('OrderStatusScreen realtime subscription başarılı');
+              retryCount = 0;
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('OrderStatusScreen subscription hatası');
+              handleSubscriptionError();
+            } else if (status === 'TIMED_OUT') {
+              console.warn('OrderStatusScreen subscription timeout');
+              handleSubscriptionError();
+            }
+          });
+
+        return subscription;
+      };
+
+      const handleSubscriptionError = () => {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.log(`OrderStatusScreen subscription yeniden deneniyor (${retryCount}/${maxRetries})`);
+          setTimeout(() => {
+            createSubscription();
+          }, 2000 * retryCount);
+        } else {
+          console.error('OrderStatusScreen subscription maksimum retry sayısına ulaştı');
+        }
+      };
+
+      const subscription = createSubscription();
 
       return () => {
         subscription.unsubscribe();
@@ -172,6 +221,9 @@ export default function OrderStatusScreen() {
         .from(TABLES.SIPARISLER)
         .select(`
           *,
+          masalar (
+            masa_no
+          ),
           siparis_detaylari (
             id,
             adet,
@@ -248,7 +300,7 @@ export default function OrderStatusScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.loadingContainer}>
@@ -256,7 +308,7 @@ export default function OrderStatusScreen() {
         </View>
 
         <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -302,6 +354,7 @@ export default function OrderStatusScreen() {
             />
             <View style={styles.orderCardInfo}>
               <Text style={styles.orderCardNumber}>#{order.siparis_no}</Text>
+              <Text style={styles.orderCardMasa}>Masa {order.masalar?.masa_no || order.masa_no || 'N/A'}</Text>
               <Text style={styles.orderCardDate}>{formatDate(order.olusturma_tarihi)}</Text>
             </View>
           </View>
@@ -349,7 +402,7 @@ export default function OrderStatusScreen() {
   // Sipariş yoksa
   if (!isLoading && orders.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.emptyContainer}>
@@ -367,13 +420,13 @@ export default function OrderStatusScreen() {
         </View>
 
         <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   // Ana sipariş listesi ekranı
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <Animated.ScrollView 
@@ -410,7 +463,7 @@ export default function OrderStatusScreen() {
       </Animated.ScrollView>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -813,6 +866,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1F2937',
+    fontFamily: 'System',
+  },
+  orderCardMasa: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8B4513',
     fontFamily: 'System',
   },
   orderCardDate: {

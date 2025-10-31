@@ -5,7 +5,6 @@ import {
   View, 
   ScrollView, 
   TouchableOpacity,
-  SafeAreaView,
   Alert,
   Image,
   Modal,
@@ -265,7 +264,7 @@ export default function CartScreen() {
 
   if (items.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <Animated.View style={[
@@ -289,12 +288,12 @@ export default function CartScreen() {
         </Animated.View>
 
         <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <Animated.ScrollView style={[
@@ -381,7 +380,7 @@ export default function CartScreen() {
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </View>
   );
 }
 

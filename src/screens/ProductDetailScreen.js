@@ -5,7 +5,6 @@ import {
   View, 
   ScrollView, 
   TouchableOpacity,
-  SafeAreaView,
   Image,
   Alert,
   TextInput,
@@ -17,7 +16,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
 import TableHeader from '../components/TableHeader';
@@ -41,7 +39,6 @@ export default function ProductDetailScreen({ route, navigation }) {
   const [ingredientsLoading, setIngredientsLoading] = useState(true);
   
   const { tableNumber, addItem } = useCartStore();
-  const insets = useSafeAreaInsets();
 
   // Resim URL'sini Supabase Storage'dan al
   const getImageUri = () => {
@@ -154,7 +151,7 @@ export default function ProductDetailScreen({ route, navigation }) {
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -231,7 +228,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       </ScrollView>
 
       {/* Alt Bar */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <View style={styles.bottomBar}>
         <View style={styles.quantityContainer}>
           <TouchableOpacity
             style={styles.quantityButton}
@@ -259,7 +256,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       </View>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -465,6 +462,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
     paddingTop: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    paddingBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 16,
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',

@@ -5,7 +5,6 @@ import {
   View, 
   ScrollView, 
   TouchableOpacity,
-  SafeAreaView,
   Image,
   TextInput,
   KeyboardAvoidingView,
@@ -147,7 +146,7 @@ export default function EditCartItemScreen() {
     : '';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TableHeader 
         showBackButton={true}
         onBackPress={() => {
@@ -288,7 +287,7 @@ export default function EditCartItemScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

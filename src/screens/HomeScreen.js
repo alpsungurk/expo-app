@@ -5,7 +5,6 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   FlatList,
   Alert,
   Dimensions,
@@ -21,7 +20,7 @@ import { supabase, TABLES } from '../config/supabase';
 import { useAppStore } from '../store/appStore';
 import { useCartStore } from '../store/cartStore';
 import TableHeader from '../components/TableHeader';
-import CampaignSlider from '../components/CampaignSlider';
+import CampaignCarousel from '../components/CampaignCarousel';
 import ProductDetailScreen from './ProductDetailScreen';
 import ProductCard from '../components/ProductCard';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
@@ -55,7 +54,7 @@ const ORDER_STATUSES = {
   },
   teslim_edildi: { 
     label: 'Teslim Edildi', 
-    color: '#059669', 
+    color: '#8B5CF6', 
     icon: 'checkmark-done-outline',
     description: 'Siparişiniz teslim edildi. Afiyet olsun!'
   },
@@ -167,6 +166,76 @@ export default function HomeScreen() {
       setOrders([]);
       setActiveOrder(null);
     }
+  }, [phoneToken]);
+
+  // Realtime subscription for order updates
+  useEffect(() => {
+    if (!phoneToken) return;
+
+    // Önceki subscription'ı temizle
+    const channelName = 'home-screen-updates';
+    supabase.removeChannel(supabase.channel(channelName));
+    
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    const createSubscription = () => {
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'siparisler'
+          },
+          (payload) => {
+            console.log('HomeScreen realtime güncelleme:', payload);
+            
+            // Sadece bu telefon token'ına ait siparişleri güncelle
+            if (payload.new && payload.new.telefon_token === phoneToken) {
+              console.log('Bu telefon token\'ına ait sipariş güncellendi:', payload.new);
+              loadOrdersData();
+            } else if (payload.old && payload.old.telefon_token === phoneToken) {
+              console.log('Bu telefon token\'ına ait sipariş silindi:', payload.old);
+              loadOrdersData();
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('HomeScreen subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('HomeScreen realtime subscription başarılı');
+            retryCount = 0;
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('HomeScreen subscription hatası');
+            handleSubscriptionError();
+          } else if (status === 'TIMED_OUT') {
+            console.warn('HomeScreen subscription timeout');
+            handleSubscriptionError();
+          }
+        });
+
+      return channel;
+    };
+
+    const handleSubscriptionError = () => {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        console.log(`HomeScreen subscription yeniden deneniyor (${retryCount}/${maxRetries})`);
+        setTimeout(() => {
+          createSubscription();
+        }, 2000 * retryCount);
+      } else {
+        console.error('HomeScreen subscription maksimum retry sayısına ulaştı');
+      }
+    };
+
+    const channel = createSubscription();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [phoneToken]);
 
   // Modal açılırken animasyon
@@ -440,7 +509,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TableHeader 
         onQRScan={handleQRScan} 
         onSidebarPress={() => setSidebarVisible(true)}
@@ -546,7 +615,7 @@ export default function HomeScreen() {
             }]
           }
         ]}>
-          <CampaignSlider loading={campaignsLoading} />
+          <CampaignCarousel />
         </Animated.View>
 
         {/* Kategoriler */}
@@ -720,7 +789,7 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
-    </SafeAreaView>
+    </View>
   );
 }
 

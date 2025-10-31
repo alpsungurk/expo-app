@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  SafeAreaView,
   Animated,
   Dimensions,
   Image
@@ -306,7 +305,7 @@ export default function AnnouncementsScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <ScrollView
@@ -403,7 +402,7 @@ export default function AnnouncementsScreen() {
       </ScrollView>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 

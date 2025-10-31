@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,7 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
-  Animated,
   ActivityIndicator,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -21,7 +19,6 @@ const { width } = Dimensions.get('window');
 const AnnouncementDetailScreen = ({ route }) => {
   const navigation = useNavigation();
   const { announcement } = route.params;
-  const slideAnim = useRef(new Animated.Value(0)).current;
   
   // State for loading and data
   const [loading, setLoading] = useState(false);
@@ -31,28 +28,9 @@ const AnnouncementDetailScreen = ({ route }) => {
   const isCampaign = announcement.tur === 'kampanya' || announcement.baslik?.toLowerCase().includes('kampanya');
   const pageTitle = isCampaign ? 'Kampanya Detayı' : 'Duyuru Detayı';
 
-  // Animasyon fonksiyonları
-  const slideIn = () => {
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const slideOut = () => {
-    Animated.timing(slideAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      navigation.goBack();
-    });
-  };
-
   // Geri buton handler
   const handleGoBack = () => {
-    slideOut();
+    navigation.goBack();
   };
 
   // Database'den detaylı veri çek
@@ -98,9 +76,8 @@ const AnnouncementDetailScreen = ({ route }) => {
     }
   };
 
-  // Component mount olduğunda animasyonu başlat ve veri çek
+  // Component mount olduğunda verileri yükle
   useEffect(() => {
-    slideIn();
     fetchAnnouncementDetails();
   }, []);
 
@@ -133,22 +110,8 @@ const AnnouncementDetailScreen = ({ route }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Animated.View 
-        style={[
-          styles.container,
-          {
-            transform: [
-              {
-                translateY: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, Dimensions.get('window').height],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
+    <View style={styles.safeArea}>
+      <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
       
       {/* Header */}
@@ -246,8 +209,8 @@ const AnnouncementDetailScreen = ({ route }) => {
           </Text>
         </View>
       </ScrollView>
-      </Animated.View>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 };
 
