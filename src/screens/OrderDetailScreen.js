@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
-  Animated,
   TextInput,
   Alert,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -21,7 +19,6 @@ const { width } = Dimensions.get('window');
 const OrderDetailScreen = ({ route }) => {
   const navigation = useNavigation();
   const { order, orderDetails } = route.params;
-  const slideAnim = useRef(new Animated.Value(0)).current;
   
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesText, setNotesText] = useState(order.aciklama || '');
@@ -33,45 +30,114 @@ const OrderDetailScreen = ({ route }) => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [deletedItems, setDeletedItems] = useState([]);
-  const modalAnim = useRef(new Animated.Value(0)).current;
-  const saveModalAnim = useRef(new Animated.Value(0)).current;
-
-  // Animasyon fonksiyonları
-  const slideIn = () => {
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const slideOut = () => {
-    Animated.timing(slideAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      navigation.goBack();
-    });
-  };
 
   // Geri buton handler
   const handleGoBack = () => {
-    slideOut();
+    navigation.goBack();
   };
 
-  // Component mount olduğunda animasyonu başlat
+
+  // Realtime subscription for order updates
   useEffect(() => {
-    slideIn();
+    // Önceki subscription'ı temizle
+    const channelName = 'order-detail-updates';
+    supabase.removeChannel(supabase.channel(channelName));
     
-  }, []);
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    const createSubscription = () => {
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'siparisler'
+          },
+          (payload) => {
+            console.log('OrderDetailScreen sipariş realtime güncelleme:', payload);
+            
+            // Sadece bu siparişin güncellemelerini dinle
+            if (payload.new && payload.new.id === currentOrder.id) {
+              console.log('Bu sipariş güncellendi:', payload.new);
+              setCurrentOrder(payload.new);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'siparis_detaylari'
+          },
+          (payload) => {
+            console.log('OrderDetailScreen sipariş detayı realtime güncelleme:', payload);
+            
+            // Bu siparişin detaylarını güncelle
+            if (payload.new && payload.new.siparis_id === currentOrder.id) {
+              console.log('Bu siparişin detayı güncellendi:', payload.new);
+              
+              // Local state'i güncelle
+              setCurrentOrderDetails(prevDetails => 
+                prevDetails.map(detail => 
+                  detail.id === payload.new.id ? { ...detail, ...payload.new } : detail
+                )
+              );
+            } else if (payload.old && payload.old.siparis_id === currentOrder.id) {
+              console.log('Bu siparişin detayı silindi:', payload.old);
+              
+              // Silinen detayı local state'den çıkar
+              setCurrentOrderDetails(prevDetails => 
+                prevDetails.filter(detail => detail.id !== payload.old.id)
+              );
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('OrderDetailScreen subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('OrderDetailScreen realtime subscription başarılı');
+            retryCount = 0;
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('OrderDetailScreen subscription hatası');
+            handleSubscriptionError();
+          } else if (status === 'TIMED_OUT') {
+            console.warn('OrderDetailScreen subscription timeout');
+            handleSubscriptionError();
+          }
+        });
+
+      return channel;
+    };
+
+    const handleSubscriptionError = () => {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        console.log(`OrderDetailScreen subscription yeniden deneniyor (${retryCount}/${maxRetries})`);
+        setTimeout(() => {
+          createSubscription();
+        }, 2000 * retryCount);
+      } else {
+        console.error('OrderDetailScreen subscription maksimum retry sayısına ulaştı');
+      }
+    };
+
+    const channel = createSubscription();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOrder.id]);
 
   const getStatusInfo = (status) => {
     const statusMap = {
       beklemede: { label: 'Beklemede', color: '#F59E0B' },
       hazirlaniyor: { label: 'Hazırlanıyor', color: '#3B82F6' },
       hazir: { label: 'Hazır', color: '#10B981' },
-      teslim_edildi: { label: 'Teslim Edildi', color: '#059669' },
+      teslim_edildi: { label: 'Teslim Edildi', color: '#8B5CF6' },
       iptal: { label: 'İptal', color: '#EF4444' },
     };
     return statusMap[status] || { label: 'Bilinmiyor', color: '#6B7280' };
@@ -165,21 +231,10 @@ const OrderDetailScreen = ({ route }) => {
   // Kaydet modalını açma
   const handleSaveChanges = () => {
     setShowSaveModal(true);
-    Animated.timing(saveModalAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
   };
 
   const hideSaveModal = () => {
-    Animated.timing(saveModalAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowSaveModal(false);
-    });
+    setShowSaveModal(false);
   };
 
   // Değişiklikleri kaydetme
@@ -360,11 +415,15 @@ const OrderDetailScreen = ({ route }) => {
         .eq('id', currentOrder.id)
         .select();
 
-
       if (error) {
         console.error('Database güncelleme hatası:', error);
         throw error;
       }
+
+      console.log('Notlar güncellendi, realtime tetiklenecek:', { 
+        orderId: currentOrder.id, 
+        newNotes: notesText 
+      });
 
       // State'de güncelle
       setCurrentOrder(prev => ({ ...prev, aciklama: notesText }));
@@ -385,21 +444,10 @@ const OrderDetailScreen = ({ route }) => {
   // Modal animasyon fonksiyonları
   const showModal = () => {
     setShowCancelModal(true);
-    Animated.timing(modalAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
   };
 
   const hideModal = () => {
-    Animated.timing(modalAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowCancelModal(false);
-    });
+    setShowCancelModal(false);
   };
 
   // Siparişi iptal etme modalını açma
@@ -525,22 +573,8 @@ const OrderDetailScreen = ({ route }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Animated.View 
-        style={[
-          styles.container,
-          {
-            transform: [
-              {
-                translateY: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, Dimensions.get('window').height],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
+    <View style={styles.safeArea}>
+      <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
       
       {/* Header */}
@@ -577,12 +611,7 @@ const OrderDetailScreen = ({ route }) => {
                 Sipariş Tarihi: {formatDate(currentOrder.olusturma_tarihi)}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="restaurant" size={16} color="#6B7280" />
-              <Text style={styles.infoText}>
-                {currentOrder.qr_token ? 'QR Token: ' + currentOrder.qr_token : 'Bilinmiyor'}
-              </Text>
-            </View>
+         
           </View>
         </View>
 
@@ -703,35 +732,8 @@ const OrderDetailScreen = ({ route }) => {
 
       {/* İptal Etme Modalı */}
       {showCancelModal && (
-        <Animated.View 
-          style={[
-            styles.modalOverlay,
-            {
-              opacity: modalAnim,
-            }
-          ]}
-        >
-          <Animated.View 
-            style={[
-              styles.modalContainer,
-              {
-                transform: [
-                  {
-                    scale: modalAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.7, 1],
-                    }),
-                  },
-                  {
-                    translateY: modalAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [50, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Ionicons name="warning-outline" size={32} color="#F59E0B" />
               <Text style={styles.modalTitle}>Siparişi İptal Et</Text>
@@ -756,41 +758,14 @@ const OrderDetailScreen = ({ route }) => {
                 <Text style={styles.modalConfirmButtonText}>Evet, İptal Et</Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </Animated.View>
+          </View>
+        </View>
       )}
 
       {/* Kaydet Modalı */}
       {showSaveModal && (
-        <Animated.View 
-          style={[
-            styles.modalOverlay,
-            {
-              opacity: saveModalAnim,
-            }
-          ]}
-        >
-          <Animated.View 
-            style={[
-              styles.modalContainer,
-              {
-                transform: [
-                  {
-                    scale: saveModalAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.7, 1],
-                    }),
-                  },
-                  {
-                    translateY: saveModalAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [50, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Ionicons name="checkmark-circle-outline" size={32} color="#10B981" />
               <Text style={styles.modalTitle}>Değişiklikleri Kaydet</Text>
@@ -815,11 +790,11 @@ const OrderDetailScreen = ({ route }) => {
                 <Text style={styles.modalConfirmButtonText}>Evet, Kaydet</Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </Animated.View>
+          </View>
+        </View>
       )}
-      </Animated.View>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 };
 
@@ -847,17 +822,12 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   headerTitle: {
     color: 'white',

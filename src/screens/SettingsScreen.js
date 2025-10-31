@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  SafeAreaView,
   Modal,
   Dimensions
 } from 'react-native';
@@ -105,7 +104,7 @@ export default function SettingsScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <ScrollView
@@ -151,7 +150,7 @@ export default function SettingsScreen() {
       </ScrollView>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 

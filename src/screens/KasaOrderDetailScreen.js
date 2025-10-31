@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Dimensions,
   Alert,
   Modal,
@@ -48,8 +47,8 @@ const ORDER_STATUSES = {
   },
   teslim_edildi: { 
     label: 'Teslim Edildi', 
-    color: '#059669', 
-    bgColor: '#D1FAE5'
+    color: '#8B5CF6', 
+    bgColor: '#EDE9FE'
   },
   iptal: { 
     label: 'İptal Edildi', 
@@ -62,22 +61,34 @@ export default function KasaOrderDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { masaNo, masaOrders, currentOrder } = route.params;
-  const [selectedFilter, setSelectedFilter] = useState('tumu');
+  const [selectedFilter, setSelectedFilter] = useState('beklemede');
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [localMasaOrders, setLocalMasaOrders] = useState(masaOrders);
+  const [updateQueue, setUpdateQueue] = useState([]);
+  const updateTimeoutRef = React.useRef(null);
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
+  const lastUpdateRef = React.useRef(Date.now());
+
+  // Component mount olduğunda başlangıç zamanını kaydet
+  React.useEffect(() => {
+    lastUpdateRef.current = Date.now();
+  }, []);
 
   // Filtreleme fonksiyonu
   const filterOrders = () => {
     let filtered = [...localMasaOrders];
     
-    if (selectedFilter !== 'tumu') {
-      filtered = filtered.filter(order => order.durum === selectedFilter);
-    }
+    filtered = filtered.filter(order => order.durum === selectedFilter);
     
     setFilteredOrders(filtered);
+  };
+
+  // Her durum için sipariş sayısını hesapla
+  const getOrderCountByStatus = (status) => {
+    return localMasaOrders.filter(order => order.durum === status).length;
   };
 
   // Local masa orders güncellendiğinde filtrele
@@ -85,55 +96,8 @@ export default function KasaOrderDetailScreen() {
     filterOrders();
   }, [localMasaOrders, selectedFilter]);
 
-  // Props değiştiğinde local state'i güncelle
-  React.useEffect(() => {
-    setLocalMasaOrders(masaOrders);
-  }, [masaOrders]);
-
-  // Realtime subscription for order updates
-  React.useEffect(() => {
-    const channel = supabase
-      .channel('kasa-order-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'siparisler'
-        },
-        (payload) => {
-          console.log('Realtime sipariş güncellemesi:', payload);
-          
-          // Sadece bu masanın siparişlerini güncelle
-          if (payload.new) {
-            const updatedOrder = payload.new;
-            const masaId = updatedOrder.masa_id;
-            
-            // Bu masanın siparişlerini kontrol et
-            const isThisMasaOrder = localMasaOrders.some(order => order.masa_id === masaId);
-            
-            if (isThisMasaOrder) {
-              console.log('Bu masanın siparişi güncellendi:', updatedOrder);
-              
-              // Local state'i güncelle
-              setLocalMasaOrders(prevOrders => 
-                prevOrders.map(order => 
-                  order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order
-                )
-              );
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [localMasaOrders]);
-
   // Sipariş detaylarını yükle
-  const loadOrderDetails = async (orderId) => {
+  const loadOrderDetails = React.useCallback(async (orderId) => {
     try {
       const { data: orderDetails, error } = await supabase
         .from(TABLES.SIPARIS_DETAYLARI)
@@ -150,16 +114,496 @@ export default function KasaOrderDetailScreen() {
 
       if (error) throw error;
 
-      // Local state'i güncelle
-      setLocalMasaOrders(prevOrders => 
-        prevOrders.map(order => 
+      // Local state'i güncelle - mevcut order bilgilerini koru
+      setLocalMasaOrders(prevOrders => {
+        const existingOrder = prevOrders.find(o => o.id === orderId);
+        if (!existingOrder) {
+          // Order bulunamadı, yeni sipariş olabilir - bu durumda sadece siparis_detaylari eklenemez
+          console.warn('loadOrderDetails: Order bulunamadı, orderId:', orderId);
+          return prevOrders;
+        }
+        
+        return prevOrders.map(order => 
           order.id === orderId 
             ? { ...order, siparis_detaylari: orderDetails }
             : order
-        )
-      );
+        );
+      });
+
+      // Eğer modal açıksa ve bu sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
+      if (showOrderModal && selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(prevSelected => ({
+          ...prevSelected,
+          siparis_detaylari: orderDetails
+        }));
+      }
     } catch (error) {
       console.error('Sipariş detayları yüklenirken hata:', error);
+    }
+  }, [showOrderModal, selectedOrder]);
+
+  // Props değiştiğinde local state'i güncelle ve sipariş detaylarını yükle
+  React.useEffect(() => {
+    // Mevcut localMasaOrders ile yeni masaOrders'ı merge et - veri kaybını önle
+    setLocalMasaOrders(prevOrders => {
+      if (!masaOrders || masaOrders.length === 0) {
+        return prevOrders;
+      }
+      
+      // Yeni ve güncellenmiş siparişleri birleştir
+      const mergedOrders = masaOrders.map(newOrder => {
+        const existingOrder = prevOrders.find(o => o.id === newOrder.id);
+        if (existingOrder) {
+          // Mevcut sipariş varsa, siparis_detaylari'ı koru ve diğer bilgileri güncelle
+          return {
+            ...existingOrder,
+            ...newOrder,
+            // siparis_detaylari koru - eğer yeni order'da yoksa eski değeri kullan
+            siparis_detaylari: newOrder.siparis_detaylari || existingOrder.siparis_detaylari
+          };
+        }
+        return newOrder;
+      });
+      
+      // Yeni eklenen siparişleri de ekle (realtime'da eklenen ama masaOrders'da olmayanlar)
+      const newOrders = prevOrders.filter(prevOrder => 
+        !masaOrders.find(newOrder => newOrder.id === prevOrder.id)
+      );
+      
+      return [...mergedOrders, ...newOrders];
+    });
+    
+    // Props güncellendiğinde connection aktif olduğunu işaretle
+    lastUpdateRef.current = Date.now();
+    
+    // Eğer siparişler varsa ve siparis_detaylari yoksa, yükle
+    if (masaOrders && masaOrders.length > 0) {
+      masaOrders.forEach(order => {
+        if (!order.siparis_detaylari || order.siparis_detaylari.length === 0) {
+          loadOrderDetails(order.id);
+        }
+      });
+    }
+  }, [masaOrders, loadOrderDetails]);
+
+  // Debounced state update fonksiyonu
+  const debouncedUpdateState = React.useCallback((updateFn) => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    
+    updateTimeoutRef.current = setTimeout(() => {
+      setLocalMasaOrders(updateFn);
+      updateTimeoutRef.current = null;
+    }, 100); // 100ms debounce
+  }, []);
+
+  // Connection monitoring
+  React.useEffect(() => {
+    const checkConnection = () => {
+      const now = Date.now();
+      const timeSinceLastUpdate = now - lastUpdateRef.current;
+      
+      // 5 dakikadan uzun süredir güncelleme alınmadıysa disconnected olarak işaretle ve subscription'ı yeniden başlat
+      if (timeSinceLastUpdate > 300000) { // 5 dakika (300000 ms)
+        setConnectionStatus(prevStatus => {
+          // Sadece durum değiştiyse (ilk disconnected olduğunda) subscription'ı yeniden başlat
+          if (prevStatus !== 'disconnected') {
+            console.warn('KasaOrderDetailScreen: Uzun süredir güncelleme alınmadı, subscription yeniden başlatılıyor...');
+            
+            // Önceki subscription'ı temizle
+            const channelName = `kasa-order-updates-${masaNo}`;
+            supabase.removeChannel(supabase.channel(channelName));
+            
+            // lastUpdateRef'i güncelle ki bir sonraki kontrol'de hemen tekrar timeout olmasın
+            lastUpdateRef.current = Date.now();
+          }
+          return 'disconnected';
+        });
+      } else {
+        setConnectionStatus('connected');
+      }
+    };
+
+    // İlk kontrol
+    checkConnection();
+    
+    // Her 30 saniyede bir kontrol et
+    const interval = setInterval(checkConnection, 30000);
+    
+    return () => clearInterval(interval);
+  }, [masaNo]); // masaNo dependency eklendi
+
+  // Realtime subscription for order updates
+  React.useEffect(() => {
+    console.log('KasaOrderDetailScreen realtime subscription başlatılıyor, masaNo:', masaNo);
+    
+    // Önceki subscription'ı temizle
+    const channelName = `kasa-order-updates-${masaNo}`;
+    const existingChannel = supabase.channel(channelName);
+    supabase.removeChannel(existingChannel);
+    
+    // Subscription başlatıldığında connection aktif olduğunu işaretle
+    lastUpdateRef.current = Date.now();
+    
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    const createSubscription = () => {
+      const channel = supabase
+        .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'siparisler'
+        },
+        (payload) => {
+          console.log('KasaOrderDetailScreen sipariş realtime güncelleme:', payload);
+          console.log('Mevcut masaNo:', masaNo);
+          // Her realtime event'te connection aktif olduğunu göster (bu masaya ait olsun ya da olmasın)
+          lastUpdateRef.current = Date.now();
+          
+          // Sadece bu masanın siparişlerini güncelle
+          if (payload.new) {
+            const updatedOrder = payload.new;
+            const masaId = updatedOrder.masa_id;
+            
+            console.log('Güncellenen sipariş masa_id:', masaId);
+            console.log('Bu masaNo:', masaNo);
+            console.log('Event type:', payload.eventType);
+            
+            // Bu masanın siparişlerini kontrol et - masa_id ile karşılaştır
+            // masaId integer, masaNo "Masa X" formatında string
+            const masaNoNumber = masaNo.replace('Masa ', '');
+            if (masaId.toString() === masaNoNumber) {
+              console.log('Bu masanın siparişi güncellendi:', updatedOrder);
+              
+              // İptal durumu özel kontrolü
+              if (updatedOrder.durum === 'iptal') {
+                console.log('Bu masanın siparişi iptal edildi:', updatedOrder);
+              }
+              
+              // Notlar güncelleme kontrolü
+              if (updatedOrder.aciklama !== undefined) {
+                console.log('Bu masanın sipariş notları güncellendi:', {
+                  orderId: updatedOrder.id,
+                  newNotes: updatedOrder.aciklama
+                });
+              }
+              
+              // Local state'i güncelle
+              setLocalMasaOrders(prevOrders => {
+                console.log('Önceki orders:', prevOrders.map(o => ({ id: o.id, masa_id: o.masa_id })));
+                
+                // Yeni sipariş oluşturulduysa (INSERT), listeye ekle
+                if (payload.eventType === 'INSERT') {
+                  console.log('Yeni sipariş eklendi:', updatedOrder);
+                  const updated = [...prevOrders, updatedOrder];
+                  console.log('Güncellenmiş orders (yeni eklendi):', updated.map(o => ({ id: o.id, masa_id: o.masa_id })));
+                  
+                  // Yeni siparişin detaylarını hemen yükle (realtime için)
+                  if (!updatedOrder.siparis_detaylari || updatedOrder.siparis_detaylari.length === 0) {
+                    loadOrderDetails(updatedOrder.id);
+                  }
+                  
+                  return updated;
+                } else {
+                  // Mevcut sipariş güncellendi (UPDATE), güncelle
+                  // ÖNEMLİ: siparis_detaylari ve diğer nested objeleri koru
+                  const updated = prevOrders.map(order => {
+                    if (order.id === updatedOrder.id) {
+                      return {
+                        ...order,
+                        ...updatedOrder,
+                        // siparis_detaylari koru - eğer updatedOrder'da yoksa eski değeri kullan
+                        siparis_detaylari: updatedOrder.siparis_detaylari !== undefined 
+                          ? updatedOrder.siparis_detaylari 
+                          : order.siparis_detaylari
+                      };
+                    }
+                    return order;
+                  });
+                  console.log('Güncellenmiş orders (güncellendi):', updated.map(o => ({ id: o.id, masa_id: o.masa_id })));
+                  return updated;
+                }
+              });
+              
+              // Eğer modal açıksa ve güncellenen sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
+              setSelectedOrder(prevSelected => {
+                if (showOrderModal && prevSelected && prevSelected.id === updatedOrder.id) {
+                  console.log('Modal açık, selectedOrder güncelleniyor:', updatedOrder);
+                  // siparis_detaylari'ı koruyarak güncelle
+                  return {
+                    ...updatedOrder,
+                    siparis_detaylari: prevSelected.siparis_detaylari || []
+                  };
+                }
+                return prevSelected;
+              });
+            } else {
+              console.log('Bu sipariş bu masaya ait değil, güncelleme yapılmadı');
+            }
+          } else if (payload.old) {
+            // Sipariş silindi (DELETE)
+            const deletedOrder = payload.old;
+            const masaId = deletedOrder.masa_id;
+            
+            console.log('Silinen sipariş masa_id:', masaId);
+            console.log('Bu masaNo:', masaNo);
+            console.log('Event type:', payload.eventType);
+            
+            // Bu masanın siparişi silinirse, listeden çıkar
+            // masaId integer, masaNo "Masa X" formatında string
+            const masaNoNumber = masaNo.replace('Masa ', '');
+            if (masaId.toString() === masaNoNumber) {
+              console.log('Bu masanın siparişi silindi:', deletedOrder);
+              
+              setLocalMasaOrders(prevOrders => {
+                console.log('Önceki orders:', prevOrders.map(o => ({ id: o.id, masa_id: o.masa_id })));
+                const updated = prevOrders.filter(order => order.id !== deletedOrder.id);
+                console.log('Güncellenmiş orders (silindi):', updated.map(o => ({ id: o.id, masa_id: o.masa_id })));
+                return updated;
+              });
+              
+              // Eğer modal açıksa ve silinen sipariş modal'daki sipariş ise, modal'ı kapat
+              if (showOrderModal && selectedOrder && selectedOrder.id === deletedOrder.id) {
+                console.log('Silinen sipariş modal\'da açık, modal kapatılıyor');
+                setShowOrderModal(false);
+                setSelectedOrder(null);
+              }
+            } else {
+              console.log('Bu silinen sipariş bu masaya ait değil, güncelleme yapılmadı');
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'siparis_detaylari'
+        },
+        (payload) => {
+          console.log('KasaOrderDetailScreen sipariş detayı realtime güncelleme:', payload);
+          // Her realtime event'te connection aktif olduğunu göster
+          lastUpdateRef.current = Date.now();
+          
+          // Bu masanın siparişlerinin detaylarını güncelle
+          if (payload.new) {
+            const updatedDetail = payload.new;
+            const orderId = updatedDetail.siparis_id;
+            
+            console.log('Güncellenen detay order ID:', orderId);
+            console.log('Mevcut masaNo:', masaNo);
+            
+            // orderId geçersizse işlemi durdur
+            if (!orderId || orderId === 'undefined' || orderId === 'null') {
+              console.log('Geçersiz orderId, işlem durduruluyor:', orderId);
+              return;
+            }
+            
+            // Local state'ten bu order'ı bul ve masa_id kontrolü yap
+            setLocalMasaOrders(prevOrders => {
+              const targetOrder = prevOrders.find(order => order.id === orderId);
+              if (targetOrder) {
+                console.log('Bu masanın sipariş detayı güncellendi:', updatedDetail);
+                console.log('Sipariş masa_id:', targetOrder.masa_id, 'Mevcut masaNo:', masaNo);
+                
+                // Eğer siparis_detaylari yoksa veya urunler bilgisi eksikse, tam detayları yükle
+                const targetOrderLocal = prevOrders.find(order => order.id === orderId);
+                if (targetOrderLocal && (!targetOrderLocal.siparis_detaylari || targetOrderLocal.siparis_detaylari.length === 0)) {
+                  // Sipariş detayları henüz yüklenmemiş, tam detayları yükle (urunler bilgisiyle birlikte)
+                  loadOrderDetails(orderId);
+                  return prevOrders; // loadOrderDetails içinde güncelleme yapılacak
+                }
+                
+                // Eğer güncellenen detayda urunler bilgisi yoksa, tam detayları yükle
+                if (updatedDetail && !updatedDetail.urunler) {
+                  // urunler bilgisi eksik, tam detayları yükle
+                  loadOrderDetails(orderId);
+                  return prevOrders;
+                }
+                
+                const updatedOrders = prevOrders.map(order => 
+                  order.id === orderId 
+                    ? {
+                        ...order,
+                        siparis_detaylari: payload.eventType === 'INSERT' 
+                          ? [...(order.siparis_detaylari || []), updatedDetail]
+                          : order.siparis_detaylari?.map(detail => 
+                              detail.id === updatedDetail.id ? { ...detail, ...updatedDetail } : detail
+                            ) || []
+                      }
+                    : order
+                );
+
+                // Eğer modal açıksa ve güncellenen sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
+                if (showOrderModal && selectedOrder && selectedOrder.id === orderId) {
+                  console.log('Modal açık, selectedOrder sipariş detayı güncelleniyor:', updatedDetail);
+                  console.log('Event type:', payload.eventType);
+                  
+                  setSelectedOrder(prevSelected => ({
+                    ...prevSelected,
+                    siparis_detaylari: payload.eventType === 'INSERT'
+                      ? [...(prevSelected.siparis_detaylari || []), updatedDetail]
+                      : prevSelected.siparis_detaylari?.map(detail => 
+                          detail.id === updatedDetail.id ? { ...detail, ...updatedDetail } : detail
+                        ) || []
+                  }));
+                }
+
+                return updatedOrders;
+              } else {
+                console.log('Bu detay bu masaya ait değil, güncelleme yapılmadı');
+                console.log('Mevcut orders:', prevOrders.map(o => ({ id: o.id, masa_id: o.masa_id })));
+                console.log('Aranan order ID:', orderId);
+                
+                // Eğer order bulunamadıysa, bu order'ın bu masaya ait olup olmadığını kontrol et
+                console.log('Order ID', orderId, 'bulunamadı. Bu order bu masaya ait olabilir ama henüz yüklenmemiş.');
+                
+                // Order'ın masa_id'sini kontrol et
+                if (orderId && orderId !== 'undefined') {
+                  checkOrderMasaId(orderId).then(order => {
+                    const masaNoNumber = masaNo.replace('Masa ', '');
+                    if (order && order.masa_id.toString() === masaNoNumber) {
+                      console.log('Order ID', orderId, 'bu masaya ait ama henüz yüklenmemiş. Sipariş detayları yükleniyor...');
+                      // Bu masaya ait sipariş bulundu ama henüz local state'de yok, detayları yükle
+                      loadOrderDetails(orderId);
+                    } else {
+                      console.log('Order ID', orderId, 'bu masaya ait değil. Masa ID:', order?.masa_id, 'Mevcut masa:', masaNo);
+                    }
+                  });
+                } else {
+                  console.log('Order ID geçersiz:', orderId, 'Kontrol edilmiyor.');
+                }
+                
+                return prevOrders;
+              }
+            });
+          } else if (payload.old) {
+            const deletedDetail = payload.old;
+            const orderId = deletedDetail.siparis_id;
+            
+            console.log('Silinen detay order ID:', orderId);
+            console.log('Mevcut masaNo:', masaNo);
+            
+            // orderId geçersizse işlemi durdur
+            if (!orderId || orderId === 'undefined' || orderId === 'null') {
+              console.log('Geçersiz orderId, silme işlemi durduruluyor:', orderId);
+              return;
+            }
+            
+            // Local state'ten bu order'ı bul ve masa_id kontrolü yap
+            setLocalMasaOrders(prevOrders => {
+              const targetOrder = prevOrders.find(order => order.id === orderId);
+              if (targetOrder) {
+                console.log('Bu masanın sipariş detayı silindi:', deletedDetail);
+                console.log('Sipariş masa_id:', targetOrder.masa_id, 'Mevcut masaNo:', masaNo);
+                
+                // masa_id kontrolü - masaId integer, masaNo "Masa X" formatında string
+                const masaNoNumber = masaNo.replace('Masa ', '');
+                if (targetOrder.masa_id.toString() !== masaNoNumber) {
+                  console.log('Bu sipariş bu masaya ait değil, silme işlemi yapılmadı');
+                  return prevOrders;
+                }
+                
+                const updatedOrders = prevOrders.map(order => 
+                  order.id === orderId 
+                    ? {
+                        ...order,
+                        siparis_detaylari: order.siparis_detaylari?.filter(detail => 
+                          detail.id !== deletedDetail.id
+                        ) || []
+                      }
+                    : order
+                );
+
+                // Eğer modal açıksa ve silinen sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
+                if (showOrderModal && selectedOrder && selectedOrder.id === orderId) {
+                  console.log('Modal açık, selectedOrder sipariş detayı siliniyor:', deletedDetail);
+                  setSelectedOrder(prevSelected => ({
+                    ...prevSelected,
+                    siparis_detaylari: prevSelected.siparis_detaylari?.filter(detail => 
+                      detail.id !== deletedDetail.id
+                    ) || []
+                  }));
+                }
+
+                return updatedOrders;
+              } else {
+                console.log('Bu silinen detay bu masaya ait değil, güncelleme yapılmadı');
+                console.log('Mevcut orders:', prevOrders.map(o => ({ id: o.id, masa_id: o.masa_id })));
+                return prevOrders;
+              }
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('KasaOrderDetailScreen subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('KasaOrderDetailScreen realtime subscription başarılı');
+          retryCount = 0; // Başarılı olduğunda retry count'u sıfırla
+          // Subscription başarılı olduğunda connection aktif olduğunu işaretle
+          lastUpdateRef.current = Date.now();
+          setConnectionStatus('connected');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('KasaOrderDetailScreen subscription hatası');
+          handleSubscriptionError();
+        } else if (status === 'TIMED_OUT') {
+          console.warn('KasaOrderDetailScreen subscription timeout');
+          handleSubscriptionError();
+        } else if (status === 'CLOSED') {
+          console.log('KasaOrderDetailScreen subscription kapandı');
+        }
+      });
+
+      return channel;
+    };
+
+    const handleSubscriptionError = () => {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        console.log(`KasaOrderDetailScreen subscription yeniden deneniyor (${retryCount}/${maxRetries})`);
+        setTimeout(() => {
+          createSubscription();
+        }, 2000 * retryCount); // Exponential backoff
+      } else {
+        console.error('KasaOrderDetailScreen subscription maksimum retry sayısına ulaştı');
+      }
+    };
+
+    const channel = createSubscription();
+
+    return () => {
+      console.log('KasaOrderDetailScreen realtime subscription temizleniyor');
+      supabase.removeChannel(channel);
+    };
+  }, [masaNo, showOrderModal, connectionStatus]); // connectionStatus eklendi - timeout sonrası yeniden başlatma için
+
+  // Siparişin masa_id'sini kontrol et
+  const checkOrderMasaId = async (orderId) => {
+    try {
+      // orderId geçersizse null döndür
+      if (!orderId || orderId === 'undefined' || orderId === 'null') {
+        console.log('checkOrderMasaId: Geçersiz orderId:', orderId);
+        return null;
+      }
+
+      const { data: order, error } = await supabase
+        .from(TABLES.SIPARISLER)
+        .select('id, masa_id')
+        .eq('id', orderId)
+        .single();
+
+      if (error) throw error;
+      return order;
+    } catch (error) {
+      console.error('Sipariş masa_id kontrol edilirken hata:', error);
+      return null;
     }
   };
 
@@ -197,7 +641,7 @@ export default function KasaOrderDetailScreen() {
       case 'iptal':
         return 'İptal edilen sipariş yok';
       default:
-        return 'Henüz sipariş yok';
+        return 'Beklemede olan sipariş yok';
     }
   };
 
@@ -240,6 +684,11 @@ export default function KasaOrderDetailScreen() {
 
   const renderFilterButton = (key, label) => {
     const isActive = selectedFilter === key;
+    const orderCount = getOrderCountByStatus(key);
+    const statusInfo = getStatusInfo(key);
+    
+    // "Teslim Edildi" için özel genişlik
+    const isTeslimEdildi = key === 'teslim_edildi';
     
     return (
       <TouchableOpacity
@@ -251,6 +700,10 @@ export default function KasaOrderDetailScreen() {
             paddingVertical: getResponsiveValue(8, 10, 12, 14),
             paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
             borderRadius: getResponsiveValue(8, 10, 12, 14),
+            ...(isTeslimEdildi && {
+              minWidth: getResponsiveValue(120, 140, 160, 180),
+              maxWidth: getResponsiveValue(160, 180, 200, 220),
+            }),
           }
         ]}
         onPress={() => handleFilterPress(key)}
@@ -262,13 +715,33 @@ export default function KasaOrderDetailScreen() {
         ]}>
           {label}
         </Text>
+        {orderCount > 0 && (
+          <View style={[
+            styles.filterBadge,
+            {
+              backgroundColor: isActive ? 'rgba(255, 255, 255, 0.3)' : statusInfo.bgColor,
+            }
+          ]}>
+            <Text style={[
+              styles.filterBadgeText,
+              {
+                color: isActive ? 'white' : statusInfo.color,
+              }
+            ]}>
+              {orderCount}
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
 
-  const handleOrderPress = (order) => {
+  const handleOrderPress = async (order) => {
     setSelectedOrder(order);
     setShowOrderModal(true);
+    
+    // Sipariş detaylarını yükle
+    await loadOrderDetails(order.id);
   };
 
   const handleCloseModal = () => {
@@ -332,11 +805,17 @@ export default function KasaOrderDetailScreen() {
         <Text style={styles.orderCardTime}>{formatTime(order.olusturma_tarihi)}</Text>
 
         <View style={[styles.orderCardProducts, { backgroundColor: statusInfo.color + '10' }]}>
-          {order.siparis_detaylari?.map((item, index) => (
-            <Text key={index} style={styles.orderCardProduct}>
-              {item.adet} {item.urunler?.ad || 'Ürün'}
+          {order.siparis_detaylari && order.siparis_detaylari.length > 0 ? (
+            order.siparis_detaylari.map((item, index) => (
+              <Text key={index} style={styles.orderCardProduct}>
+                {item.adet} {item.urunler?.ad || 'Ürün'}
+              </Text>
+            ))
+          ) : (
+            <Text style={styles.orderCardProduct}>
+              Yükleniyor...
             </Text>
-          ))}
+          )}
         </View>
 
         <Text style={[
@@ -363,7 +842,7 @@ export default function KasaOrderDetailScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -372,16 +851,25 @@ export default function KasaOrderDetailScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="#8B4513" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-         {masaNo} - Siparişler
-        </Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>
+           {masaNo} - Siparişler
+          </Text>
+          <View style={[
+            styles.connectionIndicator, 
+            { backgroundColor: connectionStatus === 'connected' ? '#10B981' : '#EF4444' }
+          ]}>
+            <Text style={styles.connectionText}>
+              {connectionStatus === 'connected' ? '●' : '●'}
+            </Text>
+          </View>
+        </View>
         <View style={styles.placeholder} />
       </View>
 
       {/* Filter Buttons */}
       <View style={styles.filterContainer}>
         <View style={styles.filterButtons}>
-          {renderFilterButton('tumu', 'Tümü')}
           {renderFilterButton('beklemede', 'Beklemede')}
           {renderFilterButton('hazirlaniyor', 'Hazırlanıyor')}
           {renderFilterButton('hazir', 'Hazır')}
@@ -422,7 +910,7 @@ export default function KasaOrderDetailScreen() {
         presentationStyle="pageSheet"
         onRequestClose={handleCloseModal}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           {/* Modal Header */}
           <View style={styles.modalHeader}>
             <TouchableOpacity
@@ -447,7 +935,7 @@ export default function KasaOrderDetailScreen() {
                 </View>
                 
                 <Text style={styles.modalOrderTime}>{formatTime(selectedOrder.olusturma_tarihi)}</Text>
-                <Text style={styles.modalOrderTable}>Masa {masaNo}</Text>
+                <Text style={styles.modalOrderTable}>{masaNo}</Text>
               </View>
 
               {/* Ürün Listesi */}
@@ -470,12 +958,12 @@ export default function KasaOrderDetailScreen() {
               </View>
 
               {/* Notlar */}
-              {selectedOrder.aciklama && (
-                <View style={styles.modalNotesSection}>
-                  <Text style={styles.modalSectionTitle}>Notlar</Text>
-                  <Text style={styles.modalNotesText}>{selectedOrder.aciklama}</Text>
-                </View>
-              )}
+              <View style={styles.modalNotesSection}>
+                <Text style={styles.modalSectionTitle}>Notlar</Text>
+                <Text style={styles.modalNotesText}>
+                  {selectedOrder.aciklama || 'Not yok'}
+                </Text>
+              </View>
 
               {/* Durum Güncelleme Butonları */}
               <View style={styles.modalActionsSection}>
@@ -506,7 +994,7 @@ export default function KasaOrderDetailScreen() {
                   
                   {selectedOrder.durum === 'hazir' && (
                     <TouchableOpacity
-                      style={[styles.modalActionButton, styles.modalActionButtonSuccess]}
+                      style={[styles.modalActionButton, styles.modalActionButtonPurple]}
                       onPress={() => updateOrderStatus(selectedOrder.id, 'teslim_edildi')}
                       disabled={isUpdating}
                     >
@@ -517,7 +1005,7 @@ export default function KasaOrderDetailScreen() {
                   
                   {selectedOrder.durum === 'teslim_edildi' && (
                     <TouchableOpacity
-                      style={[styles.modalActionButton, styles.modalActionButtonSuccess]}
+                      style={[styles.modalActionButton, styles.modalActionButtonPurple]}
                       onPress={() => updateOrderStatus(selectedOrder.id, 'teslim_edildi')}
                       disabled={true}
                     >
@@ -552,9 +1040,9 @@ export default function KasaOrderDetailScreen() {
               </View>
             </ScrollView>
           )}
-        </SafeAreaView>
+        </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -581,13 +1069,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: getResponsiveValue(8, 10, 12, 14),
+  },
   headerTitle: {
     fontSize: getResponsiveValue(18, 20, 22, 24),
     fontWeight: '700',
     color: '#1F2937',
     fontFamily: 'System',
-    flex: 1,
     textAlign: 'center',
+  },
+  connectionIndicator: {
+    width: getResponsiveValue(8, 10, 12, 14),
+    height: getResponsiveValue(8, 10, 12, 14),
+    borderRadius: getResponsiveValue(4, 5, 6, 7),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  connectionText: {
+    fontSize: getResponsiveValue(6, 7, 8, 9),
+    color: 'white',
+    fontWeight: 'bold',
   },
   placeholder: {
     width: getResponsiveValue(40, 44, 48, 52),
@@ -705,11 +1211,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 1,
+    flexDirection: 'row',
+    gap: getResponsiveValue(6, 8, 10, 12),
   },
   filterButtonActive: {
-    backgroundColor: '#8B4513',
-    borderColor: '#8B4513',
-    shadowColor: '#8B4513',
+    backgroundColor: '#6B7280',
+    borderColor: '#6B7280',
+    shadowColor: '#6B7280',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -724,6 +1232,21 @@ const styles = StyleSheet.create({
   },
   filterButtonTextActive: {
     color: 'white',
+    fontFamily: 'Inter_700Bold',
+  },
+  filterBadge: {
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    minWidth: getResponsiveValue(24, 26, 28, 30),
+    paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
+    paddingVertical: getResponsiveValue(4, 5, 6, 7),
+    height: getResponsiveValue(24, 26, 28, 30),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: getResponsiveValue(6, 8, 10, 12),
+  },
+  filterBadgeText: {
+    fontSize: getResponsiveValue(11, 12, 13, 14),
+    fontWeight: '700',
     fontFamily: 'Inter_700Bold',
   },
   orderCardFooter: {
@@ -925,6 +1448,9 @@ const styles = StyleSheet.create({
   },
   modalActionButtonSuccess: {
     backgroundColor: '#10B981',
+  },
+  modalActionButtonPurple: {
+    backgroundColor: '#8B5CF6',
   },
   modalActionButtonDanger: {
     backgroundColor: '#EF4444',

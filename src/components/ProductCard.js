@@ -210,6 +210,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     minWidth: 0,
+    height: isLargeScreen ? 380 : isMediumScreen ? 340 : 300,
     backgroundColor: 'white',
     borderRadius: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
     marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
@@ -266,7 +267,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   content: {
+    flex: 1,
     padding: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
+    justifyContent: 'space-between',
   },
   title: {
     fontWeight: 'bold',

@@ -5,7 +5,6 @@ import {
   View, 
   TouchableOpacity, 
   Alert,
-  SafeAreaView,
   Dimensions,
   TextInput,
   Modal,
@@ -201,7 +200,7 @@ export default function QRScanScreen() {
         setShowManualModal(false);
         Alert.alert(
           'Masa Ayarlandı! 🎉',
-          `Masa ${tableData.masa_no} için menüye yönlendiriliyorsunuz.`,
+          `${tableData.masa_no} için menüye yönlendiriliyorsunuz.`,
           [
             {
               text: 'Menüye Git',
@@ -233,7 +232,7 @@ export default function QRScanScreen() {
   // Ana seçenekler ekranı
   if (!showCamera) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <Animated.View style={[
@@ -420,14 +419,14 @@ export default function QRScanScreen() {
         </Modal>
 
         <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   // Kamera ekranı
   if (!permission) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.loadingContainer}>
@@ -435,13 +434,13 @@ export default function QRScanScreen() {
         </View>
 
         <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
         <View style={styles.permissionContainer}>
@@ -459,12 +458,12 @@ export default function QRScanScreen() {
         </View>
 
         <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
       <View style={styles.cameraContainer}>
@@ -537,7 +536,7 @@ export default function QRScanScreen() {
       </View>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 

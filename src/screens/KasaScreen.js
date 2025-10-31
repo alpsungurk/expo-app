@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   FlatList,
   Alert,
@@ -66,6 +65,88 @@ const ORDER_STATUSES = {
   }
 };
 
+// Renkli kart temaları - Tek renk tonları
+const CARD_THEMES = [
+  // Mavi tonları
+  {
+    gradient: ['#3B82F6', '#1D4ED8'],
+    accent: '#3B82F6',
+    text: '#ffffff',
+    shadow: '#3B82F620'
+  },
+  {
+    gradient: ['#60A5FA', '#3B82F6'],
+    accent: '#60A5FA',
+    text: '#ffffff',
+    shadow: '#60A5FA20'
+  },
+  // Mor tonları
+  {
+    gradient: ['#8B5CF6', '#7C3AED'],
+    accent: '#8B5CF6',
+    text: '#ffffff',
+    shadow: '#8B5CF620'
+  },
+  {
+    gradient: ['#A78BFA', '#8B5CF6'],
+    accent: '#A78BFA',
+    text: '#ffffff',
+    shadow: '#A78BFA20'
+  },
+  // Kırmızı tonları
+  {
+    gradient: ['#EF4444', '#DC2626'],
+    accent: '#EF4444',
+    text: '#ffffff',
+    shadow: '#EF444420'
+  },
+  {
+    gradient: ['#F87171', '#EF4444'],
+    accent: '#F87171',
+    text: '#ffffff',
+    shadow: '#F8717120'
+  },
+  // Yeşil tonları
+  {
+    gradient: ['#10B981', '#059669'],
+    accent: '#10B981',
+    text: '#ffffff',
+    shadow: '#10B98120'
+  },
+  {
+    gradient: ['#34D399', '#10B981'],
+    accent: '#34D399',
+    text: '#ffffff',
+    shadow: '#34D39920'
+  },
+  // Turuncu tonları
+  {
+    gradient: ['#F59E0B', '#D97706'],
+    accent: '#F59E0B',
+    text: '#ffffff',
+    shadow: '#F59E0B20'
+  },
+  {
+    gradient: ['#FBBF24', '#F59E0B'],
+    accent: '#FBBF24',
+    text: '#ffffff',
+    shadow: '#FBBF2420'
+  },
+  // Pembe tonları
+  {
+    gradient: ['#EC4899', '#DB2777'],
+    accent: '#EC4899',
+    text: '#ffffff',
+    shadow: '#EC489920'
+  },
+  {
+    gradient: ['#F472B6', '#EC4899'],
+    accent: '#F472B6',
+    text: '#ffffff',
+    shadow: '#F472B620'
+  }
+];
+
 export default function KasaScreen() {
   const navigation = useNavigation();
   const [orders, setOrders] = useState([]);
@@ -82,6 +163,42 @@ export default function KasaScreen() {
   useEffect(() => {
     filterOrders();
   }, [orders]);
+
+  // Realtime subscription for order updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('kasa-screen-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'siparisler'
+        },
+        (payload) => {
+          console.log('KasaScreen realtime güncelleme:', payload);
+          
+          if (payload.new) {
+            console.log('Yeni sipariş güncellemesi:', payload.new);
+            
+            // İptal durumu özel kontrolü
+            if (payload.new.durum === 'iptal') {
+              console.log('Sipariş iptal edildi:', payload.new);
+            }
+            
+            loadOrders(); // Tüm siparişleri yeniden yükle
+          } else if (payload.old) {
+            console.log('Sipariş silindi:', payload.old);
+            loadOrders(); // Tüm siparişleri yeniden yükle
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const loadOrders = async () => {
     try {
@@ -240,50 +357,195 @@ export default function KasaScreen() {
     return summaryParts.join(', ');
   };
 
-  const renderOrderItem = ({ item }) => {
+  // Sipariş durumlarını parse et ve ikonlarla göster
+  const parseStatusSummary = (statusSummary) => {
+    if (!statusSummary || statusSummary === 'Sipariş yok') {
+      return [{ text: 'Sipariş yok', icon: 'receipt-outline' }];
+    }
+    
+    const statusMap = {
+      'bekleyen': { icon: 'hourglass-outline', text: 'Bekleyen' },
+      'hazır': { icon: 'checkmark-circle-outline', text: 'Hazır' },
+      'hazırlanan': { icon: 'cafe-outline', text: 'Hazırlanan' },
+      'iptal': { icon: 'close-circle-outline', text: 'İptal' },
+      'onaylanan': { icon: 'checkmark-outline', text: 'Teslim Edildi' },
+      'teslim': { icon: 'checkmark-done-outline', text: 'Teslim' }
+    };
+    
+    return statusSummary.split(', ').map(status => {
+      const parts = status.trim().split(' ');
+      const count = parts[0];
+      const statusKey = parts[1];
+      const statusInfo = statusMap[statusKey] || { icon: 'help-outline', text: statusKey };
+      
+      return {
+        text: `${count}x ${statusInfo.text}`,
+        icon: statusInfo.icon
+      };
+    });
+  };
+
+  // Durum rengini al (KasaOrderDetailScreen ile aynı)
+  const getStatusColor = (statusText) => {
+    if (statusText.includes('Bekleyen')) {
+      return { color: '#D97706', bgColor: '#FEF3C7' };
+    } else if (statusText.includes('Hazırlanan')) {
+      return { color: '#3B82F6', bgColor: '#DBEAFE' };
+    } else if (statusText.includes('Hazır')) {
+      return { color: '#10B981', bgColor: '#D1FAE5' };
+    } else if (statusText.includes('İptal')) {
+      return { color: '#EF4444', bgColor: '#FEE2E2' };
+    } else if (statusText.includes('Teslim Edildi')) {
+      return { color: '#8B5CF6', bgColor: '#EDE9FE' };
+    } else if (statusText.includes('Teslim')) {
+      return { color: '#8B5CF6', bgColor: '#EDE9FE' };
+    } else {
+      return { color: '#6B7280', bgColor: '#F3F4F6' };
+    }
+  };
+
+  // Animasyonlu kart komponenti
+  const AnimatedCard = ({ item, masaNo, statusInfo, statusSummary, theme, onPress, index }) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+    const opacityAnim = useRef(new Animated.Value(0)).current;
+    const translateYAnim = useRef(new Animated.Value(50)).current;
+
+    useEffect(() => {
+      // Kart giriş animasyonu
+      Animated.parallel([
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 600,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateYAnim, {
+          toValue: 0,
+          duration: 600,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, []);
+
+    const handlePressIn = () => {
+      Animated.spring(scaleAnim, {
+        toValue: 0.95,
+        tension: 300,
+        friction: 10,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handlePressOut = () => {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 300,
+        friction: 10,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    return (
+      <Animated.View
+        style={[
+          {
+            opacity: opacityAnim,
+            transform: [
+              { translateY: translateYAnim },
+              { scale: scaleAnim }
+            ]
+          }
+        ]}
+      >
+        <TouchableOpacity
+          style={[
+            styles.orderCard,
+            {
+              backgroundColor: theme.gradient[0],
+              shadowColor: theme.shadow,
+              borderColor: theme.accent,
+            }
+          ]}
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={0.8}
+        >
+          {/* Gradient overlay */}
+          <View style={[styles.gradientOverlay, { backgroundColor: theme.gradient[1] }]} />
+          
+          <View style={styles.orderHeader}>
+            <Text style={[styles.orderTableText, { color: theme.text }]}>
+              {masaNo}
+            </Text>
+          </View>
+          
+          <View style={styles.statusContainer}>
+            {parseStatusSummary(statusSummary).map((status, idx) => {
+              const statusColor = getStatusColor(status.text);
+              return (
+                <View key={idx} style={[styles.statusItem, { backgroundColor: statusColor.bgColor }]}>
+                  <Ionicons 
+                    name={status.icon} 
+                    size={getResponsiveValue(14, 16, 18, 20)} 
+                    color={statusColor.color} 
+                  />
+                  <Text style={[styles.statusText, { color: statusColor.color }]}>
+                    {status.text}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          
+          <View style={styles.orderFooter}>
+            <Ionicons 
+              name="chevron-forward" 
+              size={getResponsiveValue(16, 18, 20, 22)} 
+              color={theme.text + '80'} 
+            />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
+  const renderOrderItem = ({ item, index }) => {
     const statusInfo = getStatusInfo(item.durum);
     const masaNo = item.masalar?.masa_no || item.masa_no;
     const statusSummary = getMasaOrderStatusSummary(masaNo);
     
+    // Her kart için farklı tema seç
+    const theme = CARD_THEMES[index % CARD_THEMES.length];
+    
     return (
-      <TouchableOpacity
-        style={styles.orderCard}
+      <AnimatedCard
+        item={item}
+        masaNo={masaNo}
+        statusInfo={statusInfo}
+        statusSummary={statusSummary}
+        theme={theme}
         onPress={() => handleOrderPress(item)}
-      >
-        <View style={styles.orderHeader}>
-          <Text style={styles.orderTableText}> {masaNo}</Text>
-        </View>
-        
-        <Text style={styles.orderStatusSummary}>
-          {statusSummary || 'Sipariş yok'}
-        </Text>
-        
-        <View style={styles.orderFooter}>
-          <Text style={styles.orderTime}>{formatTime(item.olusturma_tarihi)}</Text>
-          <Ionicons 
-            name="chevron-forward" 
-            size={getResponsiveValue(16, 18, 20, 22)} 
-            color="#9CA3AF" 
-          />
-        </View>
-      </TouchableOpacity>
+        index={index}
+      />
     );
   };
 
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8B4513" />
           <Text style={styles.loadingText}>Siparişler yükleniyor...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -329,8 +591,17 @@ export default function KasaScreen() {
         data={filteredOrders}
         renderItem={renderOrderItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.ordersList}
-        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.ordersList,
+          filteredOrders.length === 0 && { flexGrow: 1 }
+        ]}
+        showsVerticalScrollIndicator={true}
+        scrollEnabled={true}
+        bounces={true}
+        alwaysBounceVertical={false}
+        nestedScrollEnabled={true}
+        removeClippedSubviews={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -390,7 +661,7 @@ export default function KasaScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -509,26 +780,36 @@ const styles = StyleSheet.create({
   },
   ordersList: {
     paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
-    paddingBottom: getResponsiveValue(20, 24, 28, 32),
+    paddingBottom: getResponsiveValue(100, 120, 140, 160),
+    paddingTop: getResponsiveValue(8, 10, 12, 14),
   },
   orderCard: {
     backgroundColor: 'white',
-    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    borderRadius: getResponsiveValue(20, 22, 24, 26),
     padding: getResponsiveValue(20, 22, 24, 26),
     marginBottom: getResponsiveValue(16, 18, 20, 22),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  gradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.1,
+    borderRadius: getResponsiveValue(20, 22, 24, 26),
   },
   orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: getResponsiveValue(12, 14, 16, 18),
+    alignItems: 'center',
   },
   orderTableText: {
     fontSize: getResponsiveValue(18, 20, 22, 24),
@@ -536,6 +817,28 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontFamily: 'System',
     letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: getResponsiveValue(12, 14, 16, 18),
+    justifyContent: 'center',
+  },
+  statusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: getResponsiveValue(8, 10, 12, 14),
+    marginBottom: getResponsiveValue(4, 6, 8, 10),
+    paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
+    paddingVertical: getResponsiveValue(4, 6, 8, 10),
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+  },
+  statusText: {
+    fontSize: getResponsiveValue(12, 13, 14, 15),
+    fontWeight: '600',
+    fontFamily: 'System',
+    marginLeft: getResponsiveValue(4, 6, 8, 10),
   },
   statusBadge: {
     paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
@@ -556,7 +859,7 @@ const styles = StyleSheet.create({
   },
   orderFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
   },
   orderTime: {

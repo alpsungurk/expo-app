@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
-  Animated,
   RefreshControl,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../config/supabase';
@@ -20,35 +18,14 @@ const NotificationsScreen = ({ onClose }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const slideAnim = useRef(new Animated.Value(0)).current;
-
-  // Animasyon fonksiyonları
-  const slideIn = () => {
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const slideOut = () => {
-    Animated.timing(slideAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      onClose();
-    });
-  };
 
   // Geri buton handler
   const handleGoBack = () => {
-    slideOut();
+    onClose();
   };
 
-  // Component mount olduğunda animasyonu başlat
+  // Component mount olduğunda verileri yükle
   useEffect(() => {
-    slideIn();
     fetchNotifications();
   }, []);
 
@@ -160,22 +137,8 @@ const NotificationsScreen = ({ onClose }) => {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Animated.View 
-        style={[
-          styles.container,
-          {
-            transform: [
-              {
-                translateY: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, Dimensions.get('window').height],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
+    <View style={styles.safeArea}>
+      <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
       
       {/* Header */}
@@ -221,8 +184,8 @@ const NotificationsScreen = ({ onClose }) => {
           </View>
         )}
       </ScrollView>
-      </Animated.View>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 };
 
