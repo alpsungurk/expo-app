@@ -354,7 +354,7 @@ export default function OrderStatusScreen() {
             />
             <View style={styles.orderCardInfo}>
               <Text style={styles.orderCardNumber}>#{order.siparis_no}</Text>
-              <Text style={styles.orderCardMasa}>Masa {order.masalar?.masa_no || order.masa_no || 'N/A'}</Text>
+              <Text style={styles.orderCardMasa}>{order.masalar?.masa_no || order.masa_no || 'N/A'}</Text>
               <Text style={styles.orderCardDate}>{formatDate(order.olusturma_tarihi)}</Text>
             </View>
           </View>

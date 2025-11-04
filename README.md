@@ -170,6 +170,187 @@ extra: {
 2. Projenizi seçin
 3. Settings > API bölümünden URL ve anon key'i kopyalayın
 
+## 📦 APK Oluşturma (Release Build)
+
+Uygulamanızı APK formatında oluşturmak için iki yöntem mevcuttur:
+
+### Yöntem 1: EAS Build (Önerilen - Kolay ve Hızlı) ☁️
+
+EAS Build, Expo'nun bulut tabanlı build servisidir. En kolay ve önerilen yöntemdir.
+
+#### Adımlar:
+
+1. **EAS CLI'ı Global Olarak Kurun:**
+   ```bash
+   npm install -g eas-cli
+   ```
+
+2. **EAS'e Giriş Yapın:**
+   ```bash
+   eas login
+   ```
+   Expo hesabı oluşturmanız gerekebilir (ücretsiz).
+
+3. **EAS Build Konfigürasyonu Oluşturun:**
+   ```bash
+   eas build:configure
+   ```
+   Bu komut `eas.json` dosyası oluşturur.
+
+4. **Android APK Build Başlatın:**
+   ```bash
+   eas build --platform android --profile preview
+   ```
+   İlk build yaklaşık 15-20 dakika sürebilir.
+
+5. **APK'yı İndirin:**
+   - Build tamamlandığında terminal'de bir link göreceksiniz
+   - Bu linke tıklayarak APK'yı indirebilirsiniz
+   - Veya `eas build:list` komutuyla tüm build'lerinizi görebilirsiniz
+
+#### APK'yı Nereden Alırsınız?
+
+Build tamamlandıktan sonra:
+- Terminal'de görünen indirme linkini kullanın
+- Veya [Expo Dashboard](https://expo.dev)'a giriş yapıp projenizdeki "Builds" sekmesinden indirebilirsiniz
+
+### Yöntem 2: Lokal Build (Android Studio ile) 🏠
+
+Bilgisayarınızda direkt olarak APK oluşturmak için:
+
+#### Ön Gereksinimler:
+- Android Studio kurulu olmalı
+- Android SDK kurulu olmalı
+- Java JDK kurulu olmalı
+
+#### Adımlar:
+
+1. **Keystore Oluşturun (İlk Kez İse):**
+   ```bash
+   cd android/app
+   keytool -genkeypair -v -storetype PKCS12 -keystore my-release-key.keystore -alias my-key-alias -keyalg RSA -keysize 2048 -validity 10000
+   ```
+   Şifre belirleyin ve bilgileri girin.
+
+2. **Keystore Konfigürasyonu:**
+   `android/gradle.properties` dosyasına ekleyin:
+   ```properties
+   MYAPP_RELEASE_STORE_FILE=my-release-key.keystore
+   MYAPP_RELEASE_KEY_ALIAS=my-key-alias
+   MYAPP_RELEASE_STORE_PASSWORD=your-store-password
+   MYAPP_RELEASE_KEY_PASSWORD=your-key-password
+   ```
+
+3. **Android Studio'da Build:**
+   - Android Studio'yu açın
+   - `File > Open` ile `android` klasörünü açın
+   - `Build > Generate Signed Bundle / APK` seçin
+   - APK seçin
+   - Keystore'u seçin ve şifreleri girin
+   - Build variant: `release` seçin
+   - Finish'e tıklayın
+
+4. **APK Konumu:**
+   Build tamamlandıktan sonra APK şu konumda olacak:
+   ```
+   android/app/build/outputs/apk/release/app-release.apk
+   ```
+
+#### Alternatif: Gradle Komutları ile
+
+Terminal'den direkt build yapmak için:
+
+**Windows:**
+```bash
+cd android
+gradlew.bat assembleRelease
+```
+
+**macOS/Linux:**
+```bash
+cd android
+./gradlew assembleRelease
+```
+
+APK şu konumda olacak:
+```
+android/app/build/outputs/apk/release/app-release.apk
+```
+
+Veya npm script kullanarak:
+```bash
+npm run build:android:local
+```
+
+### Hangi Yöntemi Seçmeliyim?
+
+- **EAS Build** önerilir çünkü:
+  - ✅ Kolay kurulum
+  - ✅ Bulut üzerinde build (bilgisayarınızı yormaz)
+  - ✅ Otomatik keystore yönetimi
+  - ✅ Her build için indirme linki
+  - ✅ Build geçmişi takibi
+
+- **Lokal Build** kullanın eğer:
+  - İnternet bağlantınız yavaşsa
+  - Build sürecini tam kontrol etmek istiyorsanız
+  - Özel Gradle konfigürasyonları yapmanız gerekiyorsa
+
+## 🤖 Android Studio ile Çalıştırma
+
+Android Studio'dan uygulamayı çalıştırmak için şu adımları izleyin:
+
+### Ön Gereksinimler
+- Android Studio kurulu olmalı
+- Android SDK ve platform tools kurulu olmalı
+- ADB (Android Debug Bridge) PATH'te olmalı
+- USB ile bağlı fiziksel cihaz veya çalışan Android emulator
+
+### Adımlar
+
+1. **Metro Bundler'ı Başlatın:**
+   ```bash
+   npm start
+   # veya
+   npm run metro
+   ```
+   Metro bundler'ın çalıştığından emin olun (terminal'de "Metro waiting on..." mesajını görmelisiniz).
+
+2. **ADB Reverse Port Forwarding (USB Bağlantısı İçin):**
+   Fiziksel cihaz kullanıyorsanız, USB bağlantısı için port forwarding yapın:
+   ```bash
+   npm run android:studio
+   # veya manuel olarak:
+   adb reverse tcp:8081 tcp:8081
+   ```
+
+3. **Android Studio'da Projeyi Açın:**
+   - Android Studio'yu açın
+   - `File > Open` ile `android` klasörünü seçin
+   - Gradle sync'in tamamlanmasını bekleyin
+
+4. **Uygulamayı Çalıştırın:**
+   - Android Studio'da Run butonuna tıklayın (▶️)
+   - Veya `Shift + F10` tuşlarına basın
+   - Cihaz/emulator seçimini yapın
+
+### Sorun Giderme
+
+**"Unable to load script" Hatası:**
+- Metro bundler'ın çalıştığından emin olun (`npm start`)
+- USB bağlantısı için `adb reverse tcp:8081 tcp:8081` komutunu çalıştırın
+- Emulator kullanıyorsanız, bilgisayarınızla aynı Wi-Fi ağında olduğundan emin olun
+- Metro bundler'ı yeniden başlatın: `npm run start:reset`
+
+**Port 8081 Zaten Kullanımda:**
+- Metro bundler'ı farklı bir portta başlatın: `expo start --port 8082`
+- Veya kullanan işlemi sonlandırın
+
+**ADB Komutu Bulunamıyor:**
+- Android Studio > Settings > Appearance & Behavior > System Settings > Android SDK
+- SDK Tools sekmesinde "Android SDK Platform-Tools" seçili olduğundan emin olun
+- PATH'e ekleyin: `%LOCALAPPDATA%\Android\Sdk\platform-tools` (Windows)
+
 ## 📝 Notlar
 
 - Uygulamayı ilk kez çalıştırmadan önce `npm install` komutunu çalıştırmayı unutmayın
@@ -179,6 +360,7 @@ extra: {
 - QR kod tarama özelliği için kamera izni gereklidir
 - Veritabanı tabloları Supabase'de oluşturulmuş olmalıdır
 - `.env` dosyasını git'e eklemeyin (güvenlik için)
+- **Android Studio'dan çalıştırırken mutlaka Metro bundler'ı önce başlatın**
 
 ## 🤝 Katkıda Bulunma
 

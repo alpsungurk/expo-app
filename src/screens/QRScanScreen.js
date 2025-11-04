@@ -137,7 +137,7 @@ export default function QRScanScreen() {
       
       Alert.alert(
         'Masa Bulundu! 🎉',
-        `Masa ${tableData.masa_no} için menüye yönlendiriliyorsunuz.`,
+        `${tableData.masa_no} için menüye yönlendiriliyorsunuz.`,
         [
           {
             text: 'Menüye Git',
@@ -264,14 +264,14 @@ export default function QRScanScreen() {
                       <Ionicons name="checkmark-circle" size={24} color="#10B981" />
                       <Text style={styles.tableInfoTitle}>Masa Seçildi</Text>
                     </View>
-                    <Text style={styles.tableInfoNumber}>Masa {tableNumber}</Text>
+                    <Text style={styles.tableInfoNumber}>{tableNumber}</Text>
                     <TouchableOpacity 
                       style={styles.deleteTableButtonMain}
                       onPress={handleDeleteTable}
                       activeOpacity={0.6}
                     >
                       <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                      <Text style={styles.deleteTableButtonText}>Masa Değiştir</Text>
+                      <Text style={styles.deleteTableButtonText}>Masa Seçimini Kaldır</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (

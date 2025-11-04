@@ -1,52 +1,64 @@
 export default {
   expo: {
-    name: "Kahve Dükkanı",
-    slug: "kahve-dukkani",
-    version: "1.0.0",
-    orientation: "portrait",
-    icon: "./assets/icon.png",
-    userInterfaceStyle: "light",
-    newArchEnabled: true,
+    name: 'expo-app',
+    slug: 'expo-app',
+    version: '1.0.0',
+    orientation: 'portrait',
+    icon: './assets/icon.png',
+    userInterfaceStyle: 'light',
     splash: {
-      image: "./assets/splash-icon.png",
-      resizeMode: "contain",
-      backgroundColor: "#8B4513"
+      image: './assets/splash-icon.png',
+      resizeMode: 'contain',
+      backgroundColor: '#ffffff',
     },
+    assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
-      infoPlist: {
-        NSCameraUsageDescription: "Bu uygulama masa QR kodlarını taramak için kameraya erişim gerektirir."
-      }
+      bundleIdentifier: 'com.kahvedukkani.app',
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#8B4513"
+        foregroundImage: './assets/adaptive-icon.png',
+        backgroundColor: '#ffffff',
       },
-      edgeToEdgeEnabled: true,
+      package: 'com.kahvedukkani.app',
       permissions: [
-        "android.permission.CAMERA"
-      ]
+        'android.permission.CAMERA',
+        'android.permission.RECORD_AUDIO',
+        'android.permission.INTERNET',
+        'android.permission.POST_NOTIFICATIONS',
+        'android.permission.VIBRATE',
+      ],
     },
     web: {
-      favicon: "./assets/favicon.png"
+      favicon: './assets/favicon.png',
     },
     plugins: [
       [
-        "expo-camera",
+        'expo-notifications',
         {
-          cameraPermission: "Bu uygulama masa QR kodlarını taramak için kameraya erişim gerektirir."
-        }
-      ]
+          icon: './assets/icon.png',
+          color: '#8B4513',
+          sounds: [],
+          mode: 'production',
+        },
+      ],
     ],
     extra: {
-      // Environment variables'dan değerleri al
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-      
-      // Production Supabase (yorum satırında bırakıldı)
-      // supabaseUrl: "https://hgxicutwejvfysjsmjcw.supabase.co",
-      // supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneGljdXR3ZWp2ZnlzanNtamN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MjAwNDYsImV4cCI6MjA3NjE5NjA0Nn0.4rNe3GfRBXkG3Dfei5-tsfLXb_9EHGt39oPrtwuO0nE"
-    }
-  }
+      // Expo Project ID - EAS project ID'si kullanılacak
+      projectId: 'f2793cf7-6dcf-4754-8d0a-92d5b4859b33',
+      eas: {
+        projectId: 'f2793cf7-6dcf-4754-8d0a-92d5b4859b33',
+      },
+    },
+    notification: {
+      icon: './assets/icon.png',
+      color: '#8B4513',
+      androidMode: 'default',
+      androidCollapsedTitle: 'Yeni bildirim',
+    },
+  },
 };
+
