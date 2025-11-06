@@ -18,6 +18,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
+import { getImageUrl } from '../utils/storage';
 import TableHeader from '../components/TableHeader';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 
@@ -41,23 +42,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   const { tableNumber, addItem } = useCartStore();
 
   // Resim URL'sini Supabase Storage'dan al
-  const getImageUri = () => {
-    const STORAGE_BUCKET = 'images';
-    const resimPath = product.resim_path;
-    
-    if (!resimPath) return null;
-    
-    // Eğer zaten tam URL ise direkt kullan
-    if (typeof resimPath === 'string' && /^https?:\/\//i.test(resimPath)) {
-      return resimPath;
-    }
-    
-    // Supabase Storage'dan public URL oluştur
-    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(resimPath);
-    return data?.publicUrl || null;
-  };
-
-  const imageUri = getImageUri();
+  const imageUri = getImageUrl(product?.resim_path);
 
   useEffect(() => {
     fetchIngredients();

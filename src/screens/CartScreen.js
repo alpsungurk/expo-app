@@ -9,11 +9,13 @@ import {
   Image,
   Modal,
   Dimensions,
-  Animated
+  Animated,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
+import { getImageUrl } from '../utils/storage';
 import { useCartStore } from '../store/cartStore';
 import { useAppStore } from '../store/appStore';
 import TableHeader from '../components/TableHeader';
@@ -28,6 +30,7 @@ export default function CartScreen() {
   const navigation = useNavigation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Animasyon değişkenleri
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -59,6 +62,12 @@ export default function CartScreen() {
       // Sadece sayfa odaklandığında animasyonu yenile
     }, [])
   );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    // CartScreen'de veri yükleme yok, sadece state'i yenile
+    setTimeout(() => setRefreshing(false), 1000);
+  };
   
   const { 
     items, 
@@ -86,18 +95,7 @@ export default function CartScreen() {
 
   // Resim URL'sini Supabase Storage'dan al
   const getImageUri = (resimPath) => {
-    const STORAGE_BUCKET = 'images';
-    
-    if (!resimPath) return null;
-    
-    // Eğer zaten tam URL ise direkt kullan
-    if (typeof resimPath === 'string' && /^https?:\/\//i.test(resimPath)) {
-      return resimPath;
-    }
-    
-    // Supabase Storage'dan public URL oluştur
-    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(resimPath);
-    return data?.publicUrl || null;
+    return getImageUrl(resimPath);
   };
 
   const handleQuantityChange = (item, customizations, newQuantity) => {
@@ -302,7 +300,11 @@ export default function CartScreen() {
           opacity: fadeAnim,
           transform: [{ scale: scaleAnim }]
         }
-      ]} showsVerticalScrollIndicator={false}>
+      ]} 
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }>
         <View style={styles.content}>
           <View style={styles.tableInfo}>
             <Ionicons name="restaurant" size={20} color="#8B4513" />

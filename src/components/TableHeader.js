@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartStore } from '../store/cartStore';
 import { useAppStore } from '../store/appStore';
 import { useNotification } from '../contexts/NotificationContext';
@@ -14,11 +15,12 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
   const { tableNumber, qrToken } = useCartStore();
   const { getSistemAyarı } = useAppStore();
   const { showNotifications } = useNotification();
+  const insets = useSafeAreaInsets();
   
   const kafeAdi = getSistemAyarı('kafe_adi') || 'Kahve Dükkanı';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
       <View style={styles.header}>
         {showBackButton ? (
           <TouchableOpacity
@@ -62,7 +64,6 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#8B4513',
-    paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
     shadowColor: '#000',

@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase, TABLES } from '../config/supabase';
+import { getImageUrl } from '../utils/storage';
 import TableHeader from '../components/TableHeader';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 import { useNavigation } from '@react-navigation/native';
@@ -28,8 +29,8 @@ export default function AnnouncementsScreen() {
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [showAllAnnouncements, setShowAllAnnouncements] = useState(false);
-  const [showAllCampaigns, setShowAllCampaigns] = useState(false);
+  const [displayedAnnouncementsCount, setDisplayedAnnouncementsCount] = useState(4);
+  const [displayedCampaignsCount, setDisplayedCampaignsCount] = useState(4);
 
   const { 
     campaigns, 
@@ -70,14 +71,6 @@ export default function AnnouncementsScreen() {
         .order('id', { ascending: true });
 
       if (announcementsError) throw announcementsError;
-
-      // Debug: Tüm duyuruları kontrol et (aktif/passif)
-      const { data: allAnnouncements, error: allError } = await supabase
-        .from(TABLES.DUYURULAR)
-        .select('*')
-        .order('id', { ascending: true });
-
-     
 
       // Yeni önerileri yükle (sadece aktif olanlar - tarih filtrelemesi client tarafında yapılacak)
       const { data: suggestionsData, error: suggestionsError } = await supabase
@@ -129,7 +122,6 @@ export default function AnnouncementsScreen() {
   const renderCampaign = (campaign) => {
     // Resim URL'sini kontrol et
     const getImageUri = () => {
-      const STORAGE_BUCKET = 'images';
       let raw = (
         campaign.resim_path ||
         campaign.image_url ||
@@ -139,11 +131,7 @@ export default function AnnouncementsScreen() {
         campaign.image
       );
       
-      if (!raw) return null;
-      if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
-      // Build public URL via Supabase Storage for path-only values
-      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(raw);
-      return data?.publicUrl || null;
+      return getImageUrl(raw);
     };
 
     const imageUri = getImageUri();
@@ -225,7 +213,6 @@ export default function AnnouncementsScreen() {
 
     // Resim URL'sini kontrol et
     const getImageUri = () => {
-      const STORAGE_BUCKET = 'images';
       let raw = (
         announcement.resim_path ||
         announcement.image_url ||
@@ -235,11 +222,7 @@ export default function AnnouncementsScreen() {
         announcement.image
       );
       
-      if (!raw) return null;
-      if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
-      // Build public URL via Supabase Storage for path-only values
-      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(raw);
-      return data?.publicUrl || null;
+      return getImageUrl(raw);
     };
 
     const imageUri = getImageUri();
@@ -296,12 +279,20 @@ export default function AnnouncementsScreen() {
   const activeCampaigns = getActiveCampaigns();
   const activeAnnouncements = getActiveAnnouncements();
   
-  // İlk 4'ü göster, daha fazlası varsa "Daha Fazla Yükle" butonu ekle
-  const displayedCampaigns = showAllCampaigns ? activeCampaigns : activeCampaigns.slice(0, 4);
-  const displayedAnnouncements = showAllAnnouncements ? activeAnnouncements : activeAnnouncements.slice(0, 4);
+  // Her seferinde 4'er 4'er göster
+  const displayedCampaigns = activeCampaigns.slice(0, displayedCampaignsCount);
+  const displayedAnnouncements = activeAnnouncements.slice(0, displayedAnnouncementsCount);
   
-  const hasMoreCampaigns = activeCampaigns.length > 4;
-  const hasMoreAnnouncements = activeAnnouncements.length > 4;
+  const hasMoreCampaigns = activeCampaigns.length > displayedCampaignsCount;
+  const hasMoreAnnouncements = activeAnnouncements.length > displayedAnnouncementsCount;
+  
+  const handleLoadMoreCampaigns = () => {
+    setDisplayedCampaignsCount(prev => prev + 4);
+  };
+  
+  const handleLoadMoreAnnouncements = () => {
+    setDisplayedAnnouncementsCount(prev => prev + 4);
+  };
 
 
   return (
@@ -325,28 +316,15 @@ export default function AnnouncementsScreen() {
             {displayedCampaigns.map(renderCampaign)}
             
             {/* Daha Fazla Kampanya Butonu */}
-            {hasMoreCampaigns && !showAllCampaigns && (
+            {hasMoreCampaigns && (
               <TouchableOpacity 
                 style={styles.loadMoreButton}
-                onPress={() => setShowAllCampaigns(true)}
+                onPress={handleLoadMoreCampaigns}
               >
                 <Text style={styles.loadMoreButtonText}>
-                  Tüm Kampanyaları Gör ({activeCampaigns.length - 4} daha)
+                  Daha Fazla Göster ({activeCampaigns.length - displayedCampaignsCount} daha)
                 </Text>
                 <Ionicons name="chevron-down" size={16} color="#8B4513" />
-              </TouchableOpacity>
-            )}
-            
-            {/* Daha Az Göster Butonu */}
-            {hasMoreCampaigns && showAllCampaigns && (
-              <TouchableOpacity 
-                style={styles.loadMoreButton}
-                onPress={() => setShowAllCampaigns(false)}
-              >
-                <Text style={styles.loadMoreButtonText}>
-                  Daha Az Göster
-                </Text>
-                <Ionicons name="chevron-up" size={16} color="#8B4513" />
               </TouchableOpacity>
             )}
           </View>
@@ -362,28 +340,15 @@ export default function AnnouncementsScreen() {
             {displayedAnnouncements.map(renderAnnouncement)}
             
             {/* Daha Fazla Duyuru Butonu */}
-            {hasMoreAnnouncements && !showAllAnnouncements && (
+            {hasMoreAnnouncements && (
               <TouchableOpacity 
                 style={styles.loadMoreButton}
-                onPress={() => setShowAllAnnouncements(true)}
+                onPress={handleLoadMoreAnnouncements}
               >
                 <Text style={styles.loadMoreButtonText}>
-                  Tüm Duyuruları Gör ({activeAnnouncements.length - 4} daha)
+                  Daha Fazla Göster ({activeAnnouncements.length - displayedAnnouncementsCount} daha)
                 </Text>
                 <Ionicons name="chevron-down" size={16} color="#8B4513" />
-              </TouchableOpacity>
-            )}
-            
-            {/* Daha Az Göster Butonu */}
-            {hasMoreAnnouncements && showAllAnnouncements && (
-              <TouchableOpacity 
-                style={styles.loadMoreButton}
-                onPress={() => setShowAllAnnouncements(false)}
-              >
-                <Text style={styles.loadMoreButtonText}>
-                  Daha Az Göster
-                </Text>
-                <Ionicons name="chevron-up" size={16} color="#8B4513" />
               </TouchableOpacity>
             )}
           </View>

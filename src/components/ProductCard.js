@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image, Animated, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../config/supabase';
+import { getImageUrl } from '../utils/storage';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -13,23 +13,7 @@ export default function ProductCard({ product, onPress, onAddToCart, onProductDe
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   // Resim URL'sini Supabase Storage'dan al
-  const getImageUri = () => {
-    const STORAGE_BUCKET = 'images';
-    const resimPath = product.resim_path;
-    
-    if (!resimPath) return null;
-    
-    // Eğer zaten tam URL ise direkt kullan
-    if (typeof resimPath === 'string' && /^https?:\/\//i.test(resimPath)) {
-      return resimPath;
-    }
-    
-    // Supabase Storage'dan public URL oluştur
-    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(resimPath);
-    return data?.publicUrl || null;
-  };
-
-  const imageUri = getImageUri();
+  const imageUri = getImageUrl(product.resim_path);
 
   useEffect(() => {
     // Staggered entrance animation

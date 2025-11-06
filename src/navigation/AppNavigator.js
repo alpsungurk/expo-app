@@ -3,6 +3,7 @@ import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-naviga
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartStore } from '../store/cartStore';
 import { useAppStore } from '../store/appStore';
 
@@ -293,6 +294,15 @@ export default function AppNavigator() {
 function MainTabNavigator() {
   const { getTotalItems } = useCartStore();
   const { isProductModalOpen, getActiveOrdersCount } = useAppStore();
+  const insets = useSafeAreaInsets();
+
+  // Tab bar için base height ve padding hesaplama
+  const baseTabBarHeight = 60;
+  const basePaddingTop = 8;
+  const basePaddingBottom = 8;
+  const tabBarHeight = baseTabBarHeight + insets.bottom;
+  const tabBarPaddingBottom = basePaddingBottom + insets.bottom;
+  const tabBarPaddingTop = basePaddingTop;
 
   return (
     <Tab.Navigator
@@ -319,9 +329,9 @@ function MainTabNavigator() {
           tabBarActiveTintColor: '#8B4513',
           tabBarInactiveTintColor: '#9CA3AF',
           tabBarStyle: {
-            paddingBottom: 10,
-            paddingTop: 10,
-            height: 70,
+            paddingBottom: tabBarPaddingBottom,
+            paddingTop: tabBarPaddingTop,
+            height: tabBarHeight,
             borderTopWidth: 1,
             borderTopColor: '#E5E7EB',
             backgroundColor: '#FFFFFF',
@@ -354,9 +364,9 @@ function MainTabNavigator() {
               
               // Diğer durumlarda normal tab bar
               return {
-                paddingBottom: 10,
-                paddingTop: 10,
-                height: 70,
+                paddingBottom: tabBarPaddingBottom,
+                paddingTop: tabBarPaddingTop,
+                height: tabBarHeight,
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 backgroundColor: '#FFFFFF',
@@ -396,9 +406,9 @@ function MainTabNavigator() {
               
               // Diğer durumlarda normal tab bar
               return {
-                paddingBottom: 10,
-                paddingTop: 10,
-                height: 70,
+                paddingBottom: tabBarPaddingBottom,
+                paddingTop: tabBarPaddingTop,
+                height: tabBarHeight,
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 backgroundColor: '#FFFFFF',
@@ -416,12 +426,26 @@ function MainTabNavigator() {
           component={QRScanScreen}
           options={{
             tabBarBadge: undefined,
+            tabBarStyle: {
+              paddingBottom: tabBarPaddingBottom,
+              paddingTop: tabBarPaddingTop,
+              height: tabBarHeight,
+              borderTopWidth: 1,
+              borderTopColor: '#E5E7EB',
+              backgroundColor: '#FFFFFF',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              elevation: 8,
+            },
           }}
         />
         <Tab.Screen 
           name="Siparişlerim" 
           component={OrderStatusStack}
           options={({ route }) => ({
+            tabBarLabel: 'Sipariş Durumu',
             tabBarBadge: getActiveOrdersCount() > 0 ? getActiveOrdersCount() : undefined,
             tabBarBadgeStyle: {
               backgroundColor: '#F59E0B', // Turuncu - beklemede/hazırlanıyor rengi
@@ -445,9 +469,9 @@ function MainTabNavigator() {
               
               // Diğer durumlarda normal tab bar
               return {
-                paddingBottom: 10,
-                paddingTop: 10,
-                height: 70,
+                paddingBottom: tabBarPaddingBottom,
+                paddingTop: tabBarPaddingTop,
+                height: tabBarHeight,
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 backgroundColor: '#FFFFFF',
@@ -475,9 +499,9 @@ function MainTabNavigator() {
               
               // Diğer durumlarda normal tab bar
               return {
-                paddingBottom: 10,
-                paddingTop: 10,
-                height: 70,
+                paddingBottom: tabBarPaddingBottom,
+                paddingTop: tabBarPaddingTop,
+                height: tabBarHeight,
                 borderTopWidth: 1,
                 borderTopColor: '#E5E7EB',
                 backgroundColor: '#FFFFFF',

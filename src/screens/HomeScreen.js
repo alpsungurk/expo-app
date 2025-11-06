@@ -11,7 +11,8 @@ import {
   Animated,
   TextInput,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -77,6 +78,7 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 export default function HomeScreen() {
   const navigation = useNavigation();
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedSortFilter, setSelectedSortFilter] = useState(null); // 'populer' veya 'yeni'
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [campaignsLoading, setCampaignsLoading] = useState(true);
@@ -86,6 +88,7 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [ordersDropdownVisible, setOrdersDropdownVisible] = useState(false);
   const [orders, setOrders] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
   const modalSlideAnim = useRef(new Animated.Value(0)).current;
 
   // Animation refs
@@ -130,6 +133,13 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+    loadOrdersData();
+    setTimeout(() => setRefreshing(false), 1000);
+  };
+
   // Sayfa her açıldığında verileri yenile
   useFocusEffect(
     React.useCallback(() => {
@@ -146,6 +156,13 @@ export default function HomeScreen() {
       filtered = filtered.filter(product => product.kategori_id === selectedCategory.id);
     }
     
+    // Popüler/Yeni filtresi
+    if (selectedSortFilter === 'populer') {
+      filtered = filtered.filter(product => product.populer === true);
+    } else if (selectedSortFilter === 'yeni') {
+      filtered = filtered.filter(product => product.yeni_urun === true);
+    }
+    
     // Arama filtresi
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
@@ -156,7 +173,7 @@ export default function HomeScreen() {
     }
     
     setFilteredProducts(filtered);
-  }, [selectedCategory, products, searchQuery]);
+  }, [selectedCategory, selectedSortFilter, products, searchQuery]);
 
   // Phone token değiştiğinde siparişleri yeniden yükle
   useEffect(() => {
@@ -515,89 +532,99 @@ export default function HomeScreen() {
         onSidebarPress={() => setSidebarVisible(true)}
       />
 
-      {/* Siparişler Dropdown - Sadece sipariş varsa göster */}
-      {orders.length > 0 && (
-        <View style={styles.ordersDropdownContainer}>
-          <View style={styles.ordersDropdownWrapper}>
-            <TouchableOpacity 
-              style={styles.ordersDropdownButton}
-              onPress={() => setOrdersDropdownVisible(!ordersDropdownVisible)}
-            >
-              <View style={styles.ordersDropdownContent}>
-                <Ionicons name="list-outline" size={20} color="#8B4513" />
-                <Text style={styles.ordersDropdownText}>
-                  Siparişlerim
-                </Text>
-              </View>
-              <Ionicons 
-                name={ordersDropdownVisible ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color="#8B4513" 
-              />
-            </TouchableOpacity>
-            
-            {/* Sipariş Sayısı Badge - Sadece sipariş varsa göster */}
-            {orders.length > 0 && (
-              <View style={styles.ordersBadge}>
-                <Text style={styles.ordersBadgeText}>{orders.length}</Text>
+      {/* Siparişler Dropdown - Sadece aktif siparişler (beklemede, hazirlaniyor, hazir) göster */}
+      {(() => {
+        // Sadece beklemede, hazirlaniyor ve hazir statelerindeki siparişleri filtrele
+        const activeOrders = orders.filter(order => 
+          ['beklemede', 'hazirlaniyor', 'hazir'].includes(order.durum)
+        );
+        
+        return activeOrders.length > 0 && (
+          <View style={styles.ordersDropdownContainer}>
+            <View style={styles.ordersDropdownWrapper}>
+              <TouchableOpacity 
+                style={styles.ordersDropdownButton}
+                onPress={() => setOrdersDropdownVisible(!ordersDropdownVisible)}
+              >
+                <View style={styles.ordersDropdownContent}>
+                  <Ionicons name="list-outline" size={20} color="#8B4513" />
+                  <Text style={styles.ordersDropdownText}>
+                    Siparişlerim
+                  </Text>
+                </View>
+                <Ionicons 
+                  name={ordersDropdownVisible ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#8B4513" 
+                />
+              </TouchableOpacity>
+              
+              {/* Sipariş Sayısı Badge - Sadece aktif siparişler için */}
+              {activeOrders.length > 0 && (
+                <View style={styles.ordersBadge}>
+                  <Text style={styles.ordersBadgeText}>{activeOrders.length}</Text>
+                </View>
+              )}
+            </View>
+
+            {ordersDropdownVisible && (
+              <View style={styles.ordersDropdownList}>
+                <ScrollView 
+                  style={styles.ordersDropdownScrollView}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  nestedScrollEnabled={true}
+                >
+                  {activeOrders.map((order) => {
+                    const statusInfo = getStatusInfo(order.durum);
+                    return (
+                      <TouchableOpacity 
+                        key={order.id}
+                        style={styles.orderDropdownItem}
+                        onPress={() => {
+                          setOrdersDropdownVisible(false);
+                          navigation.navigate('Siparişlerim', {
+                            screen: 'OrderDetail',
+                            params: { 
+                              order, 
+                              orderDetails: order.siparis_detaylari
+                            }
+                          });
+                        }}
+                      >
+                        <View style={styles.orderDropdownLeft}>
+                          <Ionicons 
+                            name={statusInfo.icon} 
+                            size={16} 
+                            color={statusInfo.color} 
+                          />
+                          <View style={styles.orderDropdownInfo}>
+                            <Text style={styles.orderDropdownNumber}>#{order.siparis_no}</Text>
+                            <Text style={styles.orderDropdownDate}>{formatDate(order.olusturma_tarihi)}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.orderDropdownRight}>
+                          <View style={[styles.orderDropdownBadge, { backgroundColor: statusInfo.color }]}>
+                            <Text style={styles.orderDropdownBadgeText}>{statusInfo.label}</Text>
+                          </View>
+                          <Text style={styles.orderDropdownPrice}>{formatPrice(order.toplam_tutar)}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
             )}
           </View>
-
-          {ordersDropdownVisible && (
-            <View style={styles.ordersDropdownList}>
-              <ScrollView 
-                style={styles.ordersDropdownScrollView}
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-                nestedScrollEnabled={true}
-              >
-                {orders.map((order) => {
-                  const statusInfo = getStatusInfo(order.durum);
-                  return (
-                    <TouchableOpacity 
-                      key={order.id}
-                      style={styles.orderDropdownItem}
-                      onPress={() => {
-                        setOrdersDropdownVisible(false);
-                        navigation.navigate('Siparişlerim', {
-                          screen: 'OrderDetail',
-                          params: { 
-                            order, 
-                            orderDetails: order.siparis_detaylari
-                          }
-                        });
-                      }}
-                    >
-                      <View style={styles.orderDropdownLeft}>
-                        <Ionicons 
-                          name={statusInfo.icon} 
-                          size={16} 
-                          color={statusInfo.color} 
-                        />
-                        <View style={styles.orderDropdownInfo}>
-                          <Text style={styles.orderDropdownNumber}>#{order.siparis_no}</Text>
-                          <Text style={styles.orderDropdownDate}>{formatDate(order.olusturma_tarihi)}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.orderDropdownRight}>
-                        <View style={[styles.orderDropdownBadge, { backgroundColor: statusInfo.color }]}>
-                          <Text style={styles.orderDropdownBadgeText}>{statusInfo.label}</Text>
-                        </View>
-                        <Text style={styles.orderDropdownPrice}>{formatPrice(order.toplam_tutar)}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
-        </View>
-      )}
+        );
+      })()}
 
       <Animated.ScrollView
         style={[styles.scrollView, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -696,9 +723,23 @@ export default function HomeScreen() {
           }
         ]}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {selectedCategory ? selectedCategory.ad : 'Tüm Ürünler'}
-            </Text>
+            <View style={styles.sectionTitleContainer}>
+              <Text style={styles.sectionTitle}>
+                {selectedCategory ? selectedCategory.ad : 'Tüm Ürünler'}
+              </Text>
+              {selectedSortFilter && (
+                <View style={styles.sortFilterBadge}>
+                  <Ionicons 
+                    name={selectedSortFilter === 'populer' ? 'flame' : 'sparkles'} 
+                    size={14} 
+                    color="#8B4513" 
+                  />
+                  <Text style={styles.sortFilterText}>
+                    {selectedSortFilter === 'populer' ? 'Popüler' : 'Yeni'}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.productCount}>
               {filteredProducts.length} ürün
             </Text>
@@ -723,6 +764,63 @@ export default function HomeScreen() {
               )}
             </View>
           </View>
+
+          {/* Popüler/Yeni Filtreleri - Arama çubuğunun altında */}
+          {!productsLoading && (
+            <View style={styles.sortFiltersContainer}>
+              <View style={styles.sortFiltersRow}>
+                <TouchableOpacity
+                  onPress={() => setSelectedSortFilter(selectedSortFilter === 'populer' ? null : 'populer')}
+                  style={[
+                    styles.chip,
+                    selectedSortFilter === 'populer' && styles.chipActive,
+                  ]}
+                >
+                  <View style={styles.chipContent}>
+                    <Ionicons 
+                      name="flame-outline" 
+                      size={16} 
+                      color={selectedSortFilter === 'populer' ? 'white' : '#6B7280'} 
+                    />
+                    <Text
+                      style={[
+                        styles.chipText,
+                        selectedSortFilter === 'populer' && styles.chipTextActive,
+                        styles.chipLabel,
+                      ]}
+                    >
+                      Popüler
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setSelectedSortFilter(selectedSortFilter === 'yeni' ? null : 'yeni')}
+                  style={[
+                    styles.chip,
+                    selectedSortFilter === 'yeni' && styles.chipActive,
+                  ]}
+                >
+                  <View style={styles.chipContent}>
+                    <Ionicons 
+                      name="sparkles-outline" 
+                      size={16} 
+                      color={selectedSortFilter === 'yeni' ? 'white' : '#6B7280'} 
+                    />
+                    <Text
+                      style={[
+                        styles.chipText,
+                        selectedSortFilter === 'yeni' && styles.chipTextActive,
+                        styles.chipLabel,
+                      ]}
+                    >
+                      Yeni
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {productsLoading ? (
             <Animated.View style={[
@@ -950,12 +1048,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontFamily: 'System',
   },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveValue(8, 10, 12, 14),
+    flex: 1,
+  },
   sectionTitle: {
     fontSize: getResponsiveValue(18, 20, 22, 24),
     fontWeight: '700',
     fontFamily: 'System',
     color: '#1F2937',
     letterSpacing: 0.5,
+  },
+  sortFilterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
+    paddingVertical: getResponsiveValue(4, 5, 6, 8),
+    borderRadius: 12,
+  },
+  sortFilterText: {
+    fontSize: getResponsiveValue(11, 12, 13, 14),
+    fontWeight: '600',
+    color: '#8B4513',
+    fontFamily: 'System',
   },
   productCount: {
     fontSize: getResponsiveValue(12, 14, 16, 18),
@@ -1047,8 +1166,19 @@ const styles = StyleSheet.create({
   // Search Bar Stilleri
   searchContainer: {
     paddingHorizontal: getResponsiveValue(8, 12, 16, 20),
-    marginBottom: getResponsiveValue(16, 20, 24, 28),
+    marginBottom: getResponsiveValue(12, 14, 16, 18),
     marginTop: getResponsiveValue(8, 10, 12, 14),
+  },
+  sortFiltersContainer: {
+    paddingHorizontal: getResponsiveValue(8, 12, 16, 20),
+    marginBottom: getResponsiveValue(16, 20, 24, 28),
+  },
+  sortFiltersRow: {
+    flexDirection: 'row',
+    paddingVertical: getResponsiveValue(4, 6, 8, 10),
+    gap: getResponsiveValue(8, 10, 12, 14),
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchBar: {
     flexDirection: 'row',

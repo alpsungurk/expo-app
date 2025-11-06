@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
-  ScrollView,
   Dimensions,
   TouchableOpacity,
   Image,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
+import { getImageUrl } from '../utils/storage';
+import Constants from 'expo-constants';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -29,45 +31,104 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 export default function CampaignCarousel() {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
-  const scrollViewRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const isScrolling = useRef(false);
-  const [originalItems, setOriginalItems] = useState([]);
+  const [items, setItems] = useState([]);
+  const [prevIndex, setPrevIndex] = useState(0);
+  const [isPressing, setIsPressing] = useState(false);
+  
+  // Animasyon için ref'ler
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [animatingDirection, setAnimatingDirection] = useState(null);
   
   // Card genişliği ve margin hesaplaması
   const horizontalPadding = getResponsiveValue(16, 20, 24, 28);
   const cardMargin = getResponsiveValue(8, 10, 12, 14);
   const cardWidth = width - (horizontalPadding * 2);
-  const itemWidth = cardWidth + (cardMargin * 2); // Card + margin'ler
 
   // Database'den verileri yükle
   useEffect(() => {
     loadData();
   }, []);
 
-  // Infinite scroll için items'ı 3 kez tekrarla
-  const allItems = originalItems.length > 0 ? [
-    ...originalItems.map((item, index) => ({ ...item, uniqueKey: `${item.type}-${item.id}-1-${index}` })),
-    ...originalItems.map((item, index) => ({ ...item, uniqueKey: `${item.type}-${item.id}-2-${index}` })),
-    ...originalItems.map((item, index) => ({ ...item, uniqueKey: `${item.type}-${item.id}-3-${index}` }))
-  ] : [];
-
-  // Component mount olduğunda orta bölümde başla (infinite scroll için)
+  // Items değiştiğinde animasyonu sıfırla
   useEffect(() => {
-    if (originalItems.length > 0) {
-      const originalLength = originalItems.length;
-      const startIndex = originalLength; // Orta bölümde başla
-      
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({
-          x: startIndex * itemWidth,
-          animated: false,
-        });
-        // Indicator için gerçek index'i ayarla (0 olmalı çünkü orta bölümde başlıyoruz)
-        setCurrentIndex(0);
-      }, 100);
+    if (items.length > 0) {
+      slideAnim.setValue(0);
+      setAnimatingDirection(null);
     }
-  }, [originalItems.length, itemWidth]);
+  }, [items.length]);
+
+  // Sağ ok butonuna tıklandığında
+  const handleNext = useCallback(() => {
+    if (items.length === 0) return;
+    animateTransition('next', () => {
+      setCurrentIndex((prevIndex) => {
+        if (prevIndex === items.length - 1) {
+          return 0; // İlk item'a git
+        }
+        return prevIndex + 1;
+      });
+    });
+  }, [items.length, currentIndex]);
+
+  // Otomatik geçiş
+  useEffect(() => {
+    if (items.length <= 1) return; // Tek kart varsa otomatik geçiş yok
+    if (isPressing) return; // Basılı tutulduğunda otomatik geçiş yok
+    if (animatingDirection) return; // Animasyon sırasında otomatik geçiş yok
+
+    const interval = setInterval(() => {
+      handleNext();
+    }, 5000); // 5 saniyede bir geçiş
+
+    return () => clearInterval(interval);
+  }, [items.length, isPressing, animatingDirection, handleNext]);
+
+  // Geçiş animasyonu
+  const animateTransition = (direction, callback) => {
+    // Önce mevcut index'i kaydet (kayarken gösterilecek kart)
+    setPrevIndex(currentIndex);
+    
+    // Yeni kartı başlangıç pozisyonuna getir (render öncesi)
+    // Prev (soldaki buton): yeni kart soldan gelir (-width'den), mevcut kart sağa kayar
+    // Next (sağdaki buton): yeni kart sağdan gelir (width'den), mevcut kart sola kayar
+    slideAnim.setValue(direction === 'prev' ? -width : width);
+    
+    // Animasyon yönünü set et
+    setAnimatingDirection(direction);
+    
+    // Index'i değiştir (yeni kart render edilsin)
+    callback();
+    
+    // requestAnimationFrame ile bir sonraki frame'de animasyonu başlat
+    // Bu, yeni kartın render edilmesi için zaman tanır
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        // Her iki kartı da aynı anda kaydır - mevcut kart çıkarken yeni kart giriyor
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }).start(() => {
+          setAnimatingDirection(null);
+        });
+      });
+    });
+  };
+
+  // Sol ok butonuna tıklandığında
+  const handlePrevious = () => {
+    if (items.length === 0) return;
+    animateTransition('prev', () => {
+      setCurrentIndex((prevIndex) => {
+        if (prevIndex === 0) {
+          return items.length - 1; // Son item'a git
+        }
+        return prevIndex - 1;
+      });
+    });
+  };
+
 
   const loadData = async () => {
     try {
@@ -104,13 +165,15 @@ export default function CampaignCarousel() {
       if (suggestionsError) throw suggestionsError;
 
       // Tüm öğeleri birleştir ve öncelik sırasına göre sırala
+      // Sadece aktif olanları göster
       const allItems = [
-        ...(campaignsData || []).map(item => ({ ...item, type: 'campaign' })),
-        ...(announcementsData || []).map(item => ({ ...item, type: 'announcement' })),
-        ...(suggestionsData || []).map(item => ({ ...item, type: 'suggestion' }))
+        ...(campaignsData || []).filter(item => item.aktif === true).map(item => ({ ...item, type: 'campaign' })),
+        ...(announcementsData || []).filter(item => item.aktif === true).map(item => ({ ...item, type: 'announcement' })),
+        ...(suggestionsData || []).filter(item => item.aktif === true).map(item => ({ ...item, type: 'suggestion' }))
       ].sort((a, b) => (b.oncelik || 0) - (a.oncelik || 0));
 
-      setOriginalItems(allItems);
+      setItems(allItems);
+      setCurrentIndex(0);
     } catch (error) {
       console.error('Carousel veri yükleme hatası:', error);
     } finally {
@@ -118,71 +181,9 @@ export default function CampaignCarousel() {
     }
   };
 
-  // Scroll handler - indicator'ları eş zamanlı güncelle (infinite scroll uyumlu)
-  const handleScroll = (event) => {
-    if (isScrolling.current) return;
-    
-    const scrollPosition = event.nativeEvent.contentOffset.x;
-    const index = Math.round(scrollPosition / itemWidth);
-    
-    if (originalItems.length > 0 && index >= 0 && index < allItems.length) {
-      const originalLength = originalItems.length;
-      // Gerçek index'i hesapla (modulo ile infinite scroll uyumlu)
-      const realIndex = index % originalLength;
-      
-      // Indicator'ı sadece gerçekten değiştiyse güncelle
-      if (realIndex !== currentIndex) {
-        setCurrentIndex(realIndex);
-      }
-    }
-  };
-
-  // Scroll end handler - infinite scroll mantığı ve indicator güncellemesi
-  const handleScrollEnd = (event) => {
-    if (isScrolling.current) return;
-    
-    const scrollPosition = event.nativeEvent.contentOffset.x;
-    const index = Math.round(scrollPosition / itemWidth);
-    
-    if (originalItems.length > 0 && index >= 0 && index < allItems.length) {
-      const originalLength = originalItems.length;
-      
-      // Gerçek index'i hesapla ve indicator'ı güncelle
-      const realIndex = index % originalLength;
-      setCurrentIndex(realIndex);
-      
-      // Eğer ilk bölümdeyse (index 0 - originalLength-1), son bölüme geç
-      if (index < originalLength) {
-        // Son bölümdeki aynı pozisyona geç
-        const targetIndex = realIndex + originalLength * 2;
-        isScrolling.current = true;
-        scrollViewRef.current?.scrollTo({
-          x: targetIndex * itemWidth,
-          animated: false,
-        });
-        setTimeout(() => {
-          isScrolling.current = false;
-        }, 100);
-      }
-      // Eğer son bölümdeyse (index >= originalLength * 2), ilk bölüme geç
-      else if (index >= originalLength * 2) {
-        // İlk bölümdeki aynı pozisyona geç
-        const targetIndex = realIndex;
-        isScrolling.current = true;
-        scrollViewRef.current?.scrollTo({
-          x: targetIndex * itemWidth,
-          animated: false,
-        });
-        setTimeout(() => {
-          isScrolling.current = false;
-        }, 100);
-      }
-    }
-  };
 
   // Resim URL'i oluştur
   const getImageUri = (item) => {
-    const STORAGE_BUCKET = 'images';
     let raw = (
       item.resim_path ||
       item.image_url ||
@@ -192,29 +193,7 @@ export default function CampaignCarousel() {
       item.image
     );
 
-    if (!raw) return null;
-    if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
-    
-    // Path temizleme: Başındaki /images/ veya / karakterini kaldır
-    let cleanPath = raw;
-    if (typeof cleanPath === 'string') {
-      // /images/kahvalti.jpg -> kahvalti.jpg
-      cleanPath = cleanPath.replace(/^\/images\//, '');
-      // /kahvalti.jpg -> kahvalti.jpg
-      cleanPath = cleanPath.replace(/^\//, '');
-      // images/kahvalti.jpg -> kahvalti.jpg (bucket adını da kaldır)
-      cleanPath = cleanPath.replace(/^images\//, '');
-    }
-    
-    try {
-      const { data, error } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(cleanPath);
-      if (error) {
-        return null;
-      }
-      return data?.publicUrl || null;
-    } catch (error) {
-      return null;
-    }
+    return getImageUrl(raw);
   };
 
   // Başlık al
@@ -284,78 +263,196 @@ export default function CampaignCarousel() {
     );
   }
 
-  if (allItems.length === 0) {
+  if (items.length === 0) {
     return null;
   }
 
+  const currentItem = items[currentIndex];
+  const imageUri = getImageUri(currentItem);
+
   return (
     <View style={styles.container}>
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        pagingEnabled={false}
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        onMomentumScrollEnd={handleScrollEnd}
-        scrollEventThrottle={16}
-        decelerationRate="fast"
-        snapToInterval={itemWidth}
-        snapToAlignment="start"
-        contentContainerStyle={{
-          paddingHorizontal: horizontalPadding,
-        }}
-      >
-        {allItems.map((item, index) => {
-          const imageUri = getImageUri(item);
+      <View style={styles.carouselWrapper}>
+        {/* Kart */}
+        <View style={styles.cardContainer}>
+          {/* Mevcut kart - kayarken (sadece animasyon sırasında görünür) */}
+          {animatingDirection && (
+            <Animated.View
+              style={[
+                styles.animatedCardWrapper,
+                styles.animatedCardAbsolute,
+                {
+                  transform: [{ 
+                    translateX: slideAnim.interpolate({
+                      // Prev (soldaki buton): slideAnim -width'den 0'a giderken, mevcut kart 0'dan width'e kayar (sağa)
+                      // Next (sağdaki buton): slideAnim width'den 0'a giderken, mevcut kart 0'dan -width'e kayar (sola)
+                      // inputRange artan sırada olmalı
+                      inputRange: animatingDirection === 'prev' ? [-width, 0] : [0, width],
+                      outputRange: animatingDirection === 'prev' ? [0, width] : [-width, 0],
+                    })
+                  }],
+                  opacity: slideAnim.interpolate({
+                    inputRange: animatingDirection === 'prev' ? [-width, 0] : [0, width],
+                    outputRange: [1, 0],
+                    extrapolate: 'clamp',
+                  }),
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={[styles.card, { width: cardWidth }]}
+                activeOpacity={0.8}
+                disabled
+              >
+                {(() => {
+                  const leavingItem = items[prevIndex];
+                  if (!leavingItem) return null;
+                  
+                  const leavingImageUri = getImageUri(leavingItem);
+                  
+                  return leavingImageUri ? (
+                    <View style={styles.imageContainer}>
+                      <Image
+                        source={{ uri: leavingImageUri }}
+                        style={styles.image}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.badgeOverlay}>
+                        <Text style={styles.badgeText}>
+                          {getBadgeText(leavingItem)}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.placeholder}>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>
+                          {getBadgeText(leavingItem)}
+                        </Text>
+                      </View>
+                      <View style={styles.content}>
+                        <Text style={styles.title} numberOfLines={2}>
+                          {getTitle(leavingItem)}
+                        </Text>
+                        {getDescription(leavingItem) && (
+                          <Text style={styles.description} numberOfLines={3}>
+                            {getDescription(leavingItem)}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.iconContainer}>
+                        <Ionicons
+                          name={leavingItem.type === 'campaign' ? 'gift' : leavingItem.type === 'announcement' ? 'megaphone' : 'bulb'}
+                          size={getResponsiveValue(32, 40, 48, 56)}
+                          color="#6B4E3D"
+                        />
+                      </View>
+                    </View>
+                  );
+                })()}
+              </TouchableOpacity>
+            </Animated.View>
+          )}
           
-          return (
+          {/* Yeni kart - girerken */}
+          <Animated.View
+            style={[
+              styles.animatedCardWrapper,
+              {
+                transform: [{ translateX: slideAnim }],
+                opacity: animatingDirection ? slideAnim.interpolate({
+                  inputRange: animatingDirection === 'prev' ? [-width, 0] : [0, width],
+                  outputRange: animatingDirection === 'prev' ? [0, 1] : [1, 0],
+                  extrapolate: 'clamp',
+                }) : 1,
+              },
+            ]}
+          >
             <TouchableOpacity
-              key={item.uniqueKey || `${item.type}-${item.id}-${index}`}
               style={[styles.card, { width: cardWidth }]}
               activeOpacity={0.8}
-              onPress={() => handleItemPress(item)}
+              onPress={() => handleItemPress(currentItem)}
+              onPressIn={() => setIsPressing(true)}
+              onPressOut={() => setIsPressing(false)}
             >
-              {imageUri ? (
+            {imageUri ? (
+              <View style={styles.imageContainer}>
                 <Image
                   source={{ uri: imageUri }}
                   style={styles.image}
                   resizeMode="cover"
                 />
-              ) : (
-                <View style={styles.placeholder}>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{getBadgeText(item)}</Text>
-                  </View>
-                  
-                  <View style={styles.content}>
-                    <Text style={styles.title} numberOfLines={2}>
-                      {getTitle(item)}
-                    </Text>
-                    {getDescription(item) && (
-                      <Text style={styles.description} numberOfLines={3}>
-                        {getDescription(item)}
-                      </Text>
-                    )}
-                  </View>
-                  
-                  {/* İkon sağ alt köşede */}
-                  <View style={styles.iconContainer}>
-                    <Ionicons
-                      name={item.type === 'campaign' ? 'gift' : item.type === 'announcement' ? 'megaphone' : 'bulb'}
-                      size={getResponsiveValue(32, 40, 48, 56)}
-                      color="#6B4E3D"
-                    />
-                  </View>
+                {/* Resim varsa bile badge göster */}
+                <View style={styles.badgeOverlay}>
+                  <Text style={styles.badgeText}>{getBadgeText(currentItem)}</Text>
                 </View>
-              )}
+              </View>
+            ) : (
+              <View style={styles.placeholder}>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{getBadgeText(currentItem)}</Text>
+                </View>
+                
+                <View style={styles.content}>
+                  <Text style={styles.title} numberOfLines={3}>
+                    {getTitle(currentItem)}
+                  </Text>
+                  {getDescription(currentItem) && (
+                    <Text style={styles.description} numberOfLines={4}>
+                      {getDescription(currentItem)}
+                    </Text>
+                  )}
+                </View>
+                
+                {/* İkon sağ alt köşede */}
+                <View style={styles.iconContainer}>
+                  <Ionicons
+                    name={currentItem.type === 'campaign' ? 'gift' : currentItem.type === 'announcement' ? 'megaphone' : 'bulb'}
+                    size={getResponsiveValue(32, 40, 48, 56)}
+                    color="#6B4E3D"
+                  />
+                </View>
+              </View>
+            )}
             </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+          </Animated.View>
 
-      {originalItems.length > 1 && (
+          {/* Sol ok butonu - Kartın üstünde */}
+          {items.length > 1 && (
+            <TouchableOpacity
+              style={styles.arrowButtonLeft}
+              onPress={handlePrevious}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={getResponsiveValue(20, 22, 24, 26)}
+                color="white"
+              />
+            </TouchableOpacity>
+          )}
+
+          {/* Sağ ok butonu - Kartın üstünde */}
+          {items.length > 1 && (
+            <TouchableOpacity
+              style={styles.arrowButtonRight}
+              onPress={handleNext}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={getResponsiveValue(20, 22, 24, 26)}
+                color="white"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Indicator dots */}
+      {items.length > 1 && (
         <View style={styles.dotsContainer}>
-          {originalItems.map((_, index) => (
+          {items.map((_, index) => (
             <View
               key={index}
               style={[
@@ -375,6 +472,67 @@ const styles = StyleSheet.create({
     marginTop: getResponsiveValue(12, 16, 20, 24),
     marginBottom: getResponsiveValue(16, 20, 24, 28),
   },
+  carouselWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
+  },
+  cardContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden', // Animasyon sırasında taşmayı önle
+  },
+  animatedCardWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  animatedCardAbsolute: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  arrowButtonLeft: {
+    position: 'absolute',
+    left: getResponsiveValue(20, 22, 24, 26),
+    top: '50%',
+    marginTop: getResponsiveValue(-16, -18, -20, -22),
+    width: getResponsiveValue(32, 36, 40, 44),
+    height: getResponsiveValue(32, 36, 40, 44),
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+  },
+  arrowButtonRight: {
+    position: 'absolute',
+    right: getResponsiveValue(20, 22, 24, 26),
+    top: '50%',
+    marginTop: getResponsiveValue(-16, -18, -20, -22),
+    width: getResponsiveValue(32, 36, 40, 44),
+    height: getResponsiveValue(32, 36, 40, 44),
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+  },
   loadingContainer: {
     height: getResponsiveValue(160, 200, 240, 280),
     justifyContent: 'center',
@@ -390,7 +548,7 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   card: {
-    height: getResponsiveValue(160, 200, 240, 280), // Telefon için daha küçük yükseklik
+    height: getResponsiveValue(200, 240, 280, 320), // Yükseklik artırıldı
     marginHorizontal: getResponsiveValue(8, 10, 12, 14), // Card'lar arası margin
     borderRadius: getResponsiveValue(16, 18, 20, 22),
     overflow: 'hidden',
@@ -401,52 +559,69 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  imageContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
   image: {
     width: '100%',
     height: '100%',
     position: 'absolute',
   },
-  placeholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    backgroundColor: 'transparent',
-    padding: getResponsiveValue(12, 14, 16, 18),
-  },
-  badge: {
+  badgeOverlay: {
+    position: 'absolute',
+    top: getResponsiveValue(12, 14, 16, 18),
+    left: getResponsiveValue(12, 14, 16, 18),
     backgroundColor: '#6B4E3D',
     paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
     paddingVertical: getResponsiveValue(4, 5, 6, 7),
     borderRadius: getResponsiveValue(6, 8, 10, 12),
+    zIndex: 5,
+  },
+  placeholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    backgroundColor: 'transparent',
+    padding: getResponsiveValue(16, 18, 20, 22),
+  },
+  badge: {
+    backgroundColor: '#6B4E3D',
+    paddingHorizontal: getResponsiveValue(10, 12, 14, 16),
+    paddingVertical: getResponsiveValue(5, 6, 7, 8),
+    borderRadius: getResponsiveValue(8, 10, 12, 14),
     alignSelf: 'flex-start',
-    marginBottom: getResponsiveValue(10, 12, 14, 16),
+    marginBottom: getResponsiveValue(16, 18, 20, 22),
   },
   badgeText: {
     color: 'white',
-    fontSize: getResponsiveValue(10, 11, 12, 13),
+    fontSize: getResponsiveValue(11, 12, 13, 14),
     fontWeight: '600',
     fontFamily: 'System',
   },
   content: {
     flex: 1,
     justifyContent: 'flex-start',
-    paddingRight: getResponsiveValue(40, 50, 60, 70), // İkon için alan bırak
+    paddingLeft: getResponsiveValue(60, 65, 70, 75), // Sol ok için alan bırak
+    paddingRight: getResponsiveValue(60, 65, 70, 75), // Sağ ok için alan bırak
+    width: '100%',
   },
   title: {
-    fontSize: getResponsiveValue(14, 16, 18, 20),
+    fontSize: getResponsiveValue(22, 26, 30, 34),
     fontWeight: '700',
     color: '#4A3429',
-    marginBottom: getResponsiveValue(6, 8, 10, 12),
+    marginBottom: getResponsiveValue(12, 14, 16, 18),
     fontFamily: 'System',
-    lineHeight: getResponsiveValue(18, 20, 22, 24),
+    lineHeight: getResponsiveValue(28, 32, 36, 40),
   },
   description: {
-    fontSize: getResponsiveValue(12, 13, 14, 15),
+    fontSize: getResponsiveValue(14, 16, 18, 20),
     color: '#6B4E3D',
     fontFamily: 'System',
-    lineHeight: getResponsiveValue(16, 18, 20, 22),
-    flex: 1,
+    lineHeight: getResponsiveValue(20, 22, 24, 26),
+    marginTop: getResponsiveValue(4, 6, 8, 10),
   },
   iconContainer: {
     position: 'absolute',

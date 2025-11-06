@@ -8,7 +8,8 @@ import {
   Dimensions,
   Modal,
   Animated,
-  ScrollView
+  ScrollView,
+  RefreshControl
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +35,7 @@ export default function QRScanScreen() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { setTableInfo, clearTableInfo, tableNumber } = useCartStore();
   const navigation = useNavigation();
 
@@ -57,6 +59,13 @@ export default function QRScanScreen() {
       })
     ]).start();
   }, []);
+
+  // Kamera ekranı kapatıldığında scanned state'ini reset et
+  useEffect(() => {
+    if (!showCamera) {
+      setScanned(false);
+    }
+  }, [showCamera]);
 
   const handleBarCodeScanned = async ({ type, data }) => {
     if (scanned) return;
@@ -141,11 +150,19 @@ export default function QRScanScreen() {
         [
           {
             text: 'Menüye Git',
-            onPress: () => navigation.navigate('Menü')
+            onPress: () => {
+              setScanned(false); // QR okuma state'ini reset et
+              navigation.navigate('Menü');
+            }
           },
+ 
           {
-            text: 'Sepete Git',
-            onPress: () => navigation.navigate('Sepet')
+            text: 'Geri',
+            style: 'cancel',
+            onPress: () => {
+              setScanned(false); // QR okuma state'ini reset et
+              setShowCamera(false); // Ana ekrana (kamera açılmadan önceki ekran) dön
+            }
           }
         ]
       );
@@ -168,6 +185,7 @@ export default function QRScanScreen() {
       await requestPermission();
     }
     if (permission?.granted) {
+      setScanned(false); // QR okuma state'ini reset et
       setShowCamera(true);
     }
   };
@@ -218,11 +236,18 @@ export default function QRScanScreen() {
   const handleConfirmDelete = () => {
     clearTableInfo();
     setShowDeleteModal(false);
+    setScanned(false); // QR okuma state'ini reset et
     Alert.alert('Başarılı', 'Masa seçimi kaldırıldı.');
   };
 
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    // QRScanScreen'de veri yükleme yok, sadece state'i yenile
+    setTimeout(() => setRefreshing(false), 1000);
   };
 
   // Ana seçenekler ekranı
@@ -235,6 +260,9 @@ export default function QRScanScreen() {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         >
           <Animated.View style={[
             styles.mainContainer,
@@ -422,7 +450,10 @@ export default function QRScanScreen() {
           <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
             <Text style={styles.permissionButtonText}>İzin Ver</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.manualButton} onPress={() => setShowCamera(false)}>
+          <TouchableOpacity style={styles.manualButton} onPress={() => {
+            setScanned(false); // QR okuma state'ini reset et
+            setShowCamera(false);
+          }}>
             <Text style={styles.manualButtonText}>Geri Dön</Text>
           </TouchableOpacity>
         </View>
@@ -464,7 +495,10 @@ export default function QRScanScreen() {
         <View style={styles.cameraButtons}>
           <TouchableOpacity 
             style={[styles.cameraButton, styles.backButton, styles.backButtonFull]} 
-            onPress={() => setShowCamera(false)}
+            onPress={() => {
+              setScanned(false); // QR okuma state'ini reset et
+              setShowCamera(false);
+            }}
           >
             <Ionicons name="arrow-back" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
             <Text style={[styles.cameraButtonText, styles.backButtonText]}>Geri</Text>

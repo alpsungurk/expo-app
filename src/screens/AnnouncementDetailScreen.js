@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
+import { getImageUrl } from '../utils/storage';
 
 const { width } = Dimensions.get('window');
 
@@ -83,7 +84,6 @@ const AnnouncementDetailScreen = ({ route }) => {
 
   // Resim URL'sini oluştur
   const getImageUri = () => {
-    const STORAGE_BUCKET = 'images';
     let raw = (
       announcementData.resim_url ||
       announcementData.resim_path ||
@@ -93,11 +93,7 @@ const AnnouncementDetailScreen = ({ route }) => {
       announcementData.image
     );
     
-    if (!raw) return null;
-    if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
-    // Build public URL via Supabase Storage for path-only values
-    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(raw);
-    return data?.publicUrl || null;
+    return getImageUrl(raw);
   };
 
   const imageUri = getImageUri();

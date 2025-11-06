@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
+import { getImageUrl } from '../utils/storage';
 import { useCartStore } from '../store/cartStore';
 import TableHeader from '../components/TableHeader';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
@@ -86,18 +87,7 @@ export default function EditCartItemScreen() {
 
   // Resim URL'sini Supabase Storage'dan al
   const getImageUri = (resimPath) => {
-    const STORAGE_BUCKET = 'images';
-    
-    if (!resimPath) return null;
-    
-    // Eğer zaten tam URL ise direkt kullan
-    if (typeof resimPath === 'string' && /^https?:\/\//i.test(resimPath)) {
-      return resimPath;
-    }
-    
-    // Supabase Storage'dan public URL oluştur
-    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(resimPath);
-    return data?.publicUrl || null;
+    return getImageUrl(resimPath);
   };
 
   const handleQuantityChange = (newQuantity) => {
