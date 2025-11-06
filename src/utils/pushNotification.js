@@ -2,8 +2,11 @@
 // Bu fonksiyon Supabase Edge Function'ı çağırarak push notification gönderir
 
 import { supabase } from '../config/supabase';
+import Constants from 'expo-constants';
 
-const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
+// Environment variable'dan Expo Push API URL'ini al
+const EXPO_PUSH_API_URL = process.env.EXPO_PUBLIC_EXPO_PUSH_API_URL || 
+                          Constants.expoConfig?.extra?.expoPushApiUrl;
 
 /**
  * Tek bir kullanıcıya push notification gönder
@@ -46,6 +49,12 @@ export async function sendPushNotificationToUser(userId, title, body, data = {})
  */
 export async function sendPushNotificationToTokens(pushTokens, title, body, data = {}) {
   try {
+    console.log('Push notification gönderiliyor:', {
+      tokenCount: pushTokens?.length || 0,
+      title,
+      body
+    });
+
     const { data: result, error } = await supabase.functions.invoke('send-push-notification', {
       body: {
         pushTokens,
@@ -57,13 +66,17 @@ export async function sendPushNotificationToTokens(pushTokens, title, body, data
 
     if (error) {
       console.error('Push notification gönderme hatası:', error);
-      return { success: false, error };
+      // Edge Function'dan gelen detaylı hata mesajını göster
+      if (error.context?.body) {
+        console.error('Edge Function hata detayı:', error.context.body);
+      }
+      return { success: false, error: error.message || error, details: error.context };
     }
 
     return { success: true, result };
   } catch (error) {
     console.error('Push notification gönderme hatası:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || error };
   }
 }
 

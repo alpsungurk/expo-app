@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
+import { sendPushNotificationToTokens } from '../utils/pushNotification';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -71,11 +72,29 @@ export default function KasaOrderDetailScreen() {
   const updateTimeoutRef = React.useRef(null);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
   const lastUpdateRef = React.useRef(Date.now());
+  
+  // Ref'ler - closure sorununu önlemek için
+  const masaNoRef = React.useRef(masaNo);
+  const showOrderModalRef = React.useRef(showOrderModal);
+  const selectedOrderRef = React.useRef(selectedOrder);
 
   // Component mount olduğunda başlangıç zamanını kaydet
   React.useEffect(() => {
     lastUpdateRef.current = Date.now();
   }, []);
+
+  // Ref'leri güncel tut
+  React.useEffect(() => {
+    masaNoRef.current = masaNo;
+  }, [masaNo]);
+
+  React.useEffect(() => {
+    showOrderModalRef.current = showOrderModal;
+  }, [showOrderModal]);
+
+  React.useEffect(() => {
+    selectedOrderRef.current = selectedOrder;
+  }, [selectedOrder]);
 
   // Filtreleme fonksiyonu
   const filterOrders = () => {
@@ -131,11 +150,16 @@ export default function KasaOrderDetailScreen() {
       });
 
       // Eğer modal açıksa ve bu sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
+      // ÖNEMLİ: Sadece siparis_detaylari güncelle, durum ve diğer alanları koru
       if (showOrderModal && selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(prevSelected => ({
-          ...prevSelected,
-          siparis_detaylari: orderDetails
-        }));
+        setSelectedOrder(prevSelected => {
+          console.log('loadOrderDetails: selectedOrder güncelleniyor, mevcut durum:', prevSelected.durum);
+          return {
+            ...prevSelected,
+            siparis_detaylari: orderDetails
+            // durum ve diğer alanlar korunuyor (spread operator ile)
+          };
+        });
       }
     } catch (error) {
       console.error('Sipariş detayları yüklenirken hata:', error);
@@ -154,10 +178,13 @@ export default function KasaOrderDetailScreen() {
       const mergedOrders = masaOrders.map(newOrder => {
         const existingOrder = prevOrders.find(o => o.id === newOrder.id);
         if (existingOrder) {
-          // Mevcut sipariş varsa, siparis_detaylari'ı koru ve diğer bilgileri güncelle
+          // Mevcut sipariş varsa, siparis_detaylari ve durum'u koru ve diğer bilgileri güncelle
+          // ÖNEMLİ: durum alanını existingOrder'dan koru (realtime güncellemeleri için)
           return {
             ...existingOrder,
             ...newOrder,
+            // durum alanını existingOrder'dan koru (yeni order'daki durum eski olabilir)
+            durum: existingOrder.durum,
             // siparis_detaylari koru - eğer yeni order'da yoksa eski değeri kullan
             siparis_detaylari: newOrder.siparis_detaylari || existingOrder.siparis_detaylari
           };
@@ -260,8 +287,11 @@ export default function KasaOrderDetailScreen() {
           table: 'siparisler'
         },
         (payload) => {
+          // Ref'lerden güncel değerleri al
+          const currentMasaNo = masaNoRef.current;
+          
           console.log('KasaOrderDetailScreen sipariş realtime güncelleme:', payload);
-          console.log('Mevcut masaNo:', masaNo);
+          console.log('Mevcut masaNo:', currentMasaNo);
           // Her realtime event'te connection aktif olduğunu göster (bu masaya ait olsun ya da olmasın)
           lastUpdateRef.current = Date.now();
           
@@ -271,30 +301,35 @@ export default function KasaOrderDetailScreen() {
             const masaId = updatedOrder.masa_id;
             
             console.log('Güncellenen sipariş masa_id:', masaId);
-            console.log('Bu masaNo:', masaNo);
+            console.log('Bu masaNo:', currentMasaNo);
             console.log('Event type:', payload.eventType);
             
-            // Bu masanın siparişlerini kontrol et - masa_id ile karşılaştır
-            // masaId integer, masaNo "Masa X" formatında string
-            const masaNoNumber = masaNo.replace('Masa ', '');
-            if (masaId.toString() === masaNoNumber) {
-              console.log('Bu masanın siparişi güncellendi:', updatedOrder);
+            // Bu masanın siparişlerini kontrol et - local state'teki order'ların masa_id'si ile karşılaştır
+            // masa_id integer, masa_no string ("Masa X") - doğrudan karşılaştırma yapamayız
+            // Local state'teki order'larda zaten masa_id var, onu kullanarak kontrol edelim
+            setLocalMasaOrders(prevOrders => {
+              // Local state'te bu masa_id'ye sahip bir order var mı kontrol et
+              const hasOrderWithThisMasaId = prevOrders.some(order => order.masa_id === masaId);
+              const orderExists = prevOrders.some(order => order.id === updatedOrder.id);
               
-              // İptal durumu özel kontrolü
-              if (updatedOrder.durum === 'iptal') {
-                console.log('Bu masanın siparişi iptal edildi:', updatedOrder);
-              }
-              
-              // Notlar güncelleme kontrolü
-              if (updatedOrder.aciklama !== undefined) {
-                console.log('Bu masanın sipariş notları güncellendi:', {
-                  orderId: updatedOrder.id,
-                  newNotes: updatedOrder.aciklama
-                });
-              }
-              
-              // Local state'i güncelle
-              setLocalMasaOrders(prevOrders => {
+              // Eğer bu masa_id'ye sahip order varsa veya güncellenen order zaten varsa, işle
+              // Yeni sipariş (INSERT) için: local state'te bu masa_id'ye sahip order varsa veya local state boşsa ekle
+              if (hasOrderWithThisMasaId || orderExists || (payload.eventType === 'INSERT' && prevOrders.length === 0)) {
+                console.log('Bu masanın siparişi güncellendi:', updatedOrder);
+                
+                // İptal durumu özel kontrolü
+                if (updatedOrder.durum === 'iptal') {
+                  console.log('Bu masanın siparişi iptal edildi:', updatedOrder);
+                }
+                
+                // Notlar güncelleme kontrolü
+                if (updatedOrder.aciklama !== undefined) {
+                  console.log('Bu masanın sipariş notları güncellendi:', {
+                    orderId: updatedOrder.id,
+                    newNotes: updatedOrder.aciklama
+                  });
+                }
+                
                 console.log('Önceki orders:', prevOrders.map(o => ({ id: o.id, masa_id: o.masa_id })));
                 
                 // Yeni sipariş oluşturulduysa (INSERT), listeye ekle
@@ -310,72 +345,111 @@ export default function KasaOrderDetailScreen() {
                   
                   return updated;
                 } else {
-                  // Mevcut sipariş güncellendi (UPDATE), güncelle
-                  // ÖNEMLİ: siparis_detaylari ve diğer nested objeleri koru
-                  const updated = prevOrders.map(order => {
-                    if (order.id === updatedOrder.id) {
-                      return {
-                        ...order,
-                        ...updatedOrder,
-                        // siparis_detaylari koru - eğer updatedOrder'da yoksa eski değeri kullan
-                        siparis_detaylari: updatedOrder.siparis_detaylari !== undefined 
-                          ? updatedOrder.siparis_detaylari 
-                          : order.siparis_detaylari
-                      };
-                    }
-                    return order;
-                  });
-                  console.log('Güncellenmiş orders (güncellendi):', updated.map(o => ({ id: o.id, masa_id: o.masa_id })));
-                  return updated;
+                // Mevcut sipariş güncellendi (UPDATE), güncelle
+                // ÖNEMLİ: siparis_detaylari ve diğer nested objeleri koru
+                const updated = prevOrders.map(order => {
+                  if (order.id === updatedOrder.id) {
+                    // Realtime güncellemesi geldiğinde, updatedOrder'daki tüm alanları kullan
+                    // ÖNEMLİ: durum alanını mutlaka updatedOrder'dan al (undefined olsa bile, çünkü bu bir UPDATE event'i)
+                    const updatedOrderData = {
+                      ...order,
+                      ...updatedOrder,
+                      // durum alanını mutlaka updatedOrder'dan al
+                      durum: updatedOrder.durum !== undefined ? updatedOrder.durum : order.durum,
+                      // siparis_detaylari koru - eğer updatedOrder'da yoksa eski değeri kullan
+                      siparis_detaylari: updatedOrder.siparis_detaylari !== undefined 
+                        ? updatedOrder.siparis_detaylari 
+                        : order.siparis_detaylari
+                    };
+                    console.log('Order güncelleniyor (realtime):', {
+                      orderId: order.id,
+                      eskiDurum: order.durum,
+                      yeniDurum: updatedOrder.durum,
+                      updatedOrderDurum: updatedOrder.durum,
+                      finalDurum: updatedOrderData.durum
+                    });
+                    return updatedOrderData;
+                  }
+                  return order;
+                });
+                console.log('Güncellenmiş orders (güncellendi):', updated.map(o => ({ id: o.id, masa_id: o.masa_id, durum: o.durum })));
+                return updated;
                 }
-              });
-              
-              // Eğer modal açıksa ve güncellenen sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
-              setSelectedOrder(prevSelected => {
-                if (showOrderModal && prevSelected && prevSelected.id === updatedOrder.id) {
-                  console.log('Modal açık, selectedOrder güncelleniyor:', updatedOrder);
-                  // siparis_detaylari'ı koruyarak güncelle
-                  return {
-                    ...updatedOrder,
-                    siparis_detaylari: prevSelected.siparis_detaylari || []
-                  };
-                }
-                return prevSelected;
-              });
-            } else {
-              console.log('Bu sipariş bu masaya ait değil, güncelleme yapılmadı');
-            }
+              } else {
+                console.log('Bu sipariş bu masaya ait değil, güncelleme yapılmadı');
+                return prevOrders;
+              }
+            });
+            
+            // Eğer modal açıksa ve güncellenen sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
+            setLocalMasaOrders(prevOrders => {
+              const orderExists = prevOrders.some(order => order.id === updatedOrder.id);
+              if (orderExists) {
+                setSelectedOrder(prevSelected => {
+                  const currentShowModal = showOrderModalRef.current;
+                  if (currentShowModal && prevSelected && prevSelected.id === updatedOrder.id) {
+                    console.log('Modal açık, selectedOrder güncelleniyor (realtime):', {
+                      orderId: updatedOrder.id,
+                      eskiDurum: prevSelected.durum,
+                      yeniDurum: updatedOrder.durum
+                    });
+                    // siparis_detaylari ve durum'u koruyarak güncelle
+                    // ÖNEMLİ: durum alanını mutlaka updatedOrder'dan al (undefined olsa bile eski değeri koru)
+                    return {
+                      ...prevSelected,
+                      ...updatedOrder,
+                      // durum alanını mutlaka updatedOrder'dan al
+                      durum: updatedOrder.durum !== undefined ? updatedOrder.durum : prevSelected.durum,
+                      // siparis_detaylari'ı koru
+                      siparis_detaylari: prevSelected.siparis_detaylari || []
+                    };
+                  }
+                  return prevSelected;
+                });
+              }
+              return prevOrders;
+            });
           } else if (payload.old) {
             // Sipariş silindi (DELETE)
             const deletedOrder = payload.old;
             const masaId = deletedOrder.masa_id;
             
             console.log('Silinen sipariş masa_id:', masaId);
-            console.log('Bu masaNo:', masaNo);
+            console.log('Bu masaNo:', currentMasaNo);
             console.log('Event type:', payload.eventType);
             
             // Bu masanın siparişi silinirse, listeden çıkar
-            // masaId integer, masaNo "Masa X" formatında string
-            const masaNoNumber = masaNo.replace('Masa ', '');
-            if (masaId.toString() === masaNoNumber) {
-              console.log('Bu masanın siparişi silindi:', deletedOrder);
+            // Local state'teki order'ların masa_id'si ile karşılaştır
+            setLocalMasaOrders(prevOrders => {
+              const hasOrderWithThisMasaId = prevOrders.some(order => order.masa_id === masaId);
+              const orderExists = prevOrders.some(order => order.id === deletedOrder.id);
               
-              setLocalMasaOrders(prevOrders => {
+              if (hasOrderWithThisMasaId || orderExists) {
+                console.log('Bu masanın siparişi silindi:', deletedOrder);
                 console.log('Önceki orders:', prevOrders.map(o => ({ id: o.id, masa_id: o.masa_id })));
                 const updated = prevOrders.filter(order => order.id !== deletedOrder.id);
                 console.log('Güncellenmiş orders (silindi):', updated.map(o => ({ id: o.id, masa_id: o.masa_id })));
                 return updated;
-              });
-              
-              // Eğer modal açıksa ve silinen sipariş modal'daki sipariş ise, modal'ı kapat
-              if (showOrderModal && selectedOrder && selectedOrder.id === deletedOrder.id) {
-                console.log('Silinen sipariş modal\'da açık, modal kapatılıyor');
-                setShowOrderModal(false);
-                setSelectedOrder(null);
+              } else {
+                console.log('Bu silinen sipariş bu masaya ait değil, güncelleme yapılmadı');
+                return prevOrders;
               }
-            } else {
-              console.log('Bu silinen sipariş bu masaya ait değil, güncelleme yapılmadı');
-            }
+            });
+            
+            // Eğer modal açıksa ve silinen sipariş modal'daki sipariş ise, modal'ı kapat
+            setLocalMasaOrders(prevOrders => {
+              const orderExists = prevOrders.some(order => order.id === deletedOrder.id);
+              if (orderExists) {
+                const currentShowModal = showOrderModalRef.current;
+                const currentSelectedOrder = selectedOrderRef.current;
+                if (currentShowModal && currentSelectedOrder && currentSelectedOrder.id === deletedOrder.id) {
+                  console.log('Silinen sipariş modal\'da açık, modal kapatılıyor');
+                  setShowOrderModal(false);
+                  setSelectedOrder(null);
+                }
+              }
+              return prevOrders;
+            });
           }
         }
       )
@@ -387,7 +461,18 @@ export default function KasaOrderDetailScreen() {
           table: 'siparis_detaylari'
         },
         (payload) => {
+          // Ref'lerden güncel değerleri al
+          const currentMasaNo = masaNoRef.current;
+          
           console.log('KasaOrderDetailScreen sipariş detayı realtime güncelleme:', payload);
+          
+          // Sadece siparis_detaylari tablosundan gelen event'leri işle
+          // siparisler tablosundan gelen event'ler zaten ilk subscription'da işleniyor
+          if (payload.table !== 'siparis_detaylari') {
+            console.log('Bu event siparis_detaylari tablosundan değil, ignore ediliyor:', payload.table);
+            return;
+          }
+          
           // Her realtime event'te connection aktif olduğunu göster
           lastUpdateRef.current = Date.now();
           
@@ -397,7 +482,7 @@ export default function KasaOrderDetailScreen() {
             const orderId = updatedDetail.siparis_id;
             
             console.log('Güncellenen detay order ID:', orderId);
-            console.log('Mevcut masaNo:', masaNo);
+            console.log('Mevcut masaNo:', currentMasaNo);
             
             // orderId geçersizse işlemi durdur
             if (!orderId || orderId === 'undefined' || orderId === 'null') {
@@ -410,7 +495,7 @@ export default function KasaOrderDetailScreen() {
               const targetOrder = prevOrders.find(order => order.id === orderId);
               if (targetOrder) {
                 console.log('Bu masanın sipariş detayı güncellendi:', updatedDetail);
-                console.log('Sipariş masa_id:', targetOrder.masa_id, 'Mevcut masaNo:', masaNo);
+                console.log('Sipariş masa_id:', targetOrder.masa_id, 'Mevcut masaNo:', currentMasaNo);
                 
                 // Eğer siparis_detaylari yoksa veya urunler bilgisi eksikse, tam detayları yükle
                 const targetOrderLocal = prevOrders.find(order => order.id === orderId);
@@ -441,7 +526,9 @@ export default function KasaOrderDetailScreen() {
                 );
 
                 // Eğer modal açıksa ve güncellenen sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
-                if (showOrderModal && selectedOrder && selectedOrder.id === orderId) {
+                const currentShowModal = showOrderModalRef.current;
+                const currentSelectedOrder = selectedOrderRef.current;
+                if (currentShowModal && currentSelectedOrder && currentSelectedOrder.id === orderId) {
                   console.log('Modal açık, selectedOrder sipariş detayı güncelleniyor:', updatedDetail);
                   console.log('Event type:', payload.eventType);
                   
@@ -467,13 +554,13 @@ export default function KasaOrderDetailScreen() {
                 // Order'ın masa_id'sini kontrol et
                 if (orderId && orderId !== 'undefined') {
                   checkOrderMasaId(orderId).then(order => {
-                    const masaNoNumber = masaNo.replace('Masa ', '');
-                    if (order && order.masa_id.toString() === masaNoNumber) {
+                    const masaNoNumber = currentMasaNo.replace('Masa ', '');
+                    if (order && order.masa_id && order.masa_id.toString() === masaNoNumber) {
                       console.log('Order ID', orderId, 'bu masaya ait ama henüz yüklenmemiş. Sipariş detayları yükleniyor...');
                       // Bu masaya ait sipariş bulundu ama henüz local state'de yok, detayları yükle
                       loadOrderDetails(orderId);
                     } else {
-                      console.log('Order ID', orderId, 'bu masaya ait değil. Masa ID:', order?.masa_id, 'Mevcut masa:', masaNo);
+                      console.log('Order ID', orderId, 'bu masaya ait değil. Masa ID:', order?.masa_id, 'Mevcut masa:', currentMasaNo);
                     }
                   });
                 } else {
@@ -488,7 +575,7 @@ export default function KasaOrderDetailScreen() {
             const orderId = deletedDetail.siparis_id;
             
             console.log('Silinen detay order ID:', orderId);
-            console.log('Mevcut masaNo:', masaNo);
+            console.log('Mevcut masaNo:', currentMasaNo);
             
             // orderId geçersizse işlemi durdur
             if (!orderId || orderId === 'undefined' || orderId === 'null') {
@@ -501,11 +588,11 @@ export default function KasaOrderDetailScreen() {
               const targetOrder = prevOrders.find(order => order.id === orderId);
               if (targetOrder) {
                 console.log('Bu masanın sipariş detayı silindi:', deletedDetail);
-                console.log('Sipariş masa_id:', targetOrder.masa_id, 'Mevcut masaNo:', masaNo);
+                console.log('Sipariş masa_id:', targetOrder.masa_id, 'Mevcut masaNo:', currentMasaNo);
                 
                 // masa_id kontrolü - masaId integer, masaNo "Masa X" formatında string
-                const masaNoNumber = masaNo.replace('Masa ', '');
-                if (targetOrder.masa_id.toString() !== masaNoNumber) {
+                const masaNoNumber = currentMasaNo.replace('Masa ', '');
+                if (!targetOrder.masa_id || targetOrder.masa_id.toString() !== masaNoNumber) {
                   console.log('Bu sipariş bu masaya ait değil, silme işlemi yapılmadı');
                   return prevOrders;
                 }
@@ -522,7 +609,9 @@ export default function KasaOrderDetailScreen() {
                 );
 
                 // Eğer modal açıksa ve silinen sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
-                if (showOrderModal && selectedOrder && selectedOrder.id === orderId) {
+                const currentShowModal = showOrderModalRef.current;
+                const currentSelectedOrder = selectedOrderRef.current;
+                if (currentShowModal && currentSelectedOrder && currentSelectedOrder.id === orderId) {
                   console.log('Modal açık, selectedOrder sipariş detayı siliniyor:', deletedDetail);
                   setSelectedOrder(prevSelected => ({
                     ...prevSelected,
@@ -542,7 +631,7 @@ export default function KasaOrderDetailScreen() {
           }
         }
       )
-      .subscribe((status) => {
+      .subscribe(async (status) => {
         console.log('KasaOrderDetailScreen subscription status:', status);
         if (status === 'SUBSCRIBED') {
           console.log('KasaOrderDetailScreen realtime subscription başarılı');
@@ -552,12 +641,25 @@ export default function KasaOrderDetailScreen() {
           setConnectionStatus('connected');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('KasaOrderDetailScreen subscription hatası');
+          setConnectionStatus('disconnected');
           handleSubscriptionError();
         } else if (status === 'TIMED_OUT') {
-          console.warn('KasaOrderDetailScreen subscription timeout');
-          handleSubscriptionError();
+          console.warn('KasaOrderDetailScreen subscription timeout, yeniden başlatılıyor...');
+          setConnectionStatus('disconnected');
+          // Timeout olduğunda hemen yeniden dene
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.log(`KasaOrderDetailScreen subscription yeniden deneniyor (${retryCount}/${maxRetries})`);
+            setTimeout(() => {
+              createSubscription();
+            }, 1000); // 1 saniye bekle
+          } else {
+            console.error('KasaOrderDetailScreen subscription maksimum retry sayısına ulaştı');
+            handleSubscriptionError();
+          }
         } else if (status === 'CLOSED') {
           console.log('KasaOrderDetailScreen subscription kapandı');
+          setConnectionStatus('disconnected');
         }
       });
 
@@ -582,7 +684,7 @@ export default function KasaOrderDetailScreen() {
       console.log('KasaOrderDetailScreen realtime subscription temizleniyor');
       supabase.removeChannel(channel);
     };
-  }, [masaNo, showOrderModal, connectionStatus]); // connectionStatus eklendi - timeout sonrası yeniden başlatma için
+  }, [masaNo, loadOrderDetails]); // Sadece masaNo ve loadOrderDetails dependency olarak kalmalı
 
   // Siparişin masa_id'sini kontrol et
   const checkOrderMasaId = async (orderId) => {
@@ -737,7 +839,14 @@ export default function KasaOrderDetailScreen() {
   };
 
   const handleOrderPress = async (order) => {
-    setSelectedOrder(order);
+    // Order'ı direkt kullan (filteredOrders'dan gelen order zaten güncel)
+    // Ama siparis_detaylari eksikse localMasaOrders'dan tam order'ı al
+    const currentOrder = order.siparis_detaylari && order.siparis_detaylari.length > 0
+      ? order
+      : (localMasaOrders.find(o => o.id === order.id) || order);
+    
+    console.log('Modal açılıyor, order durumu:', currentOrder.durum, 'order ID:', currentOrder.id);
+    setSelectedOrder({ ...currentOrder }); // Yeni bir obje oluştur (referans sorununu önlemek için)
     setShowOrderModal(true);
     
     // Sipariş detaylarını yükle
@@ -752,6 +861,17 @@ export default function KasaOrderDetailScreen() {
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
       setIsUpdating(true);
+      
+      // Önce sipariş bilgilerini al (push_token_id için)
+      const { data: orderData, error: orderError } = await supabase
+        .from(TABLES.SIPARISLER)
+        .select('push_token_id, siparis_no')
+        .eq('id', orderId)
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Sipariş durumunu güncelle
       const { error } = await supabase
         .from(TABLES.SIPARISLER)
         .update({ durum: newStatus })
@@ -759,17 +879,94 @@ export default function KasaOrderDetailScreen() {
 
       if (error) throw error;
 
-      // Local state'i hemen güncelle
+      // Local state'i hemen güncelle (realtime güncellemesi gelene kadar)
+      // Bu sayede UI anında güncellenir ve realtime güncellemesi geldiğinde tekrar güncellenir
       setLocalMasaOrders(prevOrders => 
         prevOrders.map(order => 
           order.id === orderId ? { ...order, durum: newStatus } : order
         )
       );
       
+      // Eğer modal açıksa ve bu sipariş modal'daki sipariş ise, selectedOrder'ı da güncelle
+      if (showOrderModal && selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(prevSelected => ({
+          ...prevSelected,
+          durum: newStatus
+        }));
+      }
+      
       // Modal'ı kapat
       handleCloseModal();
       
       console.log(`Sipariş ${orderId} durumu ${newStatus} olarak güncellendi`);
+      
+      // Her durum değişikliğinde bildirim gönder (arka planda, await olmadan)
+      if (orderData?.push_token_id && newStatus !== 'beklemede') {
+        // Bildirim gönderme işlemini arka planda çalıştır (realtime'ı engellemesin)
+        (async () => {
+          try {
+            // push_token_id ile direkt push_token'ı al
+            const { data: pushTokenData, error: pushTokenError } = await supabase
+              .from('push_tokens')
+              .select('push_token')
+              .eq('id', orderData.push_token_id)
+              .eq('is_active', true)
+              .single();
+
+            if (!pushTokenError && pushTokenData?.push_token) {
+              // Durum mesajları
+              const durumMesajlari = {
+                'hazirlaniyor': {
+                  title: 'Siparişiniz Hazırlanıyor',
+                  body: `Sipariş #${orderData.siparis_no} hazırlanmaya başlandı.`
+                },
+                'hazir': {
+                  title: 'Siparişiniz Hazır!',
+                  body: `Sipariş #${orderData.siparis_no} hazır. Masanıza getirilecek.`
+                },
+                'teslim_edildi': {
+                  title: 'Siparişiniz Teslim Edildi',
+                  body: `Sipariş #${orderData.siparis_no} teslim edildi. Afiyet olsun!`
+                },
+                'iptal': {
+                  title: 'Sipariş İptal Edildi',
+                  body: `Sipariş #${orderData.siparis_no} iptal edildi.`
+                }
+              };
+
+              const mesaj = durumMesajlari[newStatus];
+              
+              if (mesaj) {
+                // Bildirim gönder (await olmadan, arka planda)
+                sendPushNotificationToTokens(
+                  [pushTokenData.push_token],
+                  mesaj.title,
+                  mesaj.body,
+                  {
+                    type: 'order_status',
+                    siparisNo: orderData.siparis_no,
+                    durum: newStatus,
+                    orderId: orderId
+                  }
+                ).then((notificationResult) => {
+                  if (notificationResult.success) {
+                    console.log(`Bildirim başarıyla gönderildi (${newStatus})`);
+                  } else {
+                    console.error('Bildirim gönderme hatası:', notificationResult.error);
+                  }
+                }).catch((notificationError) => {
+                  console.error('Bildirim gönderme hatası:', notificationError);
+                });
+              }
+            } else {
+              console.log('Push token bulunamadı. push_token_id:', orderData.push_token_id);
+            }
+          } catch (notificationError) {
+            console.error('Bildirim gönderme hatası:', notificationError);
+            // Bildirim hatası sipariş güncellemesini engellemez
+          }
+        })();
+      }
       
     } catch (error) {
       console.error('Sipariş durumu güncellenirken hata:', error);

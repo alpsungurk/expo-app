@@ -246,6 +246,41 @@ export const CartProvider = ({ children }) => {
       const orderNumber = generateOrderNumber();
       const totalAmount = getTotalPrice();
 
+      // Push token ID'sini bul (telefon_token ile eşleştir)
+      let pushTokenId = null;
+      try {
+        // Önce device_info içinde telefon_token ara
+        const { data: pushTokenData, error: pushTokenError } = await supabase
+          .from('push_tokens')
+          .select('id')
+          .eq('is_active', true)
+          .eq('device_info->>telefon_token', phoneToken)
+          .maybeSingle();
+        
+        if (!pushTokenError && pushTokenData?.id) {
+          pushTokenId = pushTokenData.id;
+          console.log('Push token ID bulundu (device_info):', pushTokenId);
+        } else {
+          // device_info'da bulunamadıysa device_id ile dene
+          const { data: deviceIdData, error: deviceIdError } = await supabase
+            .from('push_tokens')
+            .select('id')
+            .eq('is_active', true)
+            .eq('device_id', phoneToken)
+            .maybeSingle();
+          
+          if (!deviceIdError && deviceIdData?.id) {
+            pushTokenId = deviceIdData.id;
+            console.log('Push token ID bulundu (device_id):', pushTokenId);
+          } else {
+            console.log('Push token ID bulunamadı, telefon_token:', phoneToken);
+          }
+        }
+      } catch (error) {
+        console.error('Push token ID bulma hatası:', error);
+        // Hata olsa bile sipariş oluşturulmaya devam eder
+      }
+
       // Sipariş oluştur
       const { data: orderData, error: orderError } = await supabase
         .from(TABLES.SIPARISLER)
@@ -255,7 +290,8 @@ export const CartProvider = ({ children }) => {
           toplam_tutar: totalAmount,
           durum: 'beklemede',
           aciklama: null,
-          telefon_token: phoneToken
+          telefon_token: phoneToken,
+          push_token_id: pushTokenId
         })
         .select()
         .single();

@@ -47,6 +47,7 @@ export default {
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      expoPushApiUrl: process.env.EXPO_PUBLIC_EXPO_PUSH_API_URL,
       // Expo Project ID - EAS project ID'si kullanılacak
       projectId: 'f2793cf7-6dcf-4754-8d0a-92d5b4859b33',
       eas: {

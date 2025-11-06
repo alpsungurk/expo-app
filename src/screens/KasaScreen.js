@@ -156,52 +156,9 @@ export default function KasaScreen() {
   const [newOrderNotification, setNewOrderNotification] = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  useEffect(() => {
-    loadOrders();
-  }, []);
-
-  useEffect(() => {
-    filterOrders();
-  }, [orders]);
-
-  // Realtime subscription for order updates
-  useEffect(() => {
-    const channel = supabase
-      .channel('kasa-screen-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'siparisler'
-        },
-        (payload) => {
-          console.log('KasaScreen realtime güncelleme:', payload);
-          
-          if (payload.new) {
-            console.log('Yeni sipariş güncellemesi:', payload.new);
-            
-            // İptal durumu özel kontrolü
-            if (payload.new.durum === 'iptal') {
-              console.log('Sipariş iptal edildi:', payload.new);
-            }
-            
-            loadOrders(); // Tüm siparişleri yeniden yükle
-          } else if (payload.old) {
-            console.log('Sipariş silindi:', payload.old);
-            loadOrders(); // Tüm siparişleri yeniden yükle
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const loadOrders = async () => {
+  const loadOrders = React.useCallback(async () => {
     try {
+      console.log('KasaScreen: loadOrders başladı');
       const { data: ordersData, error: ordersError } = await supabase
         .from(TABLES.SIPARISLER)
         .select(`
@@ -226,8 +183,12 @@ export default function KasaScreen() {
         `)
         .order('olusturma_tarihi', { ascending: false });
 
-      if (ordersError) throw ordersError;
+      if (ordersError) {
+        console.error('KasaScreen: ordersError:', ordersError);
+        throw ordersError;
+      }
 
+      console.log('KasaScreen: Siparişler yüklendi, sayı:', ordersData?.length || 0);
       setOrders(ordersData || []);
       
       // Yeni sipariş kontrolü (hazırlanıyor durumundaki son 5 dakikadaki siparişler)
@@ -241,15 +202,21 @@ export default function KasaScreen() {
       }
 
     } catch (error) {
-      console.error('Siparişler yükleme hatası:', error);
+      console.error('KasaScreen: Siparişler yükleme hatası:', error);
       Alert.alert('Hata', 'Siparişler yüklenirken bir hata oluştu.');
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
-  const filterOrders = () => {
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  // filterOrders fonksiyonunu useCallback ile sarmala
+  const filterOrders = React.useCallback(() => {
+    console.log('KasaScreen: filterOrders çağrılıyor, orders sayısı:', orders.length);
     // Her masadan sadece 1 tane göster (en son sipariş)
     const uniqueMasaOrders = {};
     orders.forEach(order => {
@@ -260,8 +227,62 @@ export default function KasaScreen() {
       }
     });
     
-    setFilteredOrders(Object.values(uniqueMasaOrders));
-  };
+    const filtered = Object.values(uniqueMasaOrders);
+    console.log('KasaScreen: filterOrders tamamlandı, filtered sayısı:', filtered.length);
+    setFilteredOrders(filtered);
+  }, [orders]);
+
+  useEffect(() => {
+    filterOrders();
+  }, [filterOrders]);
+
+  // Realtime subscription for order updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('kasa-screen-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'siparisler'
+        },
+        (payload) => {
+          console.log('KasaScreen realtime güncelleme:', payload);
+          
+          if (payload.new) {
+            console.log('Yeni sipariş güncellemesi:', payload.new);
+            
+            // İptal durumu özel kontrolü
+            if (payload.new.durum === 'iptal') {
+              console.log('Sipariş iptal edildi:', payload.new);
+            }
+            
+            // loadOrders'ı çağır ve sonucu kontrol et
+            console.log('KasaScreen: loadOrders çağrılıyor...');
+            loadOrders().then(() => {
+              console.log('KasaScreen: loadOrders tamamlandı');
+            }).catch((error) => {
+              console.error('KasaScreen: loadOrders hatası:', error);
+            });
+          } else if (payload.old) {
+            console.log('Sipariş silindi:', payload.old);
+            // loadOrders'ı çağır ve sonucu kontrol et
+            console.log('KasaScreen: loadOrders çağrılıyor (silme)...');
+            loadOrders().then(() => {
+              console.log('KasaScreen: loadOrders tamamlandı (silme)');
+            }).catch((error) => {
+              console.error('KasaScreen: loadOrders hatası (silme):', error);
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadOrders]);
 
   const onRefresh = () => {
     setRefreshing(true);

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { Animated, Dimensions, Platform, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
@@ -156,6 +157,14 @@ export const NotificationProvider = ({ children }) => {
         return;
       }
 
+      // telefon_token'ı AsyncStorage'dan al
+      let telefonToken = null;
+      try {
+        telefonToken = await AsyncStorage.getItem('phoneToken');
+      } catch (error) {
+        console.error('telefon_token okuma hatası:', error);
+      }
+
       // Cihaz bilgilerini topla
       const deviceInfo = {
         platform: Platform.OS,
@@ -164,6 +173,7 @@ export const NotificationProvider = ({ children }) => {
         osVersion: Device.osVersion || 'Unknown',
         brand: Device.brand || 'Unknown',
         manufacturer: Device.manufacturer || 'Unknown',
+        ...(telefonToken && { telefon_token: telefonToken }), // telefon_token'ı device_info içinde sakla
       };
 
       // Device ID oluştur (model + osVersion kombinasyonu)

@@ -34,7 +34,11 @@ export default function CampaignCarousel() {
   const isScrolling = useRef(false);
   const [originalItems, setOriginalItems] = useState([]);
   
-  const cardWidth = width - getResponsiveValue(32, 40, 48, 56);
+  // Card genişliği ve margin hesaplaması
+  const horizontalPadding = getResponsiveValue(16, 20, 24, 28);
+  const cardMargin = getResponsiveValue(8, 10, 12, 14);
+  const cardWidth = width - (horizontalPadding * 2);
+  const itemWidth = cardWidth + (cardMargin * 2); // Card + margin'ler
 
   // Database'den verileri yükle
   useEffect(() => {
@@ -56,14 +60,14 @@ export default function CampaignCarousel() {
       
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({
-          x: startIndex * cardWidth,
+          x: startIndex * itemWidth,
           animated: false,
         });
         // Indicator için gerçek index'i ayarla (0 olmalı çünkü orta bölümde başlıyoruz)
         setCurrentIndex(0);
       }, 100);
     }
-  }, [originalItems.length, cardWidth]);
+  }, [originalItems.length, itemWidth]);
 
   const loadData = async () => {
     try {
@@ -119,7 +123,7 @@ export default function CampaignCarousel() {
     if (isScrolling.current) return;
     
     const scrollPosition = event.nativeEvent.contentOffset.x;
-    const index = Math.round(scrollPosition / cardWidth);
+    const index = Math.round(scrollPosition / itemWidth);
     
     if (originalItems.length > 0 && index >= 0 && index < allItems.length) {
       const originalLength = originalItems.length;
@@ -138,7 +142,7 @@ export default function CampaignCarousel() {
     if (isScrolling.current) return;
     
     const scrollPosition = event.nativeEvent.contentOffset.x;
-    const index = Math.round(scrollPosition / cardWidth);
+    const index = Math.round(scrollPosition / itemWidth);
     
     if (originalItems.length > 0 && index >= 0 && index < allItems.length) {
       const originalLength = originalItems.length;
@@ -153,7 +157,7 @@ export default function CampaignCarousel() {
         const targetIndex = realIndex + originalLength * 2;
         isScrolling.current = true;
         scrollViewRef.current?.scrollTo({
-          x: targetIndex * cardWidth,
+          x: targetIndex * itemWidth,
           animated: false,
         });
         setTimeout(() => {
@@ -166,7 +170,7 @@ export default function CampaignCarousel() {
         const targetIndex = realIndex;
         isScrolling.current = true;
         scrollViewRef.current?.scrollTo({
-          x: targetIndex * cardWidth,
+          x: targetIndex * itemWidth,
           animated: false,
         });
         setTimeout(() => {
@@ -289,14 +293,17 @@ export default function CampaignCarousel() {
       <ScrollView
         ref={scrollViewRef}
         horizontal
-        pagingEnabled
+        pagingEnabled={false}
         showsHorizontalScrollIndicator={false}
         onScroll={handleScroll}
         onMomentumScrollEnd={handleScrollEnd}
         scrollEventThrottle={16}
         decelerationRate="fast"
-        snapToInterval={cardWidth}
-        snapToAlignment="center"
+        snapToInterval={itemWidth}
+        snapToAlignment="start"
+        contentContainerStyle={{
+          paddingHorizontal: horizontalPadding,
+        }}
       >
         {allItems.map((item, index) => {
           const imageUri = getImageUri(item);
@@ -304,7 +311,7 @@ export default function CampaignCarousel() {
           return (
             <TouchableOpacity
               key={item.uniqueKey || `${item.type}-${item.id}-${index}`}
-              style={styles.card}
+              style={[styles.card, { width: cardWidth }]}
               activeOpacity={0.8}
               onPress={() => handleItemPress(item)}
             >
@@ -316,17 +323,6 @@ export default function CampaignCarousel() {
                 />
               ) : (
                 <View style={styles.placeholder}>
-                  <Ionicons
-                    name={item.type === 'campaign' ? 'gift' : item.type === 'announcement' ? 'megaphone' : 'bulb'}
-                    size={getResponsiveValue(40, 48, 56, 64)}
-                    color="#6B4E3D"
-                  />
-                </View>
-              )}
-              
-              {/* Badge ve yazılar - resim yoksa göster */}
-              {!imageUri && (
-                <View style={styles.contentContainer}>
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>{getBadgeText(item)}</Text>
                   </View>
@@ -336,10 +332,19 @@ export default function CampaignCarousel() {
                       {getTitle(item)}
                     </Text>
                     {getDescription(item) && (
-                      <Text style={styles.description} numberOfLines={2}>
+                      <Text style={styles.description} numberOfLines={3}>
                         {getDescription(item)}
                       </Text>
                     )}
+                  </View>
+                  
+                  {/* İkon sağ alt köşede */}
+                  <View style={styles.iconContainer}>
+                    <Ionicons
+                      name={item.type === 'campaign' ? 'gift' : item.type === 'announcement' ? 'megaphone' : 'bulb'}
+                      size={getResponsiveValue(32, 40, 48, 56)}
+                      color="#6B4E3D"
+                    />
                   </View>
                 </View>
               )}
@@ -371,12 +376,12 @@ const styles = StyleSheet.create({
     marginBottom: getResponsiveValue(16, 20, 24, 28),
   },
   loadingContainer: {
-    height: getResponsiveValue(220, 260, 300, 340),
+    height: getResponsiveValue(160, 200, 240, 280),
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(139, 69, 19, 0.05)',
     borderRadius: getResponsiveValue(16, 18, 20, 22),
-    marginHorizontal: getResponsiveValue(16, 20, 24, 28),
+    marginHorizontal: getResponsiveValue(24, 28, 32, 36),
   },
   loadingText: {
     fontSize: getResponsiveValue(14, 15, 16, 18),
@@ -385,9 +390,8 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   card: {
-    width: width - getResponsiveValue(32, 40, 48, 56),
-    height: getResponsiveValue(220, 260, 300, 340),
-    marginHorizontal: getResponsiveValue(16, 20, 24, 28),
+    height: getResponsiveValue(160, 200, 240, 280), // Telefon için daha küçük yükseklik
+    marginHorizontal: getResponsiveValue(8, 10, 12, 14), // Card'lar arası margin
     borderRadius: getResponsiveValue(16, 18, 20, 22),
     overflow: 'hidden',
     backgroundColor: '#efe7df',
@@ -405,45 +409,50 @@ const styles = StyleSheet.create({
   placeholder: {
     width: '100%',
     height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     backgroundColor: 'transparent',
-  },
-  contentContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     padding: getResponsiveValue(12, 14, 16, 18),
   },
   badge: {
     backgroundColor: '#6B4E3D',
-    paddingHorizontal: getResponsiveValue(10, 12, 14, 16),
+    paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
     paddingVertical: getResponsiveValue(4, 5, 6, 7),
-    borderRadius: getResponsiveValue(8, 10, 12, 14),
+    borderRadius: getResponsiveValue(6, 8, 10, 12),
     alignSelf: 'flex-start',
-    marginBottom: getResponsiveValue(8, 10, 12, 14),
+    marginBottom: getResponsiveValue(10, 12, 14, 16),
   },
   badgeText: {
     color: 'white',
-    fontSize: getResponsiveValue(11, 12, 13, 14),
+    fontSize: getResponsiveValue(10, 11, 12, 13),
     fontWeight: '600',
     fontFamily: 'System',
   },
   content: {
     flex: 1,
+    justifyContent: 'flex-start',
+    paddingRight: getResponsiveValue(40, 50, 60, 70), // İkon için alan bırak
   },
   title: {
-    fontSize: getResponsiveValue(16, 18, 20, 22),
-    fontWeight: 'bold',
+    fontSize: getResponsiveValue(14, 16, 18, 20),
+    fontWeight: '700',
     color: '#4A3429',
-    marginBottom: getResponsiveValue(4, 5, 6, 7),
+    marginBottom: getResponsiveValue(6, 8, 10, 12),
     fontFamily: 'System',
+    lineHeight: getResponsiveValue(18, 20, 22, 24),
   },
   description: {
-    fontSize: getResponsiveValue(13, 14, 15, 16),
+    fontSize: getResponsiveValue(12, 13, 14, 15),
     color: '#6B4E3D',
     fontFamily: 'System',
+    lineHeight: getResponsiveValue(16, 18, 20, 22),
+    flex: 1,
+  },
+  iconContainer: {
+    position: 'absolute',
+    bottom: getResponsiveValue(12, 14, 16, 18),
+    right: getResponsiveValue(12, 14, 16, 18),
+    opacity: 0.3,
   },
   dotsContainer: {
     flexDirection: 'row',
