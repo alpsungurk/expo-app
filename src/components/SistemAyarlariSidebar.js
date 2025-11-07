@@ -7,12 +7,13 @@ import {
   ScrollView,
   Modal,
   Dimensions,
-  Linking,
-  Alert
+  Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
 import { useNavigation } from '@react-navigation/native';
+import { supabase } from '../config/supabase';
+import { showError, showSuccess } from '../utils/toast';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -199,18 +200,41 @@ const SistemAyarlariListesi = () => {
 // Ana Sidebar Component
 const SistemAyarlariSidebar = ({ visible, onClose }) => {
   const navigation = useNavigation();
-  const { getSistemAyarı } = useAppStore();
+  const { getSistemAyarı, user, userProfile } = useAppStore();
   
   const kafeAdi = getSistemAyarı('kafe_adi');
+  const isLoggedIn = !!user;
 
   const handleLoginPress = () => {
     onClose(); // Sidebar'ı kapat
     navigation.navigate('LoginScreen');
   };
 
+  const handleLogoutPress = async () => {
+    try {
+      await supabase.auth.signOut();
+      onClose(); // Sidebar'ı kapat
+      showSuccess('Çıkış yapıldı.');
+    } catch (error) {
+      console.error('Çıkış hatası:', error);
+      showError('Çıkış yapılırken bir hata oluştu.');
+    }
+  };
+
   const handleSettingsPress = () => {
     onClose(); // Sidebar'ı kapat
     navigation.navigate('SettingsScreen');
+  };
+
+  // Kullanıcı adını oluştur
+  const getUserName = () => {
+    if (userProfile) {
+      return `${userProfile.ad} ${userProfile.soyad}`.trim();
+    }
+    if (user?.email) {
+      return user.email.split('@')[0];
+    }
+    return 'Kullanıcı';
   };
 
   return (
@@ -276,6 +300,48 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
+              {/* Profile Card - Giriş yapılmışsa göster */}
+              {isLoggedIn && (
+                <View style={[
+                  styles.profileCard,
+                  {
+                    padding: getResponsiveValue(16, 18, 20, 22),
+                    borderRadius: getResponsiveValue(12, 14, 16, 18),
+                    marginBottom: getResponsiveValue(20, 24, 28, 32),
+                  }
+                ]}>
+                  <View style={[
+                    styles.profileIcon,
+                    {
+                      width: getResponsiveValue(50, 56, 62, 68),
+                      height: getResponsiveValue(50, 56, 62, 68),
+                      borderRadius: getResponsiveValue(25, 28, 31, 34),
+                      marginBottom: getResponsiveValue(12, 14, 16, 18),
+                    }
+                  ]}>
+                    <Ionicons 
+                      name="person" 
+                      size={getResponsiveValue(28, 32, 36, 40)} 
+                      color="#8B4513" 
+                    />
+                  </View>
+                  <Text style={[
+                    styles.profileName,
+                    { fontSize: getResponsiveValue(18, 20, 22, 24) }
+                  ]}>
+                    {getUserName()}
+                  </Text>
+                  {userProfile?.roller && (
+                    <Text style={[
+                      styles.profileRole,
+                      { fontSize: getResponsiveValue(14, 15, 16, 18) }
+                    ]}>
+                      {userProfile.roller?.ad || 'Kullanıcı'}
+                    </Text>
+                  )}
+                </View>
+              )}
+
               <SistemAyarlariListesi />
             </ScrollView>
 
@@ -308,33 +374,61 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Giriş Yap Butonu - En Altta */}
+            {/* Giriş Yap / Çıkış Yap Butonu - En Altta */}
             <View style={styles.loginButtonContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.loginButton,
-                  {
-                    paddingVertical: getResponsiveValue(16, 18, 20, 22),
-                    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-                    borderRadius: getResponsiveValue(16, 18, 20, 22),
-                  }
-                ]}
-                onPress={handleLoginPress}
-              >
-                <View style={styles.loginButtonContent}>
-                  <Ionicons 
-                    name="log-in" 
-                    size={getResponsiveValue(22, 24, 26, 28)} 
-                    color="white" 
-                  />
-                  <Text style={[
-                    styles.loginButtonText,
-                    { fontSize: getResponsiveValue(16, 17, 18, 20) }
-                  ]}>
-                    Giriş Yap
-                  </Text>
-                </View>
-              </TouchableOpacity>
+              {isLoggedIn ? (
+                <TouchableOpacity
+                  style={[
+                    styles.logoutButton,
+                    {
+                      paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                      paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+                      borderRadius: getResponsiveValue(16, 18, 20, 22),
+                    }
+                  ]}
+                  onPress={handleLogoutPress}
+                >
+                  <View style={styles.loginButtonContent}>
+                    <Ionicons 
+                      name="log-out" 
+                      size={getResponsiveValue(22, 24, 26, 28)} 
+                      color="white" 
+                    />
+                    <Text style={[
+                      styles.loginButtonText,
+                      { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                    ]}>
+                      Çıkış Yap
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.loginButton,
+                    {
+                      paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                      paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+                      borderRadius: getResponsiveValue(16, 18, 20, 22),
+                    }
+                  ]}
+                  onPress={handleLoginPress}
+                >
+                  <View style={styles.loginButtonContent}>
+                    <Ionicons 
+                      name="log-in" 
+                      size={getResponsiveValue(22, 24, 26, 28)} 
+                      color="white" 
+                    />
+                    <Text style={[
+                      styles.loginButtonText,
+                      { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                    ]}>
+                      Giriş Yap
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -535,10 +629,44 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   
+  // Profile Card Stilleri
+  profileCard: {
+    backgroundColor: 'white',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  profileIcon: {
+    backgroundColor: 'rgba(139, 69, 19, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileName: {
+    fontWeight: '700',
+    fontFamily: 'System',
+    color: '#1F2937',
+    marginBottom: getResponsiveValue(4, 5, 6, 8),
+  },
+  profileRole: {
+    color: '#6B7280',
+    fontWeight: '500',
+    fontFamily: 'System',
+  },
   // Login Button Stilleri
   loginButton: {
     backgroundColor: '#8B4513',
     shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  logoutButton: {
+    backgroundColor: '#EF4444',
+    shadowColor: '#EF4444',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

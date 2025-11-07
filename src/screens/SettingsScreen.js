@@ -1,23 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
   View,
+  TextInput,
   TouchableOpacity,
-  ScrollView,
-  Switch,
+  ActivityIndicator,
   Dimensions,
-  Alert,
-  Platform
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
-import { useTheme } from '../contexts/ThemeContext';
-import { useNotification } from '../contexts/NotificationContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../config/supabase';
+import { useAppStore } from '../store/appStore';
+import { showError, showSuccess } from '../utils/toast';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -33,484 +32,532 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
   return small;
 };
 
-const SETTINGS_KEYS = {
-  NOTIFICATIONS_ENABLED: 'notifications_enabled',
-};
-
-const AUTH_KEYS = {
-  IS_LOGGED_IN: 'is_logged_in',
-  USERNAME: 'username',
-};
-
 export default function SettingsScreen() {
   const navigation = useNavigation();
-  const { colors } = useTheme();
-  const { expoPushToken } = useNotification();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [aboutExpanded, setAboutExpanded] = useState(true); // Hakkında varsayılan olarak açık
-  const [privacyExpanded, setPrivacyExpanded] = useState(false);
+  const { user, userProfile, loadUserProfile } = useAppStore();
+  const insets = useSafeAreaInsets();
+  const isLoggedIn = !!user;
 
-  useEffect(() => {
-    loadSettings();
-  }, [expoPushToken]);
+  // Profil bilgileri state
+  const [ad, setAd] = useState(userProfile?.ad || '');
+  const [soyad, setSoyad] = useState(userProfile?.soyad || '');
+  const [telefon, setTelefon] = useState(userProfile?.telefon || '');
+  
+  // Şifre değiştirme state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const loadSettings = async () => {
-    try {
-      const [notifications, loggedIn, user] = await Promise.all([
-        AsyncStorage.getItem(SETTINGS_KEYS.NOTIFICATIONS_ENABLED),
-        AsyncStorage.getItem(AUTH_KEYS.IS_LOGGED_IN),
-        AsyncStorage.getItem(AUTH_KEYS.USERNAME),
-      ]);
+  // Loading state
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-      const notificationsEnabledValue = notifications !== 'false';
-      setNotificationsEnabled(notificationsEnabledValue);
-      setIsLoggedIn(loggedIn === 'true');
-      setUsername(user || '');
-
-      // Supabase'deki token durumunu senkronize et
-      if (expoPushToken) {
-        const { error } = await supabase
-          .from('push_tokens')
-          .update({ is_active: notificationsEnabledValue })
-          .eq('push_token', expoPushToken);
-        
-        if (error) {
-          console.error('Token durumu senkronizasyon hatası:', error);
-        } else {
-          console.log('Token durumu senkronize edildi:', notificationsEnabledValue);
-        }
-      }
-    } catch (error) {
-      console.error('Ayarlar yüklenirken hata:', error);
-    } finally {
-      setLoading(false);
+  // İlk yüklemede profil bilgilerini set et
+  React.useEffect(() => {
+    if (userProfile) {
+      setAd(userProfile.ad || '');
+      setSoyad(userProfile.soyad || '');
+      setTelefon(userProfile.telefon || '');
     }
-  };
-
-  const saveSetting = async (key, value) => {
-    try {
-      await AsyncStorage.setItem(key, value.toString());
-    } catch (error) {
-      console.error('Ayar kaydedilirken hata:', error);
-      Alert.alert('Hata', 'Ayar kaydedilemedi.');
-    }
-  };
-
-  const handleNotificationsToggle = async (value) => {
-    setNotificationsEnabled(value);
-    await saveSetting(SETTINGS_KEYS.NOTIFICATIONS_ENABLED, value);
-
-    if (value) {
-      // Bildirimleri aç
-      // 1. Bildirim izni kontrol et
-      const { status } = await Notifications.getPermissionsAsync();
-      if (status !== 'granted') {
-        const { status: newStatus } = await Notifications.requestPermissionsAsync();
-        if (newStatus !== 'granted') {
-          Alert.alert(
-            'Bildirim İzni',
-            'Bildirimleri açmak için izin gereklidir. Lütfen ayarlardan izin verin.',
-            [{ text: 'Tamam' }]
-          );
-          setNotificationsEnabled(false);
-          await saveSetting(SETTINGS_KEYS.NOTIFICATIONS_ENABLED, false);
-          return;
-        }
-      }
-      
-      // 2. Supabase'de token'ı aktif yap
-      if (expoPushToken) {
-        const { error } = await supabase
-          .from('push_tokens')
-          .update({ is_active: true })
-          .eq('push_token', expoPushToken);
-        
-        if (error) {
-          console.error('Token aktif yapma hatası:', error);
-        } else {
-          console.log('Push token aktif yapıldı');
-        }
-      }
-      
-      // 3. Notification handler'ı aktif yap
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-        }),
-      });
-    } else {
-      // Bildirimleri kapat
-      // 1. Supabase'de token'ı pasif yap (ÖNEMLİ!)
-      if (expoPushToken) {
-        const { error } = await supabase
-          .from('push_tokens')
-          .update({ is_active: false })
-          .eq('push_token', expoPushToken);
-        
-        if (error) {
-          console.error('Token pasif yapma hatası:', error);
-        } else {
-          console.log('Push token pasif yapıldı');
-        }
-      }
-      
-      // 2. Notification handler'ı pasif yap
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: false,
-          shouldPlaySound: false,
-          shouldSetBadge: false,
-        }),
-      });
-    }
-  };
-
+  }, [userProfile]);
 
   const handleBackPress = () => {
     navigation.goBack();
   };
 
+  const handleUpdateProfile = async () => {
+    if (!isLoggedIn || !user) {
+      showError('Lütfen önce giriş yapın.');
+      return;
+    }
 
-  const handleAccountInfoPress = () => {
-    Alert.alert(
-      'Hesap Bilgileri',
-      `Kullanıcı Adı: ${username}\n\n` +
-      'Hesap ayarlarınızı buradan görüntüleyebilir ve yönetebilirsiniz.',
-      [{ text: 'Tamam' }]
-    );
-  };
+    if (!ad.trim() || !soyad.trim()) {
+      showError('Ad ve Soyad alanları gereklidir.');
+      return;
+    }
 
-  const handleLogoutPress = () => {
-    Alert.alert(
-      'Çıkış Yap',
-      'Çıkış yapmak istediğinize emin misiniz?',
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Çıkış Yap',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.multiRemove([
-                AUTH_KEYS.IS_LOGGED_IN,
-                AUTH_KEYS.USERNAME,
-              ]);
-              setIsLoggedIn(false);
-              setUsername('');
-              Alert.alert('Başarılı', 'Çıkış yapıldı.');
-            } catch (error) {
-              console.error('Çıkış yapılırken hata:', error);
-              Alert.alert('Hata', 'Çıkış yapılırken bir hata oluştu.');
-            }
-          },
-        },
-      ]
-    );
-  };
+    setIsUpdatingProfile(true);
 
-  const handleAboutToggle = () => {
-    setAboutExpanded(!aboutExpanded);
-  };
+    try {
+      // Kullanıcı profilini güncelle
+      const { error: updateError } = await supabase
+        .from('kullanici_profilleri')
+        .update({
+          ad: ad.trim(),
+          soyad: soyad.trim(),
+          telefon: telefon.trim() || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
 
-  const handlePrivacyToggle = () => {
-    setPrivacyExpanded(!privacyExpanded);
-  };
-
-  const SettingItem = ({ 
-    icon, 
-    title, 
-    description, 
-    value, 
-    onValueChange, 
-    disabled = false 
-  }) => (
-    <View style={[
-      styles.settingItem,
-      dynamicStyles.settingItem,
-      {
-        paddingVertical: getResponsiveValue(16, 18, 20, 22),
-        paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-        marginBottom: getResponsiveValue(12, 14, 16, 18),
-        borderRadius: getResponsiveValue(12, 14, 16, 18),
+      if (updateError) {
+        console.error('Profil güncelleme hatası:', updateError);
+        showError(updateError.message || 'Profil güncellenirken bir hata oluştu.');
+        setIsUpdatingProfile(false);
+        return;
       }
-    ]}>
-      <View style={styles.settingItemLeft}>
-        <View style={[
-          styles.settingIcon,
-          {
-            width: getResponsiveValue(40, 44, 48, 52),
-            height: getResponsiveValue(40, 44, 48, 52),
-            borderRadius: getResponsiveValue(20, 22, 24, 26),
-          }
-        ]}>
-          <Ionicons 
-            name={icon} 
-            size={getResponsiveValue(20, 22, 24, 26)} 
-            color={colors.primary} 
-          />
-        </View>
-        <View style={styles.settingTextContainer}>
-          <Text style={[
-            styles.settingTitle,
-            dynamicStyles.settingTitle,
-            { fontSize: getResponsiveValue(16, 17, 18, 20) }
-          ]}>
-            {title}
-          </Text>
-          {description && (
-            <Text style={[
-              styles.settingDescription,
-              dynamicStyles.settingDescription,
-              { fontSize: getResponsiveValue(13, 14, 15, 16) }
-            ]}>
-              {description}
-            </Text>
-          )}
-        </View>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        disabled={disabled}
-        trackColor={{ false: colors.border, true: `${colors.primary}30` }}
-        thumbColor={value ? colors.primary : colors.textSecondary}
-        ios_backgroundColor={colors.border}
-      />
-    </View>
-  );
 
-  const AccordionItem = ({ icon, title, expanded, onToggle, content }) => (
-    <View style={[
-      styles.accordionItem,
-      dynamicStyles.infoItem,
-      {
-        marginBottom: getResponsiveValue(12, 14, 16, 18),
-        borderRadius: getResponsiveValue(12, 14, 16, 18),
+      // Profili yeniden yükle
+      await loadUserProfile(user.id);
+
+      showSuccess('Profil bilgileri başarıyla güncellendi.');
+    } catch (error) {
+      console.error('Profil güncelleme hatası:', error);
+      showError('Profil güncellenirken bir hata oluştu.');
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!isLoggedIn || !user) {
+      showError('Lütfen önce giriş yapın.');
+      return;
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showError('Tüm şifre alanları gereklidir.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showError('Yeni şifreler eşleşmiyor.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showError('Yeni şifre en az 6 karakter olmalıdır.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      // Önce mevcut şifreyi doğrula
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        showError('Mevcut şifre yanlış.');
+        setIsChangingPassword(false);
+        return;
       }
-    ]}>
-      <TouchableOpacity
-        style={[
-          styles.accordionHeader,
-          {
-            paddingVertical: getResponsiveValue(16, 18, 20, 22),
-            paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-          }
-        ]}
-        onPress={onToggle}
-      >
-        <View style={styles.settingItemLeft}>
-          <View style={[
-            styles.settingIcon,
-            {
-              width: getResponsiveValue(40, 44, 48, 52),
-              height: getResponsiveValue(40, 44, 48, 52),
-              borderRadius: getResponsiveValue(20, 22, 24, 26),
-            }
-          ]}>
-            <Ionicons 
-              name={icon} 
-              size={getResponsiveValue(20, 22, 24, 26)} 
-              color={colors.primary} 
-            />
-          </View>
-          <Text style={[
-            styles.settingTitle,
-            dynamicStyles.settingTitle,
-            { fontSize: getResponsiveValue(16, 17, 18, 20) }
-          ]}>
-            {title}
-          </Text>
-        </View>
-        <Ionicons 
-          name={expanded ? "chevron-up" : "chevron-down"} 
-          size={getResponsiveValue(20, 22, 24, 26)} 
-          color={colors.primary} 
-        />
-      </TouchableOpacity>
-      
-      {expanded && (
-        <View style={[
-          styles.accordionContent,
-          {
-            paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-            paddingBottom: getResponsiveValue(16, 18, 20, 22),
-          }
-        ]}>
-          <Text style={[
-            styles.accordionText,
-            dynamicStyles.settingDescription,
-            { fontSize: getResponsiveValue(14, 15, 16, 18) }
-          ]}>
-            {content}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
 
-  const InfoItem = ({ icon, title, onPress }) => (
-    <TouchableOpacity
-      style={[
-        styles.infoItem,
-        dynamicStyles.infoItem,
+      // Şifreyi güncelle
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (updateError) {
+        console.error('Şifre güncelleme hatası:', updateError);
+        showError(updateError.message || 'Şifre güncellenirken bir hata oluştu.');
+        setIsChangingPassword(false);
+        return;
+      }
+
+      // Formu temizle
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+
+      showSuccess('Şifre başarıyla güncellendi.');
+    } catch (error) {
+      console.error('Şifre güncelleme hatası:', error);
+      showError('Şifre güncellenirken bir hata oluştu.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const renderInputField = (label, value, onChangeText, placeholder, icon, keyboardType = 'default', secureTextEntry = false, showPasswordToggle = false, showPassword = false, onTogglePassword = null) => (
+    <View style={styles.inputContainer}>
+      <Text style={[
+        styles.inputLabel,
+        { fontSize: getResponsiveValue(14, 15, 16, 18) }
+      ]}>
+        {label}
+      </Text>
+      <View style={[
+        styles.inputWrapper,
         {
-          paddingVertical: getResponsiveValue(16, 18, 20, 22),
-          paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-          marginBottom: getResponsiveValue(12, 14, 16, 18),
+          paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
+          paddingVertical: getResponsiveValue(12, 14, 16, 18),
           borderRadius: getResponsiveValue(12, 14, 16, 18),
         }
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.settingItemLeft}>
-        <View style={[
-          styles.settingIcon,
-          {
-            width: getResponsiveValue(40, 44, 48, 52),
-            height: getResponsiveValue(40, 44, 48, 52),
-            borderRadius: getResponsiveValue(20, 22, 24, 26),
-          }
-        ]}>
-          <Ionicons 
-            name={icon} 
-            size={getResponsiveValue(20, 22, 24, 26)} 
-            color={colors.primary} 
-          />
-        </View>
-        <Text style={[
-          styles.settingTitle,
-          dynamicStyles.settingTitle,
-          { fontSize: getResponsiveValue(16, 17, 18, 20) }
-        ]}>
-          {title}
-        </Text>
+      ]}>
+        <Ionicons 
+          name={icon} 
+          size={getResponsiveValue(20, 22, 24, 26)} 
+          color="#8B4513" 
+          style={styles.inputIcon}
+        />
+        <TextInput
+          style={[
+            styles.textInput,
+            { fontSize: getResponsiveValue(16, 17, 18, 20) }
+          ]}
+          placeholder={placeholder}
+          placeholderTextColor="#9CA3AF"
+          value={value}
+          onChangeText={onChangeText}
+          autoCapitalize={keyboardType === 'email-address' ? 'none' : 'words'}
+          autoCorrect={false}
+          keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry && !showPassword}
+          editable={isLoggedIn}
+        />
+        {showPasswordToggle && onTogglePassword && (
+          <TouchableOpacity
+            onPress={onTogglePassword}
+            style={styles.passwordToggle}
+          >
+            <Ionicons 
+              name={showPassword ? "eye-off-outline" : "eye-outline"} 
+              size={getResponsiveValue(20, 22, 24, 26)} 
+              color="#8B4513" 
+            />
+          </TouchableOpacity>
+        )}
       </View>
-      <Ionicons 
-        name="chevron-forward" 
-        size={getResponsiveValue(20, 22, 24, 26)} 
-        color={colors.primary} 
-      />
-    </TouchableOpacity>
+    </View>
   );
 
-  const dynamicStyles = {
-    container: { backgroundColor: colors.background },
-    header: { backgroundColor: colors.surface, borderBottomColor: colors.border },
-    headerTitle: { color: colors.text },
-    settingItem: { backgroundColor: colors.surface },
-    settingTitle: { color: colors.text },
-    settingDescription: { color: colors.textSecondary },
-    infoItem: { backgroundColor: colors.surface },
-    logoutButton: { backgroundColor: colors.surface, borderColor: colors.border },
-    loadingText: { color: colors.textSecondary },
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.container, dynamicStyles.container]}>
-        <View style={[styles.header, dynamicStyles.header]}>
+  return (
+    <View style={styles.container}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardContainer}
+      >
+        {/* Header */}
+        <View style={[
+          styles.header,
+          { paddingTop: getResponsiveValue(16, 18, 20, 22) + insets.top }
+        ]}>
           <TouchableOpacity 
             style={styles.backButton}
             onPress={handleBackPress}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.primary} />
+            <Ionicons name="arrow-back" size={24} color="#8B4513" />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>Ayarlar</Text>
+          <Text style={styles.headerTitle}>Ayarlar</Text>
           <View style={styles.placeholder} />
         </View>
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, dynamicStyles.loadingText]}>Yükleniyor...</Text>
-        </View>
-      </View>
-    );
-  }
 
-  return (
-    <View style={[styles.container, dynamicStyles.container]}>
-      {/* Header */}
-      <View style={[styles.header, dynamicStyles.header]}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={handleBackPress}
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>Ayarlar</Text>
-        <View style={styles.placeholder} />
-      </View>
+          {!isLoggedIn ? (
+            // Giriş yapılmamışsa
+            <View style={styles.notLoggedInContainer}>
+              <Ionicons 
+                name="lock-closed" 
+                size={getResponsiveValue(64, 72, 80, 88)} 
+                color="#9CA3AF"
+                style={styles.notLoggedInIcon}
+              />
+              <Text style={[
+                styles.notLoggedInTitle,
+                { fontSize: getResponsiveValue(20, 22, 24, 26) }
+              ]}>
+                Giriş Yapın
+              </Text>
+              <Text style={[
+                styles.notLoggedInText,
+                { fontSize: getResponsiveValue(14, 15, 16, 18) }
+              ]}>
+                Ayarları görüntülemek ve düzenlemek için lütfen giriş yapın.
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.loginButton,
+                  {
+                    paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                    paddingHorizontal: getResponsiveValue(24, 28, 32, 36),
+                    borderRadius: getResponsiveValue(12, 14, 16, 18),
+                    marginTop: getResponsiveValue(24, 28, 32, 36),
+                  }
+                ]}
+                onPress={() => navigation.navigate('LoginScreen')}
+              >
+                <View style={styles.loginButtonContent}>
+                  <Ionicons 
+                    name="log-in" 
+                    size={getResponsiveValue(20, 22, 24, 26)} 
+                    color="white" 
+                  />
+                  <Text style={[
+                    styles.loginButtonText,
+                    { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                  ]}>
+                    Giriş Yap
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            // Giriş yapılmışsa
+            <>
+              {/* Profil Bilgileri Bölümü */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons 
+                    name="person" 
+                    size={getResponsiveValue(24, 26, 28, 30)} 
+                    color="#8B4513" 
+                  />
+                  <Text style={[
+                    styles.sectionTitle,
+                    { fontSize: getResponsiveValue(20, 22, 24, 26) }
+                  ]}>
+                    Profil Bilgileri
+                  </Text>
+                </View>
 
-      <ScrollView 
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <SettingItem
-          icon="notifications-outline"
-          title="Bildirimler"
-          description="Push bildirimlerini aç veya kapat"
-          value={notificationsEnabled}
-          onValueChange={handleNotificationsToggle}
-        />
+                {renderInputField(
+                  'Ad',
+                  ad,
+                  setAd,
+                  'Adınızı girin',
+                  'person-outline'
+                )}
 
-        {isLoggedIn && (
-          <>
-            <InfoItem
-              icon="person-outline"
-              title="Hesap Bilgileri"
-              onPress={handleAccountInfoPress}
-            />
+                {renderInputField(
+                  'Soyad',
+                  soyad,
+                  setSoyad,
+                  'Soyadınızı girin',
+                  'person-outline'
+                )}
 
-            <TouchableOpacity
-              style={[
-                styles.logoutButton,
-                dynamicStyles.logoutButton,
-                {
-                  paddingVertical: getResponsiveValue(16, 18, 20, 22),
-                  paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-                  marginBottom: getResponsiveValue(12, 14, 16, 18),
-                  borderRadius: getResponsiveValue(12, 14, 16, 18),
-                }
-              ]}
-              onPress={handleLogoutPress}
-            >
-              <View style={styles.logoutButtonContent}>
-                <Ionicons 
-                  name="log-out-outline" 
-                  size={getResponsiveValue(20, 22, 24, 26)} 
-                  color="#EF4444" 
-                />
-                <Text style={[
-                  styles.logoutButtonText,
-                  { fontSize: getResponsiveValue(16, 17, 18, 20) }
-                ]}>
-                  Çıkış Yap
-                </Text>
+                <View style={styles.inputContainer}>
+                  <Text style={[
+                    styles.inputLabel,
+                    { fontSize: getResponsiveValue(14, 15, 16, 18) }
+                  ]}>
+                    E-posta
+                  </Text>
+                  <View style={[
+                    styles.inputWrapper,
+                    styles.disabledInput,
+                    {
+                      paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
+                      paddingVertical: getResponsiveValue(12, 14, 16, 18),
+                      borderRadius: getResponsiveValue(12, 14, 16, 18),
+                    }
+                  ]}>
+                    <Ionicons 
+                      name="mail-outline" 
+                      size={getResponsiveValue(20, 22, 24, 26)} 
+                      color="#9CA3AF" 
+                      style={styles.inputIcon}
+                    />
+                    <Text style={[
+                      styles.textInput,
+                      styles.disabledText,
+                      { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                    ]}>
+                      {user?.email || 'E-posta adresiniz'}
+                    </Text>
+                  </View>
+                  <Text style={[
+                    styles.helperText,
+                    { fontSize: getResponsiveValue(12, 13, 14, 16) }
+                  ]}>
+                    E-posta adresi değiştirilemez
+                  </Text>
+                </View>
+
+                {renderInputField(
+                  'Telefon',
+                  telefon,
+                  setTelefon,
+                  'Telefon numaranızı girin (Opsiyonel)',
+                  'call-outline',
+                  'phone-pad'
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.updateButton,
+                    {
+                      paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                      paddingHorizontal: getResponsiveValue(24, 28, 32, 36),
+                      borderRadius: getResponsiveValue(12, 14, 16, 18),
+                      marginTop: getResponsiveValue(16, 18, 20, 22),
+                    }
+                  ]}
+                  onPress={handleUpdateProfile}
+                  disabled={isUpdatingProfile}
+                >
+                  {isUpdatingProfile ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <View style={styles.updateButtonContent}>
+                      <Ionicons 
+                        name="checkmark-circle" 
+                        size={getResponsiveValue(20, 22, 24, 26)} 
+                        color="white" 
+                      />
+                      <Text style={[
+                        styles.updateButtonText,
+                        { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                      ]}>
+                        Profili Güncelle
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          </>
-        )}
 
-        <AccordionItem
-          icon="information-circle-outline"
-          title="Hakkında"
-          expanded={aboutExpanded}
-          onToggle={handleAboutToggle}
-          content={`Sipariş Sistemi\n\nVersiyon: ${Constants.expoConfig?.version || '1.0.0'}\n\nModern ve kullanıcı dostu sipariş yönetim sistemi.`}
-        />
+              {/* Şifre Değiştirme Bölümü */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons 
+                    name="lock-closed" 
+                    size={getResponsiveValue(24, 26, 28, 30)} 
+                    color="#8B4513" 
+                  />
+                  <Text style={[
+                    styles.sectionTitle,
+                    { fontSize: getResponsiveValue(20, 22, 24, 26) }
+                  ]}>
+                    Şifre Değiştir
+                  </Text>
+                </View>
 
-        <AccordionItem
-          icon="shield-checkmark-outline"
-          title="Gizlilik Politikası"
-          expanded={privacyExpanded}
-          onToggle={handlePrivacyToggle}
-          content={`Gizlilik Politikamız\n\n1. Veri Toplama\nUygulamamız, sipariş vermeniz ve hizmetlerimizden yararlanmanız için gerekli olan minimum düzeyde kişisel bilgi toplar.\n\n2. Veri Kullanımı\nToplanan bilgiler sadece sipariş işlemlerinizi gerçekleştirmek ve size hizmet sunmak amacıyla kullanılır.\n\n3. Veri Güvenliği\nKişisel bilgileriniz güvenli bir şekilde saklanır ve üçüncü taraflarla paylaşılmaz.\n\n4. Çerezler\nUygulamamız, deneyiminizi iyileştirmek için çerezler kullanabilir.\n\n5. Değişiklikler\nBu politika zaman zaman güncellenebilir. Güncellemeler uygulama içinde bildirilir.`}
-        />
-      </ScrollView>
+                {renderInputField(
+                  'Mevcut Şifre',
+                  currentPassword,
+                  setCurrentPassword,
+                  'Mevcut şifrenizi girin',
+                  'lock-closed-outline',
+                  'default',
+                  true,
+                  true,
+                  showCurrentPassword,
+                  () => setShowCurrentPassword(!showCurrentPassword)
+                )}
+
+                {renderInputField(
+                  'Yeni Şifre',
+                  newPassword,
+                  setNewPassword,
+                  'Yeni şifrenizi girin',
+                  'lock-closed-outline',
+                  'default',
+                  true,
+                  true,
+                  showNewPassword,
+                  () => setShowNewPassword(!showNewPassword)
+                )}
+
+                {renderInputField(
+                  'Yeni Şifre Tekrar',
+                  confirmPassword,
+                  setConfirmPassword,
+                  'Yeni şifrenizi tekrar girin',
+                  'lock-closed-outline',
+                  'default',
+                  true,
+                  true,
+                  showConfirmPassword,
+                  () => setShowConfirmPassword(!showConfirmPassword)
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.updateButton,
+                    {
+                      paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                      paddingHorizontal: getResponsiveValue(24, 28, 32, 36),
+                      borderRadius: getResponsiveValue(12, 14, 16, 18),
+                      marginTop: getResponsiveValue(16, 18, 20, 22),
+                    }
+                  ]}
+                  onPress={handleChangePassword}
+                  disabled={isChangingPassword}
+                >
+                  {isChangingPassword ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <View style={styles.updateButtonContent}>
+                      <Ionicons 
+                        name="key" 
+                        size={getResponsiveValue(20, 22, 24, 26)} 
+                        color="white" 
+                      />
+                      <Text style={[
+                        styles.updateButtonText,
+                        { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                      ]}>
+                        Şifreyi Değiştir
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Hesap Bilgileri Bölümü */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons 
+                    name="information-circle" 
+                    size={getResponsiveValue(24, 26, 28, 30)} 
+                    color="#8B4513" 
+                  />
+                  <Text style={[
+                    styles.sectionTitle,
+                    { fontSize: getResponsiveValue(20, 22, 24, 26) }
+                  ]}>
+                    Hesap Bilgileri
+                  </Text>
+                </View>
+
+                <View style={styles.infoCard}>
+                  <View style={styles.infoRow}>
+                    <Text style={[
+                      styles.infoLabel,
+                      { fontSize: getResponsiveValue(14, 15, 16, 18) }
+                    ]}>
+                      Rol:
+                    </Text>
+                    <Text style={[
+                      styles.infoValue,
+                      { fontSize: getResponsiveValue(14, 15, 16, 18) }
+                    ]}>
+                      {userProfile?.roller?.ad || 'Kullanıcı'}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={[
+                      styles.infoLabel,
+                      { fontSize: getResponsiveValue(14, 15, 16, 18) }
+                    ]}>
+                      Hesap Durumu:
+                    </Text>
+                    <View style={styles.statusBadge}>
+                      <Text style={[
+                        styles.statusText,
+                        { fontSize: getResponsiveValue(12, 13, 14, 16) }
+                      ]}>
+                        {userProfile?.aktif ? 'Aktif' : 'Pasif'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -518,14 +565,20 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
-    paddingVertical: getResponsiveValue(16, 18, 20, 22),
+    paddingBottom: getResponsiveValue(16, 18, 20, 22),
+    backgroundColor: 'white',
     borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -543,6 +596,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: getResponsiveValue(18, 20, 22, 24),
     fontWeight: '700',
+    color: '#1F2937',
     fontFamily: 'System',
   },
   placeholder: {
@@ -552,99 +606,171 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: getResponsiveValue(20, 24, 28, 32),
+    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    paddingTop: getResponsiveValue(24, 28, 32, 36),
     paddingBottom: getResponsiveValue(40, 48, 56, 64),
   },
-  settingItem: {
-    flexDirection: 'row',
+  notLoggedInContainer: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  settingItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingIcon: {
-    backgroundColor: 'rgba(139, 69, 19, 0.12)',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: getResponsiveValue(14, 16, 18, 20),
+    paddingVertical: getResponsiveValue(60, 80, 100, 120),
+    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
   },
-  settingTextContainer: {
-    flex: 1,
+  notLoggedInIcon: {
+    marginBottom: getResponsiveValue(24, 28, 32, 36),
   },
-  settingTitle: {
-    fontWeight: '600',
+  notLoggedInTitle: {
+    fontWeight: '700',
+    color: '#1F2937',
     fontFamily: 'System',
-    marginBottom: getResponsiveValue(4, 5, 6, 8),
+    marginBottom: getResponsiveValue(12, 14, 16, 18),
+    textAlign: 'center',
   },
-  settingDescription: {
+  notLoggedInText: {
+    color: '#6B7280',
+    textAlign: 'center',
     fontFamily: 'System',
-    lineHeight: getResponsiveValue(18, 20, 22, 24),
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  accordionItem: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  accordionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  accordionContent: {
-    paddingTop: getResponsiveValue(8, 10, 12, 14),
-  },
-  accordionText: {
-    fontFamily: 'System',
+    marginBottom: getResponsiveValue(24, 28, 32, 36),
     lineHeight: getResponsiveValue(20, 22, 24, 26),
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  loginButton: {
+    backgroundColor: '#8B4513',
+    shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  loadingText: {
-    fontSize: getResponsiveValue(16, 17, 18, 20),
+  loginButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: getResponsiveValue(8, 10, 12, 14),
+  },
+  loginButtonText: {
+    color: 'white',
+    fontWeight: '600',
     fontFamily: 'System',
   },
-  logoutButton: {
-    borderWidth: 1,
+  section: {
+    backgroundColor: 'white',
+    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    padding: getResponsiveValue(20, 24, 28, 32),
+    marginBottom: getResponsiveValue(24, 28, 32, 36),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
   },
-  logoutButtonContent: {
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: getResponsiveValue(20, 24, 28, 32),
+    gap: getResponsiveValue(12, 14, 16, 18),
+  },
+  sectionTitle: {
+    fontWeight: '700',
+    color: '#1F2937',
+    fontFamily: 'System',
+  },
+  inputContainer: {
+    marginBottom: getResponsiveValue(20, 24, 28, 32),
+  },
+  inputLabel: {
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: getResponsiveValue(8, 10, 12, 14),
+    fontFamily: 'System',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  inputIcon: {
+    marginRight: getResponsiveValue(12, 14, 16, 18),
+  },
+  textInput: {
+    flex: 1,
+    color: '#1F2937',
+    fontFamily: 'System',
+    padding: 0,
+  },
+  passwordToggle: {
+    padding: getResponsiveValue(4, 5, 6, 8),
+    marginLeft: getResponsiveValue(8, 10, 12, 14),
+  },
+  updateButton: {
+    backgroundColor: '#8B4513',
+    shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  updateButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: getResponsiveValue(10, 12, 14, 16),
+    gap: getResponsiveValue(8, 10, 12, 14),
   },
-  logoutButtonText: {
-    color: '#EF4444',
+  updateButtonText: {
+    color: 'white',
     fontWeight: '600',
     fontFamily: 'System',
+  },
+  infoCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    padding: getResponsiveValue(16, 18, 20, 22),
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: getResponsiveValue(12, 14, 16, 18),
+  },
+  infoLabel: {
+    fontWeight: '600',
+    color: '#6B7280',
+    fontFamily: 'System',
+  },
+  infoValue: {
+    fontWeight: '500',
+    color: '#1F2937',
+    fontFamily: 'System',
+  },
+  statusBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
+    paddingVertical: getResponsiveValue(6, 7, 8, 9),
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+  },
+  statusText: {
+    color: 'white',
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  disabledInput: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  disabledText: {
+    color: '#9CA3AF',
+  },
+  helperText: {
+    color: '#9CA3AF',
+    marginTop: getResponsiveValue(4, 5, 6, 8),
+    fontFamily: 'System',
+    fontStyle: 'italic',
   },
 });
 

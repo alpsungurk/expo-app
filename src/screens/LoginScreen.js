@@ -5,7 +5,6 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
@@ -13,7 +12,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../config/supabase';
+import { useAppStore } from '../store/appStore';
+import { showError, showSuccess, showInfo } from '../utils/toast';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -31,34 +33,57 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 
 export default function LoginScreen() {
   const navigation = useNavigation();
-  const [username, setUsername] = useState('');
+  const { loadUserProfile } = useAppStore();
+  const insets = useSafeAreaInsets();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) {
-      Alert.alert('Hata', 'Kullanıcı adı ve şifre gereklidir.');
+    if (!email.trim() || !password.trim()) {
+      showError('E-posta ve şifre gereklidir.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Basit giriş kontrolü (gerçek uygulamada API'den kontrol edilir)
-      if (username === 'admin' && password === 'admin123') {
-        // Başarılı giriş - AsyncStorage'a kaydet
-        await AsyncStorage.multiSet([
-          ['is_logged_in', 'true'],
-          ['username', username],
-        ]);
-        navigation.navigate('KasaScreen');
-      } else {
-        Alert.alert('Hata', 'Kullanıcı adı veya şifre hatalı.');
+      // Supabase Auth ile giriş yap
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
+
+      if (error) {
+        showError(error.message || 'Giriş yapılırken bir hata oluştu.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        // Kullanıcı profilini yükle
+        const profile = await loadUserProfile(data.user.id);
+        
+        // Başarılı giriş toast mesajı
+        showSuccess('Giriş yapıldı', 'Hoş geldiniz!');
+        
+        if (profile) {
+          // Rol kontrolü - Kasa rolü (id: 3) ise KasaScreen'e yönlendir
+          if (profile.rol_id === 3) {
+            navigation.navigate('KasaScreen');
+          } else {
+            // Diğer roller için ana ekrana dön
+            navigation.goBack();
+          }
+        } else {
+          // Profil yoksa ana ekrana dön
+          navigation.goBack();
+        }
       }
     } catch (error) {
       console.error('Giriş yapılırken hata:', error);
-      Alert.alert('Hata', 'Giriş yapılırken bir hata oluştu.');
+      showError('Giriş yapılırken bir hata oluştu.');
     } finally {
       setIsLoading(false);
     }
@@ -70,7 +95,7 @@ export default function LoginScreen() {
 
   const handleGoogleAuth = () => {
     // Google auth işlemi (şimdilik sadece görünüm)
-    Alert.alert('Bilgi', 'Google ile giriş yakında eklenecek.');
+    showInfo('Google ile giriş yakında eklenecek.');
   };
 
   const handleSignUpPress = () => {
@@ -84,7 +109,10 @@ export default function LoginScreen() {
         style={styles.keyboardContainer}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[
+          styles.header,
+          { paddingTop: getResponsiveValue(16, 18, 20, 22) + insets.top }
+        ]}>
           <TouchableOpacity 
             style={styles.backButton}
             onPress={handleBackPress}
@@ -97,20 +125,12 @@ export default function LoginScreen() {
 
         {/* Logo ve Başlık */}
         <View style={styles.logoContainer}>
-          <View style={[
-            styles.logoIcon,
-            {
-              width: getResponsiveValue(80, 90, 100, 110),
-              height: getResponsiveValue(80, 90, 100, 110),
-              borderRadius: getResponsiveValue(40, 45, 50, 55),
-            }
-          ]}>
-            <Ionicons 
-              name="cafe" 
-              size={getResponsiveValue(40, 45, 50, 55)} 
-              color="#8B4513" 
-            />
-          </View>
+          <Ionicons 
+            name="cafe" 
+            size={getResponsiveValue(50, 56, 62, 68)} 
+            color="#8B4513"
+            style={styles.logoIcon}
+          />
           <Text style={[
             styles.logoText,
             { fontSize: getResponsiveValue(24, 26, 28, 30) }
@@ -132,7 +152,7 @@ export default function LoginScreen() {
               styles.inputLabel,
               { fontSize: getResponsiveValue(14, 15, 16, 18) }
             ]}>
-              Kullanıcı Adı
+              E-posta
             </Text>
             <View style={[
               styles.inputWrapper,
@@ -143,7 +163,7 @@ export default function LoginScreen() {
               }
             ]}>
               <Ionicons 
-                name="person-outline" 
+                name="mail-outline" 
                 size={getResponsiveValue(20, 22, 24, 26)} 
                 color="#8B4513" 
                 style={styles.inputIcon}
@@ -153,12 +173,13 @@ export default function LoginScreen() {
                   styles.textInput,
                   { fontSize: getResponsiveValue(16, 17, 18, 20) }
                 ]}
-                placeholder="Kullanıcı adınızı girin"
+                placeholder="E-posta adresinizi girin"
                 placeholderTextColor="#9CA3AF"
-                value={username}
-                onChangeText={setUsername}
+                value={email}
+                onChangeText={setEmail}
                 autoCapitalize="none"
                 autoCorrect={false}
+                keyboardType="email-address"
               />
             </View>
           </View>
@@ -300,15 +321,6 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Demo Bilgisi */}
-          <View style={styles.demoInfo}>
-            <Text style={[
-              styles.demoText,
-              { fontSize: getResponsiveValue(12, 13, 14, 16) }
-            ]}>
-              Demo: admin / admin123
-            </Text>
-          </View>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -328,7 +340,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
-    paddingVertical: getResponsiveValue(16, 18, 20, 22),
+    paddingBottom: getResponsiveValue(16, 18, 20, 22),
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
@@ -356,15 +368,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
   },
   logoIcon: {
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: getResponsiveValue(16, 18, 20, 22),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   logoText: {
     fontWeight: '700',
