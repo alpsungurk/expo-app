@@ -952,10 +952,16 @@ export default function KasaOrderDetailScreen() {
                   if (notificationResult.success) {
                     console.log(`Bildirim başarıyla gönderildi (${newStatus})`);
                   } else {
-                    console.error('Bildirim gönderme hatası:', notificationResult.error);
+                    // Sadece önemli hataları logla (skipLog flag'i varsa loglama)
+                    if (!notificationResult.skipLog) {
+                      console.warn('Bildirim gönderme hatası:', notificationResult.error);
+                    }
+                    // Hata olsa bile sipariş güncellemesi başarılı olduğu için sessizce devam et
                   }
                 }).catch((notificationError) => {
-                  console.error('Bildirim gönderme hatası:', notificationError);
+                  // Beklenmeyen hatalar için log
+                  console.warn('Bildirim gönderme hatası (beklenmeyen):', notificationError);
+                  // Hata olsa bile sipariş güncellemesi başarılı olduğu için sessizce devam et
                 });
               }
             } else {

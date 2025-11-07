@@ -1,15 +1,18 @@
 // Expo Push Notification Gönderme Utility Fonksiyonu
-// Bu fonksiyon Supabase Edge Function'ı çağırarak push notification gönderir
+// Bu fonksiyon Cloudflare Workers proxy API üzerinden Expo Push API'ye bildirim gönderir
 
 import { supabase } from '../config/supabase';
 import Constants from 'expo-constants';
 
-// Environment variable'dan Expo Push API URL'ini al
-const EXPO_PUSH_API_URL = process.env.EXPO_PUBLIC_EXPO_PUSH_API_URL || 
-                          Constants.expoConfig?.extra?.expoPushApiUrl;
+// Environment variable'dan Push Notification API URL'ini al
+// Cloudflare Workers proxy API kullanılıyor (CORS sorununu çözmek için)
+const PUSH_NOTIFICATION_API_URL = process.env.VITE_PUSH_NOTIFICATION_API_URL ||
+                                  process.env.EXPO_PUBLIC_PUSH_NOTIFICATION_API_URL ||
+                                  Constants.expoConfig?.extra?.pushNotificationApiUrl ||
+                                  'https://push-notification.kilicalpsungur.workers.dev';
 
 /**
- * Tek bir kullanıcıya push notification gönder
+ * Tek bir kullanıcıya push notification gönder (Cloudflare Workers Proxy üzerinden)
  * @param {string} userId - Kullanıcı ID (UUID)
  * @param {string} title - Bildirim başlığı
  * @param {string} body - Bildirim içeriği
@@ -18,21 +21,46 @@ const EXPO_PUSH_API_URL = process.env.EXPO_PUBLIC_EXPO_PUSH_API_URL ||
  */
 export async function sendPushNotificationToUser(userId, title, body, data = {}) {
   try {
-    const { data: result, error } = await supabase.functions.invoke('send-push-notification', {
-      body: {
-        userId,
-        title,
-        body,
-        data,
-      },
-    });
+    // Kullanıcının push token'ını Supabase'den al
+    const { data: profile, error: profileError } = await supabase
+      .from('kullanici_profilleri')
+      .select('push_token')
+      .eq('id', userId)
+      .single();
 
-    if (error) {
-      console.error('Push notification gönderme hatası:', error);
-      return { success: false, error };
+    if (profileError || !profile?.push_token) {
+      console.warn('Kullanıcı push token bulunamadı:', userId);
+      return { 
+        success: false, 
+        error: 'Kullanıcı push token bulunamadı',
+        skipLog: true
+      };
     }
 
-    return { success: true, result };
+    // push_tokens tablosundan aktif token'ı kontrol et
+    const { data: pushTokenData, error: tokenError } = await supabase
+      .from('push_tokens')
+      .select('push_token')
+      .eq('push_token', profile.push_token)
+      .eq('is_active', true)
+      .single();
+
+    if (tokenError || !pushTokenData?.push_token) {
+      console.warn('Aktif push token bulunamadı:', profile.push_token);
+      return { 
+        success: false, 
+        error: 'Aktif push token bulunamadı',
+        skipLog: true
+      };
+    }
+
+    // sendPushNotificationToTokens kullanarak gönder
+    return await sendPushNotificationToTokens(
+      [pushTokenData.push_token],
+      title,
+      body,
+      data
+    );
   } catch (error) {
     console.error('Push notification gönderme hatası:', error);
     return { success: false, error: error.message };
@@ -40,7 +68,7 @@ export async function sendPushNotificationToUser(userId, title, body, data = {})
 }
 
 /**
- * Birden fazla push token'a bildirim gönder
+ * Birden fazla push token'a bildirim gönder (Cloudflare Workers Proxy üzerinden)
  * @param {string[]} pushTokens - Push token array
  * @param {string} title - Bildirim başlığı
  * @param {string} body - Bildirim içeriği
@@ -49,39 +77,87 @@ export async function sendPushNotificationToUser(userId, title, body, data = {})
  */
 export async function sendPushNotificationToTokens(pushTokens, title, body, data = {}) {
   try {
-    console.log('Push notification gönderiliyor:', {
-      tokenCount: pushTokens?.length || 0,
-      title,
-      body
-    });
-
-    const { data: result, error } = await supabase.functions.invoke('send-push-notification', {
-      body: {
-        pushTokens,
-        title,
-        body,
-        data,
-      },
-    });
-
-    if (error) {
-      console.error('Push notification gönderme hatası:', error);
-      // Edge Function'dan gelen detaylı hata mesajını göster
-      if (error.context?.body) {
-        console.error('Edge Function hata detayı:', error.context.body);
-      }
-      return { success: false, error: error.message || error, details: error.context };
+    // Token kontrolü
+    if (!pushTokens || !Array.isArray(pushTokens) || pushTokens.length === 0) {
+      return { 
+        success: false, 
+        error: 'Geçerli push token bulunamadı',
+        skipLog: true // Bu hatayı loglamaya gerek yok
+      };
     }
 
-    return { success: true, result };
+    // Geçerli token'ları filtrele
+    const validTokens = pushTokens.filter(token => token && token.startsWith('ExponentPushToken'));
+    if (validTokens.length === 0) {
+      return { 
+        success: false, 
+        error: 'Geçerli Expo push token bulunamadı',
+        skipLog: true
+      };
+    }
+
+    console.log('Push notification gönderiliyor (Cloudflare Workers Proxy):', {
+      tokenCount: validTokens.length,
+      title,
+      body,
+      apiUrl: PUSH_NOTIFICATION_API_URL
+    });
+
+    // Her token için mesaj oluştur
+    const messages = validTokens.map(token => ({
+      to: token,
+      sound: 'default',
+      title: title,
+      body: body,
+      data: data || {},
+      priority: 'high',
+      channelId: 'default',
+    }));
+
+    // Cloudflare Workers proxy API üzerinden Expo Push API'ye gönder
+    const response = await fetch(PUSH_NOTIFICATION_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(messages),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Push notification gönderme hatası:', result);
+      return { 
+        success: false, 
+        error: result.error?.message || 'Bildirim gönderilemedi',
+        details: result,
+        skipLog: false
+      };
+    }
+
+    console.log('Push notification başarıyla gönderildi:', {
+      sent: result.data?.length || 0,
+      results: result.data
+    });
+
+    return { 
+      success: true, 
+      result: result.data || result,
+      sent: result.data?.length || 0
+    };
   } catch (error) {
     console.error('Push notification gönderme hatası:', error);
-    return { success: false, error: error.message || error };
+    return { 
+      success: false, 
+      error: error.message || error,
+      skipLog: false
+    };
   }
 }
 
 /**
- * Tüm aktif kullanıcılara bildirim gönder
+ * Tüm aktif kullanıcılara bildirim gönder (Cloudflare Workers Proxy üzerinden)
  * @param {string} title - Bildirim başlığı
  * @param {string} body - Bildirim içeriği
  * @param {object} data - Ek veri (opsiyonel)
@@ -89,10 +165,11 @@ export async function sendPushNotificationToTokens(pushTokens, title, body, data
  */
 export async function sendPushNotificationToAllUsers(title, body, data = {}) {
   try {
-    // Tüm aktif kullanıcıların push token'larını al
-    const { data: profiles, error } = await supabase
-      .from('kullanici_profilleri')
+    // Tüm aktif push token'ları al (is_active: true olanlar)
+    const { data: tokens, error } = await supabase
+      .from('push_tokens')
       .select('push_token')
+      .eq('is_active', true)
       .not('push_token', 'is', null);
 
     if (error) {
@@ -100,8 +177,8 @@ export async function sendPushNotificationToAllUsers(title, body, data = {}) {
       return { success: false, error };
     }
 
-    const pushTokens = profiles
-      .map(p => p.push_token)
+    const pushTokens = tokens
+      .map(t => t.push_token)
       .filter(token => token && token.startsWith('ExponentPushToken'));
 
     if (pushTokens.length === 0) {
@@ -116,7 +193,7 @@ export async function sendPushNotificationToAllUsers(title, body, data = {}) {
 }
 
 /**
- * Sipariş durumu değiştiğinde bildirim gönder
+ * Sipariş durumu değiştiğinde bildirim gönder (Cloudflare Workers Proxy üzerinden)
  * @param {string} userId - Kullanıcı ID
  * @param {string} siparisNo - Sipariş numarası
  * @param {string} durum - Yeni sipariş durumu
@@ -145,7 +222,7 @@ export async function sendOrderStatusNotification(userId, siparisNo, durum) {
 }
 
 /**
- * TEST İÇİN: Direkt Expo Push API'ye bildirim gönder (Edge Function olmadan)
+ * TEST İÇİN: Cloudflare Workers Proxy üzerinden bildirim gönder
  * @param {string} pushToken - Expo push token (ExponentPushToken[...])
  * @param {string} title - Bildirim başlığı
  * @param {string} body - Bildirim içeriği
@@ -182,16 +259,14 @@ export async function sendTestPushNotification(pushToken, title, body, data = {}
 
     console.log('Push notification gönderiliyor:', message);
 
-    const response = await fetch(EXPO_PUSH_API_URL, {
+    // Cloudflare Workers proxy API üzerinden gönder
+    const response = await fetch(PUSH_NOTIFICATION_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Accept-Encoding': 'gzip, deflate',
-        // Eğer push security enabled ise, access token ekleyin
-        ...(options.accessToken && { 'Authorization': `Bearer ${options.accessToken}` }),
       },
-      body: JSON.stringify(message),
+      body: JSON.stringify([message]), // Array olarak gönder (Cloudflare Workers bekliyor)
     });
 
     const result = await response.json();

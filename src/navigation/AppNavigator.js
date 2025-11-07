@@ -17,6 +17,8 @@ import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import AnnouncementDetailScreen from '../screens/AnnouncementDetailScreen';
 import ProductDetailScreen from '../screens/ProductDetailScreen';
 import LoginScreen from '../screens/LoginScreen';
+import SignUpScreen from '../screens/SignUpScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import KasaScreen from '../screens/KasaScreen';
 import KasaOrderDetailScreen from '../screens/KasaOrderDetailScreen';
 
@@ -255,6 +257,8 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
+        <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
+        <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
         <Stack.Screen name="KasaScreen" component={KasaStack} />
         <Stack.Screen 
           name="AnnouncementDetail" 
@@ -354,6 +358,11 @@ function MainTabNavigator() {
               
               // OrderDetail ekranındaysa tab bar'ı gizle
               if (routeName === 'OrderDetail') {
+                return { display: 'none' };
+              }
+              
+              // ProductDetail ekranındaysa tab bar'ı gizle (carousel'den veya normal açılışta)
+              if (routeName === 'ProductDetail') {
                 return { display: 'none' };
               }
               

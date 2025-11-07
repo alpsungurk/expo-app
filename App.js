@@ -8,6 +8,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { CartProvider } from './src/store/cartStore';
 import { AppProvider } from './src/store/appStore';
 import { NotificationProvider } from './src/contexts/NotificationContext';
+import { ThemeProvider } from './src/contexts/ThemeContext';
 import Toast from 'react-native-toast-message';
 
 export default function App() {
@@ -26,15 +27,17 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={styles.container}>
-        <AppProvider>
-          <CartProvider>
-            <NotificationProvider>
-              <AppNavigator />
-              <StatusBar style="light" />
-              <Toast />
-            </NotificationProvider>
-          </CartProvider>
-        </AppProvider>
+        <ThemeProvider>
+          <AppProvider>
+            <CartProvider>
+              <NotificationProvider>
+                <AppNavigator />
+                <StatusBar style="light" />
+                <Toast />
+              </NotificationProvider>
+            </CartProvider>
+          </AppProvider>
+        </ThemeProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

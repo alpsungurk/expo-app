@@ -11,10 +11,12 @@ import {
   Modal,
   Dimensions,
   Animated,
-  Platform
+  Platform,
+  StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
@@ -31,6 +33,7 @@ export default function ProductDetailScreen({ route, navigation }) {
   // Modal olarak kullanıldığında route ve navigation props olarak gelir
   const routeParams = route?.params || {};
   const { product: initialProduct } = routeParams;
+  const insets = useSafeAreaInsets();
   
   const [product, setProduct] = useState(initialProduct);
   const [quantity, setQuantity] = useState(1);
@@ -137,7 +140,8 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
+      <View style={[styles.header, { paddingTop: insets.top + (isLargeScreen ? 20 : isMediumScreen ? 16 : 12) }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -150,7 +154,10 @@ export default function ProductDetailScreen({ route, navigation }) {
 
       <ScrollView 
         style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: (isLargeScreen ? 140 : isMediumScreen ? 120 : 100) + insets.bottom }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Ürün Görseli */}
@@ -213,7 +220,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       </ScrollView>
 
       {/* Alt Bar */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + (isLargeScreen ? 20 : isMediumScreen ? 16 : 12) }]}>
         <View style={styles.quantityContainer}>
           <TouchableOpacity
             style={styles.quantityButton}
@@ -254,7 +261,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: isLargeScreen ? 60 : isMediumScreen ? 50 : 40,
     paddingBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
     paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
     backgroundColor: '#8B4513',
@@ -447,7 +453,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
     paddingTop: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
-    paddingBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 16,
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
@@ -456,6 +461,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
+    zIndex: 1000, // Tab bar'ın üstünde olması için
   },
   quantityContainer: {
     flexDirection: 'row',

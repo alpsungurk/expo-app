@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -29,36 +28,45 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
   return small;
 };
 
-export default function LoginScreen() {
+export default function SignUpScreen() {
   const navigation = useNavigation();
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) {
-      Alert.alert('Hata', 'Kullanıcı adı ve şifre gereklidir.');
+  const handleSignUp = async () => {
+    if (!username.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
+      Alert.alert('Hata', 'Tüm alanlar gereklidir.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Hata', 'Şifreler eşleşmiyor.');
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('Hata', 'Şifre en az 6 karakter olmalıdır.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Basit giriş kontrolü (gerçek uygulamada API'den kontrol edilir)
-      if (username === 'admin' && password === 'admin123') {
-        // Başarılı giriş - AsyncStorage'a kaydet
-        await AsyncStorage.multiSet([
-          ['is_logged_in', 'true'],
-          ['username', username],
-        ]);
-        navigation.navigate('KasaScreen');
-      } else {
-        Alert.alert('Hata', 'Kullanıcı adı veya şifre hatalı.');
-      }
+      // Kayıt işlemi (gerçek uygulamada API'ye gönderilir)
+      // Şimdilik sadece görünüm için
+      Alert.alert('Başarılı', 'Kayıt işlemi başarıyla tamamlandı!', [
+        {
+          text: 'Tamam',
+          onPress: () => navigation.navigate('LoginScreen')
+        }
+      ]);
     } catch (error) {
-      console.error('Giriş yapılırken hata:', error);
-      Alert.alert('Hata', 'Giriş yapılırken bir hata oluştu.');
+      Alert.alert('Hata', 'Kayıt olurken bir hata oluştu.');
     } finally {
       setIsLoading(false);
     }
@@ -73,8 +81,8 @@ export default function LoginScreen() {
     Alert.alert('Bilgi', 'Google ile giriş yakında eklenecek.');
   };
 
-  const handleSignUpPress = () => {
-    navigation.navigate('SignUpScreen');
+  const handleLoginPress = () => {
+    navigation.navigate('LoginScreen');
   };
 
   return (
@@ -91,7 +99,7 @@ export default function LoginScreen() {
           >
             <Ionicons name="arrow-back" size={24} color="#8B4513" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Giriş</Text>
+          <Text style={styles.headerTitle}>Kayıt Ol</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -106,7 +114,7 @@ export default function LoginScreen() {
             }
           ]}>
             <Ionicons 
-              name="cafe" 
+              name="person-add" 
               size={getResponsiveValue(40, 45, 50, 55)} 
               color="#8B4513" 
             />
@@ -115,17 +123,17 @@ export default function LoginScreen() {
             styles.logoText,
             { fontSize: getResponsiveValue(24, 26, 28, 30) }
           ]}>
-            Sipariş Sistemi
+            Hesap Oluştur
           </Text>
           <Text style={[
             styles.logoSubtext,
             { fontSize: getResponsiveValue(14, 15, 16, 18) }
           ]}>
-            Sipariş yönetimi için giriş yapın
+            Yeni hesap oluşturmak için bilgilerinizi girin
           </Text>
         </View>
 
-        {/* Giriş Formu */}
+        {/* Kayıt Formu */}
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
             <Text style={[
@@ -159,6 +167,43 @@ export default function LoginScreen() {
                 onChangeText={setUsername}
                 autoCapitalize="none"
                 autoCorrect={false}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={[
+              styles.inputLabel,
+              { fontSize: getResponsiveValue(14, 15, 16, 18) }
+            ]}>
+              E-posta
+            </Text>
+            <View style={[
+              styles.inputWrapper,
+              {
+                paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
+                paddingVertical: getResponsiveValue(12, 14, 16, 18),
+                borderRadius: getResponsiveValue(12, 14, 16, 18),
+              }
+            ]}>
+              <Ionicons 
+                name="mail-outline" 
+                size={getResponsiveValue(20, 22, 24, 26)} 
+                color="#8B4513" 
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={[
+                  styles.textInput,
+                  { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                ]}
+                placeholder="E-posta adresinizi girin"
+                placeholderTextColor="#9CA3AF"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
               />
             </View>
           </View>
@@ -210,9 +255,56 @@ export default function LoginScreen() {
             </View>
           </View>
 
+          <View style={styles.inputContainer}>
+            <Text style={[
+              styles.inputLabel,
+              { fontSize: getResponsiveValue(14, 15, 16, 18) }
+            ]}>
+              Şifre Tekrar
+            </Text>
+            <View style={[
+              styles.inputWrapper,
+              {
+                paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
+                paddingVertical: getResponsiveValue(12, 14, 16, 18),
+                borderRadius: getResponsiveValue(12, 14, 16, 18),
+              }
+            ]}>
+              <Ionicons 
+                name="lock-closed-outline" 
+                size={getResponsiveValue(20, 22, 24, 26)} 
+                color="#8B4513" 
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={[
+                  styles.textInput,
+                  { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                ]}
+                placeholder="Şifrenizi tekrar girin"
+                placeholderTextColor="#9CA3AF"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={styles.passwordToggle}
+              >
+                <Ionicons 
+                  name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} 
+                  size={getResponsiveValue(20, 22, 24, 26)} 
+                  color="#8B4513" 
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <TouchableOpacity
             style={[
-              styles.loginButton,
+              styles.signUpButton,
               {
                 paddingVertical: getResponsiveValue(16, 18, 20, 22),
                 paddingHorizontal: getResponsiveValue(24, 28, 32, 36),
@@ -220,23 +312,23 @@ export default function LoginScreen() {
                 marginTop: getResponsiveValue(24, 28, 32, 36),
               }
             ]}
-            onPress={handleLogin}
+            onPress={handleSignUp}
             disabled={isLoading}
           >
             {isLoading ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <View style={styles.loginButtonContent}>
+              <View style={styles.signUpButtonContent}>
                 <Ionicons 
-                  name="log-in" 
+                  name="person-add" 
                   size={getResponsiveValue(20, 22, 24, 26)} 
                   color="white" 
                 />
                 <Text style={[
-                  styles.loginButtonText,
+                  styles.signUpButtonText,
                   { fontSize: getResponsiveValue(16, 17, 18, 20) }
                 ]}>
-                  Giriş Yap
+                  Kayıt Ol
                 </Text>
               </View>
             )}
@@ -282,32 +374,22 @@ export default function LoginScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Kayıt Ol Linki */}
-          <View style={styles.signUpLinkContainer}>
+          {/* Giriş Yap Linki */}
+          <View style={styles.loginLinkContainer}>
             <Text style={[
-              styles.signUpLinkText,
+              styles.loginLinkText,
               { fontSize: getResponsiveValue(14, 15, 16, 18) }
             ]}>
-              Hesabınız yok mu?{' '}
+              Zaten hesabınız var mı?{' '}
             </Text>
-            <TouchableOpacity onPress={handleSignUpPress}>
+            <TouchableOpacity onPress={handleLoginPress}>
               <Text style={[
-                styles.signUpLinkButton,
+                styles.loginLinkButton,
                 { fontSize: getResponsiveValue(14, 15, 16, 18) }
               ]}>
-                Kayıt Ol
+                Giriş Yap
               </Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Demo Bilgisi */}
-          <View style={styles.demoInfo}>
-            <Text style={[
-              styles.demoText,
-              { fontSize: getResponsiveValue(12, 13, 14, 16) }
-            ]}>
-              Demo: admin / admin123
-            </Text>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -352,7 +434,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    paddingVertical: getResponsiveValue(40, 50, 60, 70),
+    paddingVertical: getResponsiveValue(32, 40, 48, 56),
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
   },
   logoIcon: {
@@ -380,6 +462,7 @@ const styles = StyleSheet.create({
   formContainer: {
     flex: 1,
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    paddingBottom: getResponsiveValue(20, 24, 28, 32),
   },
   inputContainer: {
     marginBottom: getResponsiveValue(20, 24, 28, 32),
@@ -415,7 +498,7 @@ const styles = StyleSheet.create({
     padding: getResponsiveValue(4, 5, 6, 8),
     marginLeft: getResponsiveValue(8, 10, 12, 14),
   },
-  loginButton: {
+  signUpButton: {
     backgroundColor: '#8B4513',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -423,27 +506,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  loginButtonContent: {
+  signUpButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: getResponsiveValue(8, 10, 12, 14),
   },
-  loginButtonText: {
+  signUpButtonText: {
     color: 'white',
     fontWeight: '600',
-    fontFamily: 'System',
-  },
-  demoInfo: {
-    alignItems: 'center',
-    marginTop: getResponsiveValue(20, 24, 28, 32),
-    padding: getResponsiveValue(12, 14, 16, 18),
-    backgroundColor: 'rgba(139, 69, 19, 0.05)',
-    borderRadius: getResponsiveValue(8, 10, 12, 14),
-  },
-  demoText: {
-    color: '#8B4513',
-    fontWeight: '500',
     fontFamily: 'System',
   },
   dividerContainer: {
@@ -482,19 +553,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'System',
   },
-  signUpLinkContainer: {
+  loginLinkContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: getResponsiveValue(20, 24, 28, 32),
   },
-  signUpLinkText: {
+  loginLinkText: {
     color: '#6B7280',
     fontFamily: 'System',
   },
-  signUpLinkButton: {
+  loginLinkButton: {
     color: '#8B4513',
     fontWeight: '600',
     fontFamily: 'System',
   },
 });
+

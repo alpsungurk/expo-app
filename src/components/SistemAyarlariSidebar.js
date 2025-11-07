@@ -7,7 +7,8 @@ import {
   ScrollView,
   Modal,
   Dimensions,
-  Linking
+  Linking,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
@@ -31,8 +32,6 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 const SistemAyarlariListesi = () => {
   const { getSistemAyarı } = useAppStore();
   const [activeTab, setActiveTab] = useState('bilgi');
-  
-  const kafeAdi = getSistemAyarı('kafe_adi');
   
   const bilgiAyarlari = [
     { key: 'calisma_saatleri', label: 'Çalışma Saatleri', icon: 'time', value: getSistemAyarı('calisma_saatleri') },
@@ -134,30 +133,6 @@ const SistemAyarlariListesi = () => {
 
   return (
     <View style={styles.ayarlarContainer}>
-      {/* Kafe Adı Başlık */}
-      <View style={styles.kafeAdiContainer}>
-        <View style={[
-          styles.kafeAdiIcon,
-          {
-            width: getResponsiveValue(50, 55, 60, 65),
-            height: getResponsiveValue(50, 55, 60, 65),
-            borderRadius: getResponsiveValue(25, 27, 30, 32),
-          }
-        ]}>
-          <Ionicons 
-            name="cafe" 
-            size={getResponsiveValue(28, 30, 32, 34)} 
-            color="#8B4513" 
-          />
-        </View>
-        <Text style={[
-          styles.kafeAdiText,
-          { fontSize: getResponsiveValue(20, 22, 24, 26) }
-        ]}>
-          {kafeAdi || 'Kafe'}
-        </Text>
-      </View>
-
       {/* Sekmeler */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
@@ -224,10 +199,18 @@ const SistemAyarlariListesi = () => {
 // Ana Sidebar Component
 const SistemAyarlariSidebar = ({ visible, onClose }) => {
   const navigation = useNavigation();
+  const { getSistemAyarı } = useAppStore();
+  
+  const kafeAdi = getSistemAyarı('kafe_adi');
 
   const handleLoginPress = () => {
     onClose(); // Sidebar'ı kapat
     navigation.navigate('LoginScreen');
+  };
+
+  const handleSettingsPress = () => {
+    onClose(); // Sidebar'ı kapat
+    navigation.navigate('SettingsScreen');
   };
 
   return (
@@ -237,113 +220,231 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
       transparent={true}
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <View style={[
-          styles.sidebar,
-          {
-            width: getResponsiveValue(width * 0.9, width * 0.8, width * 0.7, width * 0.6)
-          }
-        ]}>
-          <TouchableOpacity
-            style={[
-              styles.closeButton,
-              {
-                width: getResponsiveValue(40, 42, 45, 48),
-                height: getResponsiveValue(40, 42, 45, 48),
-                borderRadius: getResponsiveValue(20, 21, 22, 24),
-              }
-            ]}
-            onPress={onClose}
-          >
-            <Ionicons name="close" size={getResponsiveValue(18, 20, 22, 24)} color="#8B4513" />
-          </TouchableOpacity>
-
-          <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
-            {/* Giriş Yap Butonu */}
-            <TouchableOpacity
-              style={[
-                styles.loginButton,
+      <View style={styles.modalContainer}>
+        <View 
+          style={[
+            styles.sidebar,
+            {
+              width: getResponsiveValue(width * 0.85, width * 0.75, width * 0.65, width * 0.55)
+            }
+          ]}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+        >
+          {/* Kafe Adı Header Bar - En Üstte */}
+          <View style={styles.kafeAdiHeaderBar}>
+            <View style={styles.kafeAdiHeaderContent}>
+              <View style={[
+                styles.kafeAdiIcon,
                 {
-                  paddingVertical: getResponsiveValue(16, 18, 20, 22),
-                  paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
-                  marginBottom: getResponsiveValue(20, 24, 28, 32),
-                  borderRadius: getResponsiveValue(12, 14, 16, 18),
+                  width: getResponsiveValue(40, 44, 48, 52),
+                  height: getResponsiveValue(40, 44, 48, 52),
+                  borderRadius: getResponsiveValue(20, 22, 24, 26),
                 }
-              ]}
-              onPress={handleLoginPress}
-            >
-              <View style={styles.loginButtonContent}>
-                <View style={[
-                  styles.loginIcon,
-                  {
-                    width: getResponsiveValue(40, 44, 48, 52),
-                    height: getResponsiveValue(40, 44, 48, 52),
-                    borderRadius: getResponsiveValue(20, 22, 24, 26),
-                  }
-                ]}>
-                  <Ionicons 
-                    name="log-in" 
-                    size={getResponsiveValue(20, 22, 24, 26)} 
-                    color="white" 
-                  />
-                </View>
-                <Text style={[
-                  styles.loginButtonText,
-                  { fontSize: getResponsiveValue(16, 17, 18, 20) }
-                ]}>
-                  Giriş
-                </Text>
+              ]}>
                 <Ionicons 
-                  name="chevron-forward" 
-                  size={getResponsiveValue(16, 18, 20, 22)} 
-                  color="white" 
+                  name="cafe" 
+                  size={getResponsiveValue(22, 24, 26, 28)} 
+                  color="#8B4513" 
                 />
               </View>
+              <Text style={[
+                styles.kafeAdiText,
+                { fontSize: getResponsiveValue(18, 20, 22, 24) }
+              ]}>
+                {kafeAdi || 'Kafe'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.closeButton,
+                {
+                  width: getResponsiveValue(32, 36, 40, 44),
+                  height: getResponsiveValue(32, 36, 40, 44),
+                  borderRadius: getResponsiveValue(16, 18, 20, 22),
+                }
+              ]}
+              onPress={onClose}
+            >
+              <Ionicons name="close" size={getResponsiveValue(18, 20, 22, 24)} color="#8B4513" />
             </TouchableOpacity>
+          </View>
 
-            <SistemAyarlariListesi />
-          </ScrollView>
+          <View style={styles.sidebarWrapper}>
+            <ScrollView 
+              style={styles.sidebarContent} 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContent}
+            >
+              <SistemAyarlariListesi />
+            </ScrollView>
+
+            {/* Ayarlar Butonu */}
+            <View style={styles.settingsButtonContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.settingsButton,
+                  {
+                    paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+                    borderRadius: getResponsiveValue(16, 18, 20, 22),
+                  }
+                ]}
+                onPress={handleSettingsPress}
+              >
+                <View style={styles.settingsButtonContent}>
+                  <Ionicons 
+                    name="settings-outline" 
+                    size={getResponsiveValue(22, 24, 26, 28)} 
+                    color="#8B4513" 
+                  />
+                  <Text style={[
+                    styles.settingsButtonText,
+                    { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                  ]}>
+                    Ayarlar
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Giriş Yap Butonu - En Altta */}
+            <View style={styles.loginButtonContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.loginButton,
+                  {
+                    paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+                    borderRadius: getResponsiveValue(16, 18, 20, 22),
+                  }
+                ]}
+                onPress={handleLoginPress}
+              >
+                <View style={styles.loginButtonContent}>
+                  <Ionicons 
+                    name="log-in" 
+                    size={getResponsiveValue(22, 24, 26, 28)} 
+                    color="white" 
+                  />
+                  <Text style={[
+                    styles.loginButtonText,
+                    { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                  ]}>
+                    Giriş Yap
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
   // Modal ve Sidebar Stilleri
+  modalContainer: {
+    flex: 1,
+    flexDirection: 'row',
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(107, 114, 128, 0.6)', // Gri tonları
-    justifyContent: 'flex-start',
+    backgroundColor: 'rgba(107, 114, 128, 0.6)',
   },
   sidebar: {
-    width: getResponsiveValue(width * 0.8, width * 0.7, width * 0.6, width * 0.5),
     height: '100%',
-    backgroundColor: 'white',
-    padding: getResponsiveValue(25, 30, 35, 40),
+    backgroundColor: '#F9FAFB',
+    padding: 0,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+    elevation: 15,
+  },
+  kafeAdiHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    paddingVertical: getResponsiveValue(16, 18, 20, 22),
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  kafeAdiHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   closeButton: {
-    alignSelf: 'flex-end',
-    width: getResponsiveValue(40, 45, 50, 55),
-    height: getResponsiveValue(40, 45, 50, 55),
-    borderRadius: getResponsiveValue(20, 22, 25, 27),
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
+    backgroundColor: 'rgba(139, 69, 19, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: getResponsiveValue(22, 25, 30, 35),
+  },
+  sidebarWrapper: {
+    flex: 1,
   },
   sidebarContent: {
     flex: 1,
-    paddingTop: getResponsiveValue(10, 12, 14, 16),
+    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    paddingTop: getResponsiveValue(16, 18, 20, 22),
+  },
+  scrollContent: {
+    paddingTop: getResponsiveValue(8, 10, 12, 14),
+    paddingBottom: getResponsiveValue(100, 110, 120, 130),
+  },
+  settingsButtonContainer: {
+    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    paddingTop: getResponsiveValue(16, 18, 20, 22),
+    paddingBottom: getResponsiveValue(12, 14, 16, 18),
+    backgroundColor: '#F9FAFB',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  settingsButton: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 69, 19, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  settingsButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: getResponsiveValue(10, 12, 14, 16),
+  },
+  settingsButtonText: {
+    color: '#8B4513',
+    fontWeight: '600',
+    fontFamily: 'System',
+    letterSpacing: 0.3,
+  },
+  loginButtonContainer: {
+    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    paddingVertical: getResponsiveValue(12, 14, 16, 18),
+    paddingBottom: getResponsiveValue(24, 28, 32, 36),
+    backgroundColor: '#F9FAFB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 5,
   },
   
   // Sistem Ayarları Stilleri
@@ -352,82 +453,76 @@ const styles = StyleSheet.create({
   },
   ayarItem: {
     backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 69, 19, 0.2)',
+    borderWidth: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   ayarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   ayarIcon: {
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
+    backgroundColor: 'rgba(139, 69, 19, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: getResponsiveValue(12, 14, 16, 18),
+    marginRight: getResponsiveValue(14, 16, 18, 20),
   },
   ayarLabel: {
     fontWeight: '600',
     fontFamily: 'System',
-    color: '#8B4513',
+    color: '#1F2937',
     flex: 1,
+    letterSpacing: 0.2,
   },
   ayarValue: {
     color: '#6B7280',
     fontWeight: '400',
     fontFamily: 'System',
+    lineHeight: getResponsiveValue(20, 22, 24, 26),
   },
   
   // Kafe Adı Stilleri
-  kafeAdiContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: getResponsiveValue(20, 24, 28, 32),
-    paddingVertical: getResponsiveValue(16, 18, 20, 22),
-    backgroundColor: 'rgba(139, 69, 19, 0.05)',
-    borderRadius: getResponsiveValue(12, 14, 16, 18),
-  },
   kafeAdiIcon: {
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
+    backgroundColor: 'rgba(139, 69, 19, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: getResponsiveValue(12, 14, 16, 18),
   },
   kafeAdiText: {
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontFamily: 'System',
     color: '#8B4513',
-    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   
   // Sekme Stilleri
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(139, 69, 19, 0.05)',
-    borderRadius: getResponsiveValue(10, 12, 14, 16),
-    padding: getResponsiveValue(4, 6, 8, 10),
-    marginBottom: getResponsiveValue(20, 24, 28, 32),
+    backgroundColor: '#F3F4F6',
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    padding: getResponsiveValue(4, 5, 6, 8),
+    marginBottom: getResponsiveValue(24, 28, 32, 36),
+    gap: getResponsiveValue(4, 5, 6, 8),
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: getResponsiveValue(10, 12, 14, 16),
   },
   activeTab: {
     backgroundColor: '#8B4513',
-    shadowColor: '#000',
+    shadowColor: '#8B4513',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 4,
   },
   tabText: {
-    color: '#8B4513',
+    color: '#6B7280',
     fontWeight: '600',
     fontFamily: 'System',
   },
@@ -443,28 +538,23 @@ const styles = StyleSheet.create({
   // Login Button Stilleri
   loginButton: {
     backgroundColor: '#8B4513',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   loginButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  loginIcon: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: getResponsiveValue(12, 14, 16, 18),
+    gap: getResponsiveValue(10, 12, 14, 16),
   },
   loginButtonText: {
     color: 'white',
-    fontWeight: '600',
+    fontWeight: '700',
     fontFamily: 'System',
-    flex: 1,
+    letterSpacing: 0.5,
   },
 });
 
