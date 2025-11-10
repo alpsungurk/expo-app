@@ -34,7 +34,9 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
-  const { user, userProfile, loadUserProfile } = useAppStore();
+  const appStore = useAppStore();
+  const { user, userProfile } = appStore;
+  const loadUserProfile = appStore?.loadUserProfile;
   const insets = useSafeAreaInsets();
   const isLoggedIn = !!user;
 
@@ -101,7 +103,21 @@ export default function SettingsScreen() {
       }
 
       // Profili yeniden yükle
-      await loadUserProfile(user.id);
+      if (loadUserProfile && typeof loadUserProfile === 'function') {
+        await loadUserProfile(user.id);
+      } else {
+        // Fallback: Direkt Supabase'den profil yükle
+        console.warn('loadUserProfile fonksiyonu bulunamadı, direkt Supabase\'den yükleniyor');
+        const { data: profileData, error: profileError } = await supabase
+          .from('kullanici_profilleri')
+          .select('*, roller(*)')
+          .eq('id', user.id)
+          .single();
+        
+        if (!profileError && profileData && appStore?.setUserProfile) {
+          appStore.setUserProfile(profileData);
+        }
+      }
 
       showSuccess('Profil bilgileri başarıyla güncellendi.');
     } catch (error) {

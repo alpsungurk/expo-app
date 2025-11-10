@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
+import { useAppStore } from '../store/appStore';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -149,12 +150,21 @@ const CARD_THEMES = [
 
 export default function KasaScreen() {
   const navigation = useNavigation();
+  const { userProfile } = useAppStore();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [newOrderNotification, setNewOrderNotification] = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Rol kontrolü - Sadece kasa rolü (id: 3) erişebilir
+  useEffect(() => {
+    if (userProfile && userProfile.rol_id !== 3) {
+      // Kasa rolü değilse ana ekrana yönlendir
+      navigation.navigate('MainTabs');
+    }
+  }, [userProfile, navigation]);
 
   const loadOrders = React.useCallback(async () => {
     try {

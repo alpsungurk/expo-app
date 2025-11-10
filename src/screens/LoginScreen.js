@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ScrollView,
+  InteractionManager
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -33,7 +35,8 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 
 export default function LoginScreen() {
   const navigation = useNavigation();
-  const { loadUserProfile } = useAppStore();
+  const appStore = useAppStore();
+  const loadUserProfile = appStore?.loadUserProfile;
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,11 +66,36 @@ export default function LoginScreen() {
 
       if (data.user) {
         // Kullanıcı profilini yükle
-        const profile = await loadUserProfile(data.user.id);
+        let profile = null;
+        if (loadUserProfile && typeof loadUserProfile === 'function') {
+          profile = await loadUserProfile(data.user.id);
+        } else {
+          // Fallback: Direkt Supabase'den profil yükle
+          console.warn('loadUserProfile fonksiyonu bulunamadı, direkt Supabase\'den yükleniyor');
+          const { data: profileData, error: profileError } = await supabase
+            .from('kullanici_profilleri')
+            .select('*, roller(*)')
+            .eq('id', data.user.id)
+            .single();
+          
+          if (!profileError && profileData) {
+            profile = profileData;
+            if (appStore?.setUserProfile) {
+              appStore.setUserProfile(profileData);
+            }
+          }
+        }
         
-        // Başarılı giriş toast mesajı
-        showSuccess('Giriş yapıldı', 'Hoş geldiniz!');
+        // Aktif kontrolü - Pasif kullanıcılar giriş yapamaz
+        if (profile && profile.aktif === false) {
+          // Kullanıcıyı çıkış yaptır
+          await supabase.auth.signOut();
+          showError('Hesabınız pasif durumda. Giriş yapamazsınız. Lütfen yönetici ile iletişime geçin.');
+          setIsLoading(false);
+          return;
+        }
         
+        // Navigation'ı hemen yap (kullanıcı deneyimi için önemli)
         if (profile) {
           // Rol kontrolü - Kasa rolü (id: 3) ise KasaScreen'e yönlendir
           if (profile.rol_id === 3) {
@@ -80,6 +108,11 @@ export default function LoginScreen() {
           // Profil yoksa ana ekrana dön
           navigation.goBack();
         }
+        
+        // Toast mesajını navigation animasyonları tamamlandıktan sonra göster
+        InteractionManager.runAfterInteractions(() => {
+          showSuccess('Giriş yapıldı', 'Hoş geldiniz!');
+        });
       }
     } catch (error) {
       console.error('Giriş yapılırken hata:', error);
@@ -123,30 +156,36 @@ export default function LoginScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        {/* Logo ve Başlık */}
-        <View style={styles.logoContainer}>
-          <Ionicons 
-            name="cafe" 
-            size={getResponsiveValue(50, 56, 62, 68)} 
-            color="#8B4513"
-            style={styles.logoIcon}
-          />
-          <Text style={[
-            styles.logoText,
-            { fontSize: getResponsiveValue(24, 26, 28, 30) }
-          ]}>
-            Sipariş Sistemi
-          </Text>
-          <Text style={[
-            styles.logoSubtext,
-            { fontSize: getResponsiveValue(14, 15, 16, 18) }
-          ]}>
-            Sipariş yönetimi için giriş yapın
-          </Text>
-        </View>
-
         {/* Giriş Formu */}
-        <View style={styles.formContainer}>
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContentContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Logo ve Başlık */}
+          <View style={styles.logoContainer}>
+            <Ionicons 
+              name="cafe" 
+              size={getResponsiveValue(50, 56, 62, 68)} 
+              color="#8B4513"
+              style={styles.logoIcon}
+            />
+            <Text style={[
+              styles.logoText,
+              { fontSize: getResponsiveValue(24, 26, 28, 30) }
+            ]}>
+              Sipariş Sistemi
+            </Text>
+            <Text style={[
+              styles.logoSubtext,
+              { fontSize: getResponsiveValue(14, 15, 16, 18) }
+            ]}>
+              Sipariş yönetimi için giriş yapın
+            </Text>
+          </View>
+
+          <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
             <Text style={[
               styles.inputLabel,
@@ -320,8 +359,8 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -334,6 +373,12 @@ const styles = StyleSheet.create({
   },
   keyboardContainer: {
     flex: 1,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    paddingBottom: getResponsiveValue(40, 48, 56, 64),
   },
   header: {
     flexDirection: 'row',
@@ -366,6 +411,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: getResponsiveValue(40, 50, 60, 70),
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    paddingTop: getResponsiveValue(20, 24, 28, 32),
   },
   logoIcon: {
     marginBottom: getResponsiveValue(16, 18, 20, 22),
@@ -382,7 +428,6 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   formContainer: {
-    flex: 1,
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
   },
   inputContainer: {

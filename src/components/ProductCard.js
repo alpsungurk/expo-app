@@ -157,13 +157,27 @@ export default function ProductCard({ product, onPress, onAddToCart, onProductDe
               <Text style={[
                 styles.price,
                 { fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16 }
-              ]}>{formatPrice(product.fiyat)}</Text>
-              <Text style={[
-                styles.preparationTime,
-                { fontSize: isLargeScreen ? 13 : isMediumScreen ? 12 : 10 }
-              ]}>
-                {getPreparationTime(product.hazirlanma_suresi)}
+              ]} numberOfLines={1} ellipsizeMode="tail">
+                {formatPrice(product.fiyat)}
               </Text>
+              <View style={styles.preparationTimeContainer}>
+                <Ionicons 
+                  name="time-outline" 
+                  size={isLargeScreen ? 12 : isMediumScreen ? 11 : 10} 
+                  color="#9CA3AF" 
+                  style={styles.timeIcon}
+                />
+                <Text 
+                  style={[
+                    styles.preparationTime,
+                    { fontSize: isLargeScreen ? 13 : isMediumScreen ? 12 : 10 }
+                  ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {getPreparationTime(product.hazirlanma_suresi)}
+                </Text>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -271,15 +285,27 @@ const styles = StyleSheet.create({
   },
   priceContainer: {
     flex: 1,
+    minWidth: 0, // Text overflow için önemli
+    marginRight: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
   },
   price: {
     fontWeight: 'bold',
     fontFamily: 'System',
     color: '#8B4513',
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  preparationTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  timeIcon: {
+    marginRight: 4,
   },
   preparationTime: {
     color: '#9CA3AF',
+    fontFamily: 'System',
+    flexShrink: 1,
   },
   addButton: {
     backgroundColor: '#8B4513',

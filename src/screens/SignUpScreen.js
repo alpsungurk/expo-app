@@ -34,7 +34,8 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 
 export default function SignUpScreen() {
   const navigation = useNavigation();
-  const { loadUserProfile } = useAppStore();
+  const appStore = useAppStore();
+  const loadUserProfile = appStore?.loadUserProfile;
   const insets = useSafeAreaInsets();
   const [ad, setAd] = useState('');
   const [soyad, setSoyad] = useState('');
@@ -45,6 +46,27 @@ export default function SignUpScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Şifre doğrulama fonksiyonu
+  const validatePassword = (pwd) => {
+    if (pwd.length < 8) {
+      return { valid: false, message: 'Şifre en az 8 karakter olmalıdır.' };
+    }
+    
+    if (!/[a-z]/.test(pwd)) {
+      return { valid: false, message: 'Şifre en az bir küçük harf içermelidir.' };
+    }
+    
+    if (!/[A-Z]/.test(pwd)) {
+      return { valid: false, message: 'Şifre en az bir büyük harf içermelidir.' };
+    }
+    
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) {
+      return { valid: false, message: 'Şifre en az bir özel karakter içermelidir (!@#$%^&* vb.).' };
+    }
+    
+    return { valid: true };
+  };
 
   const handleSignUp = async () => {
     if (!ad.trim() || !soyad.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
@@ -57,8 +79,10 @@ export default function SignUpScreen() {
       return;
     }
 
-    if (password.length < 6) {
-      showError('Şifre en az 6 karakter olmalıdır.');
+    // Şifre doğrulama
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      showError(passwordValidation.message);
       return;
     }
 
@@ -114,7 +138,21 @@ export default function SignUpScreen() {
         }
 
         // Profili yükle
-        await loadUserProfile(authData.user.id);
+        if (loadUserProfile && typeof loadUserProfile === 'function') {
+          await loadUserProfile(authData.user.id);
+        } else {
+          // Fallback: Direkt Supabase'den profil yükle
+          console.warn('loadUserProfile fonksiyonu bulunamadı, direkt Supabase\'den yükleniyor');
+          const { data: profileData, error: profileError } = await supabase
+            .from('kullanici_profilleri')
+            .select('*, roller(*)')
+            .eq('id', authData.user.id)
+            .single();
+          
+          if (!profileError && profileData && appStore?.setUserProfile) {
+            appStore.setUserProfile(profileData);
+          }
+        }
 
         showSuccess('Kayıt işlemi başarıyla tamamlandı!');
         setTimeout(() => {
@@ -163,36 +201,37 @@ export default function SignUpScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        {/* Logo ve Başlık */}
-        <View style={styles.logoContainer}>
-          <Ionicons 
-            name="person-add" 
-            size={getResponsiveValue(40, 44, 48, 52)} 
-            color="#8B4513"
-            style={styles.logoIcon}
-          />
-          <Text style={[
-            styles.logoText,
-            { fontSize: getResponsiveValue(20, 22, 24, 26) }
-          ]}>
-            Hesap Oluştur
-          </Text>
-          <Text style={[
-            styles.logoSubtext,
-            { fontSize: getResponsiveValue(12, 13, 14, 16) }
-          ]}>
-            Yeni hesap oluşturmak için bilgilerinizi girin
-          </Text>
-        </View>
-
         {/* Kayıt Formu */}
         <ScrollView 
-          style={styles.formContainer}
-          contentContainerStyle={styles.formContentContainer}
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContentContainer}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.inputContainer}>
+          {/* Logo ve Başlık */}
+          <View style={styles.logoContainer}>
+            <Ionicons 
+              name="person-add" 
+              size={getResponsiveValue(40, 44, 48, 52)} 
+              color="#8B4513"
+              style={styles.logoIcon}
+            />
+            <Text style={[
+              styles.logoText,
+              { fontSize: getResponsiveValue(20, 22, 24, 26) }
+            ]}>
+              Hesap Oluştur
+            </Text>
+            <Text style={[
+              styles.logoSubtext,
+              { fontSize: getResponsiveValue(12, 13, 14, 16) }
+            ]}>
+              Yeni hesap oluşturmak için bilgilerinizi girin
+            </Text>
+          </View>
+
+          <View style={styles.formContainer}>
+            <View style={styles.inputContainer}>
             <Text style={[
               styles.inputLabel,
               { fontSize: getResponsiveValue(14, 15, 16, 18) }
@@ -383,6 +422,43 @@ export default function SignUpScreen() {
                 />
               </TouchableOpacity>
             </View>
+            {/* Şifre Gereksinimleri */}
+            <View style={styles.passwordRequirements}>
+              <Text style={[
+                styles.passwordRequirementText,
+                { fontSize: getResponsiveValue(11, 12, 13, 14) }
+              ]}>
+                Şifre gereksinimleri:
+              </Text>
+              <Text style={[
+                styles.passwordRequirementItem,
+                { fontSize: getResponsiveValue(11, 12, 13, 14) },
+                password.length >= 8 && styles.passwordRequirementMet
+              ]}>
+                • En az 8 karakter
+              </Text>
+              <Text style={[
+                styles.passwordRequirementItem,
+                { fontSize: getResponsiveValue(11, 12, 13, 14) },
+                /[a-z]/.test(password) && styles.passwordRequirementMet
+              ]}>
+                • En az bir küçük harf
+              </Text>
+              <Text style={[
+                styles.passwordRequirementItem,
+                { fontSize: getResponsiveValue(11, 12, 13, 14) },
+                /[A-Z]/.test(password) && styles.passwordRequirementMet
+              ]}>
+                • En az bir büyük harf
+              </Text>
+              <Text style={[
+                styles.passwordRequirementItem,
+                { fontSize: getResponsiveValue(11, 12, 13, 14) },
+                /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password) && styles.passwordRequirementMet
+              ]}>
+                • En az bir özel karakter (!@#$%^&* vb.)
+              </Text>
+            </View>
           </View>
 
           <View style={styles.inputContainer}>
@@ -521,6 +597,7 @@ export default function SignUpScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -562,10 +639,18 @@ const styles = StyleSheet.create({
   placeholder: {
     width: getResponsiveValue(40, 44, 48, 52),
   },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    flexGrow: 1,
+    paddingBottom: getResponsiveValue(40, 48, 56, 64),
+  },
   logoContainer: {
     alignItems: 'center',
     paddingVertical: getResponsiveValue(16, 20, 24, 28),
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    paddingTop: getResponsiveValue(20, 24, 28, 32),
   },
   logoIcon: {
     marginBottom: getResponsiveValue(8, 10, 12, 14),
@@ -582,11 +667,7 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   formContainer: {
-    flex: 1,
-  },
-  formContentContainer: {
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-    paddingBottom: getResponsiveValue(40, 48, 56, 64),
     paddingTop: getResponsiveValue(8, 10, 12, 14),
   },
   inputContainer: {
@@ -628,6 +709,27 @@ const styles = StyleSheet.create({
   passwordToggle: {
     padding: getResponsiveValue(4, 5, 6, 8),
     marginLeft: getResponsiveValue(8, 10, 12, 14),
+  },
+  passwordRequirements: {
+    marginTop: getResponsiveValue(8, 10, 12, 14),
+    padding: getResponsiveValue(12, 14, 16, 18),
+    backgroundColor: 'rgba(139, 69, 19, 0.05)',
+    borderRadius: getResponsiveValue(8, 10, 12, 14),
+  },
+  passwordRequirementText: {
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: getResponsiveValue(4, 5, 6, 8),
+    fontFamily: 'System',
+  },
+  passwordRequirementItem: {
+    color: '#6B7280',
+    marginTop: getResponsiveValue(2, 3, 4, 5),
+    fontFamily: 'System',
+  },
+  passwordRequirementMet: {
+    color: '#10B981',
+    fontWeight: '500',
   },
   signUpButton: {
     backgroundColor: '#8B4513',

@@ -7,7 +7,8 @@ import {
   ScrollView,
   Modal,
   Dimensions,
-  Linking
+  Linking,
+  InteractionManager
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
@@ -206,8 +207,12 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
   const isLoggedIn = !!user;
 
   const handleLoginPress = () => {
-    onClose(); // Sidebar'ı kapat
+    // Navigation'ı hemen yap (kullanıcı deneyimi için önemli)
     navigation.navigate('LoginScreen');
+    // Modal'ı animasyonlar tamamlandıktan sonra kapat
+    InteractionManager.runAfterInteractions(() => {
+      onClose();
+    });
   };
 
   const handleLogoutPress = async () => {
@@ -222,8 +227,12 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
   };
 
   const handleSettingsPress = () => {
-    onClose(); // Sidebar'ı kapat
+    // Navigation'ı hemen yap (kullanıcı deneyimi için önemli)
     navigation.navigate('SettingsScreen');
+    // Modal'ı animasyonlar tamamlandıktan sonra kapat
+    InteractionManager.runAfterInteractions(() => {
+      onClose();
+    });
   };
 
   // Kullanıcı adını oluştur

@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../config/supabase';
 
 // Initial state
 const initialState = {
@@ -16,6 +17,8 @@ const initialState = {
   sistemAyarlari: [],
   isProductModalOpen: false, // Product detail modal durumu
   phoneToken: null, // Cihaz kimliği
+  user: null, // Kullanıcı bilgisi (auth.users)
+  userProfile: null, // Kullanıcı profili (kullanici_profilleri)
 };
 
 // Action types
@@ -32,7 +35,9 @@ const APP_ACTIONS = {
   SET_PRODUCTS: 'SET_PRODUCTS',
   SET_SISTEM_AYARLARI: 'SET_SISTEM_AYARLARI',
   SET_PRODUCT_MODAL_OPEN: 'SET_PRODUCT_MODAL_OPEN',
-  SET_PHONE_TOKEN: 'SET_PHONE_TOKEN'
+  SET_PHONE_TOKEN: 'SET_PHONE_TOKEN',
+  SET_USER: 'SET_USER',
+  SET_USER_PROFILE: 'SET_USER_PROFILE'
 };
 
 // Reducer
@@ -64,6 +69,10 @@ const appReducer = (state, action) => {
       return { ...state, isProductModalOpen: action.payload };
     case APP_ACTIONS.SET_PHONE_TOKEN:
       return { ...state, phoneToken: action.payload };
+    case APP_ACTIONS.SET_USER:
+      return { ...state, user: action.payload };
+    case APP_ACTIONS.SET_USER_PROFILE:
+      return { ...state, userProfile: action.payload };
     default:
       return state;
   }
@@ -128,6 +137,41 @@ export const AppProvider = ({ children }) => {
     dispatch({ type: APP_ACTIONS.SET_PHONE_TOKEN, payload: token });
   };
 
+  const setUser = (user) => {
+    dispatch({ type: APP_ACTIONS.SET_USER, payload: user });
+  };
+
+  const setUserProfile = (profile) => {
+    dispatch({ type: APP_ACTIONS.SET_USER_PROFILE, payload: profile });
+  };
+
+  // Kullanıcı profilini yükle
+  const loadUserProfile = useCallback(async (userId) => {
+    try {
+      if (!userId) {
+        console.error('loadUserProfile: userId gerekli');
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('kullanici_profilleri')
+        .select('*, roller(*)')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Kullanıcı profili yükleme hatası:', error);
+        return null;
+      }
+
+      setUserProfile(data);
+      return data;
+    } catch (error) {
+      console.error('Kullanıcı profili yükleme hatası:', error);
+      return null;
+    }
+  }, [setUserProfile]);
+
   // Phone token'ı yükle
   useEffect(() => {
     const loadPhoneToken = async () => {
@@ -146,6 +190,44 @@ export const AppProvider = ({ children }) => {
     };
     loadPhoneToken();
   }, []);
+
+  // Auth state listener
+  useEffect(() => {
+    // Mevcut session'ı kontrol et
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        setUser(session.user);
+        const profile = await loadUserProfile(session.user.id);
+        // Aktif kontrolü - Pasif kullanıcıları otomatik çıkış yaptır
+        if (profile && profile.aktif === false) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setUserProfile(null);
+        }
+      }
+    });
+
+    // Auth state değişikliklerini dinle
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        setUser(session.user);
+        const profile = await loadUserProfile(session.user.id);
+        // Aktif kontrolü - Pasif kullanıcıları otomatik çıkış yaptır
+        if (profile && profile.aktif === false) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setUserProfile(null);
+        }
+      } else {
+        setUser(null);
+        setUserProfile(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [loadUserProfile]);
   
 
   const getActiveCampaigns = () => {
@@ -205,6 +287,9 @@ export const AppProvider = ({ children }) => {
     setProductModalOpen,
     setPhoneToken,
     getActiveOrdersCount,
+    setUser,
+    setUserProfile,
+    loadUserProfile,
   };
 
   return (
