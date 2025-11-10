@@ -17,7 +17,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     headers: {
-      'ngrok-skip-browser-warning': 'true'
+      // Cloudflare Tunnel kullanıldığı için ngrok header'ına gerek yok
     }
   }
 });

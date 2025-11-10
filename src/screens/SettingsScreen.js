@@ -622,6 +622,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
     paddingTop: getResponsiveValue(24, 28, 32, 36),
     paddingBottom: getResponsiveValue(40, 48, 56, 64),
