@@ -11,7 +11,8 @@ import {
   Dimensions,
   RefreshControl,
   Modal,
-  Animated
+  Animated,
+  SafeAreaView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -150,7 +151,7 @@ const CARD_THEMES = [
 
 export default function KasaScreen() {
   const navigation = useNavigation();
-  const { userProfile } = useAppStore();
+  const { userProfile, setUser, setUserProfile } = useAppStore();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -228,17 +229,38 @@ export default function KasaScreen() {
   const filterOrders = React.useCallback(() => {
     console.log('KasaScreen: filterOrders çağrılıyor, orders sayısı:', orders.length);
     // Her masadan sadece 1 tane göster (en son sipariş)
+    // İptal edilen siparişler de gösterilmeli
     const uniqueMasaOrders = {};
     orders.forEach(order => {
       const masaNo = order.masalar?.masa_no || order.masa_no;
-      if (!uniqueMasaOrders[masaNo] || 
-          new Date(order.olusturma_tarihi) > new Date(uniqueMasaOrders[masaNo].olusturma_tarihi)) {
+      // Eğer bu masa için henüz sipariş yoksa veya
+      // Bu sipariş daha yeni ise veya
+      // Mevcut sipariş iptal edilmiş ve bu sipariş iptal edilmemiş ise
+      if (!uniqueMasaOrders[masaNo]) {
         uniqueMasaOrders[masaNo] = order;
+      } else {
+        const existingOrder = uniqueMasaOrders[masaNo];
+        const existingDate = new Date(existingOrder.olusturma_tarihi);
+        const newDate = new Date(order.olusturma_tarihi);
+        
+        // Eğer mevcut sipariş iptal edilmiş ve yeni sipariş iptal edilmemiş ise, yeni siparişi göster
+        if (existingOrder.durum === 'iptal' && order.durum !== 'iptal') {
+          uniqueMasaOrders[masaNo] = order;
+        } 
+        // Eğer yeni sipariş daha yeni ise, yeni siparişi göster
+        else if (newDate > existingDate) {
+          uniqueMasaOrders[masaNo] = order;
+        }
+        // Eğer her ikisi de iptal edilmiş ise, daha yeni olanı göster
+        else if (existingOrder.durum === 'iptal' && order.durum === 'iptal' && newDate > existingDate) {
+          uniqueMasaOrders[masaNo] = order;
+        }
       }
     });
     
     const filtered = Object.values(uniqueMasaOrders);
     console.log('KasaScreen: filterOrders tamamlandı, filtered sayısı:', filtered.length);
+    console.log('KasaScreen: Filtrelenmiş siparişler durumları:', filtered.map(o => ({ masa: o.masalar?.masa_no || o.masa_no, durum: o.durum })));
     setFilteredOrders(filtered);
   }, [orders]);
 
@@ -327,9 +349,37 @@ export default function KasaScreen() {
     setShowLogoutModal(false);
   };
 
-  const handleConfirmLogout = () => {
-    setShowLogoutModal(false);
-    navigation.navigate('MainTabs');
+  const handleConfirmLogout = async () => {
+    try {
+      setShowLogoutModal(false);
+      
+      // Çıkış yap - işlemin tamamlanmasını bekle
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Çıkış hatası:', error);
+        Alert.alert('Hata', 'Çıkış yapılırken bir hata oluştu: ' + error.message);
+        return;
+      }
+      
+      // SignOut işleminin tamamlanması için kısa bir bekleme
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // State'i güncelle
+      setUser(null);
+      setUserProfile(null);
+      
+      // Ana ekrana yönlendir
+      setTimeout(() => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
+      }, 100);
+    } catch (error) {
+      console.error('Çıkış hatası:', error);
+      Alert.alert('Hata', 'Çıkış yapılırken bir hata oluştu.');
+    }
   };
 
   const formatPrice = (price) => {
@@ -566,17 +616,17 @@ export default function KasaScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8B4513" />
           <Text style={styles.loadingText}>Siparişler yükleniyor...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -587,8 +637,11 @@ export default function KasaScreen() {
         </View>
         <View style={styles.headerRight}>
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>Ahmet Y.</Text>
-            <Text style={styles.userRole}>Yönetici</Text>
+            <Text style={styles.userName}>
+              {userProfile 
+                ? `${userProfile.ad || ''} ${userProfile.soyad || ''}`.trim() || 'Kullanıcı'
+                : 'Kullanıcı'}
+            </Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Ionicons name="log-out-outline" size={getResponsiveValue(18, 20, 22, 24)} color="#8B4513" />
@@ -692,7 +745,7 @@ export default function KasaScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

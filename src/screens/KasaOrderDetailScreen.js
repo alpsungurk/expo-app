@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   Animated,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -512,15 +513,21 @@ export default function KasaOrderDetailScreen() {
                   return prevOrders;
                 }
                 
+                // INSERT event'inde yeni detay eklendiğinde, tüm detayları yeniden yükle
+                // Çünkü sadece tek bir detay eklemek yerine tüm detayları güncel halde görmek daha iyi
+                if (payload.eventType === 'INSERT') {
+                  // Yeni detay eklendi, tüm detayları yeniden yükle
+                  loadOrderDetails(orderId);
+                  return prevOrders;
+                }
+                
                 const updatedOrders = prevOrders.map(order => 
                   order.id === orderId 
                     ? {
                         ...order,
-                        siparis_detaylari: payload.eventType === 'INSERT' 
-                          ? [...(order.siparis_detaylari || []), updatedDetail]
-                          : order.siparis_detaylari?.map(detail => 
-                              detail.id === updatedDetail.id ? { ...detail, ...updatedDetail } : detail
-                            ) || []
+                        siparis_detaylari: order.siparis_detaylari?.map(detail => 
+                            detail.id === updatedDetail.id ? { ...detail, ...updatedDetail } : detail
+                          ) || []
                       }
                     : order
                 );
@@ -982,6 +989,30 @@ export default function KasaOrderDetailScreen() {
     }
   };
 
+  // FilteredOrders değiştiğinde, sipariş detayları olmayan siparişler için otomatik yükleme yap
+  React.useEffect(() => {
+    if (filteredOrders && filteredOrders.length > 0) {
+      filteredOrders.forEach(order => {
+        if (!order.siparis_detaylari || order.siparis_detaylari.length === 0) {
+          // Sipariş detaylarını yükle
+          loadOrderDetails(order.id);
+        }
+      });
+    }
+  }, [filteredOrders, loadOrderDetails]);
+
+  // LocalMasaOrders değiştiğinde de sipariş detaylarını kontrol et (realtime güncellemeleri için)
+  React.useEffect(() => {
+    if (localMasaOrders && localMasaOrders.length > 0) {
+      localMasaOrders.forEach(order => {
+        if (!order.siparis_detaylari || order.siparis_detaylari.length === 0) {
+          // Sipariş detaylarını yükle
+          loadOrderDetails(order.id);
+        }
+      });
+    }
+  }, [localMasaOrders, loadOrderDetails]);
+
   const renderOrderCard = (order) => {
     const statusInfo = getStatusInfo(order.durum);
     
@@ -1045,7 +1076,7 @@ export default function KasaOrderDetailScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -1245,7 +1276,7 @@ export default function KasaOrderDetailScreen() {
           )}
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

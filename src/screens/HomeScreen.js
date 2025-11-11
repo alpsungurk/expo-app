@@ -12,7 +12,8 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  BackHandler
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -78,7 +79,7 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 export default function HomeScreen() {
   const navigation = useNavigation();
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedSortFilter, setSelectedSortFilter] = useState(null); // 'populer' veya 'yeni'
+  const [selectedSortFilter, setSelectedSortFilter] = useState([]); // ['populer', 'yeni'] - her ikisi de seçilebilir
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [campaignsLoading, setCampaignsLoading] = useState(true);
@@ -156,11 +157,20 @@ export default function HomeScreen() {
       filtered = filtered.filter(product => product.kategori_id === selectedCategory.id);
     }
     
-    // Popüler/Yeni filtresi
-    if (selectedSortFilter === 'populer') {
-      filtered = filtered.filter(product => product.populer === true);
-    } else if (selectedSortFilter === 'yeni') {
-      filtered = filtered.filter(product => product.yeni_urun === true);
+    // Popüler/Yeni filtresi - her iki filtre de seçilebilir
+    if (selectedSortFilter.length > 0) {
+      filtered = filtered.filter(product => {
+        // Eğer popüler seçiliyse, ürün popüler olmalı
+        if (selectedSortFilter.includes('populer') && !product.populer) {
+          return false;
+        }
+        // Eğer yeni seçiliyse, ürün yeni olmalı
+        if (selectedSortFilter.includes('yeni') && !product.yeni_urun) {
+          return false;
+        }
+        // Her iki koşul da sağlanıyorsa veya sadece bir filtre seçiliyse ve o koşul sağlanıyorsa, ürünü göster
+        return true;
+      });
     }
     
     // Arama filtresi
@@ -194,10 +204,21 @@ export default function HomeScreen() {
     supabase.removeChannel(supabase.channel(channelName));
     
     let retryCount = 0;
-    const maxRetries = 3;
+    const maxRetries = 2; // Retry sayısını azalttık
+    let pollingInterval = null;
+    let channel = null;
     
+    const startPolling = () => {
+      // WebSocket başarısız olduğunda polling başlat
+      if (pollingInterval) clearInterval(pollingInterval);
+      pollingInterval = setInterval(() => {
+        loadOrdersData();
+      }, 5000); // Her 5 saniyede bir güncelle
+      console.log('HomeScreen: WebSocket bağlantısı başarısız, polling moduna geçildi');
+    };
+
     const createSubscription = () => {
-      const channel = supabase
+      channel = supabase
         .channel(channelName)
         .on(
           'postgres_changes',
@@ -220,38 +241,40 @@ export default function HomeScreen() {
           }
         )
         .subscribe((status) => {
-          console.log('HomeScreen subscription status:', status);
           if (status === 'SUBSCRIBED') {
             console.log('HomeScreen realtime subscription başarılı');
             retryCount = 0;
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('HomeScreen subscription hatası');
-            handleSubscriptionError();
-          } else if (status === 'TIMED_OUT') {
-            console.warn('HomeScreen subscription timeout');
-            handleSubscriptionError();
+            // Başarılı bağlantıda polling'i durdur
+            if (pollingInterval) {
+              clearInterval(pollingInterval);
+              pollingInterval = null;
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            // Sessizce polling'e geç
+            if (retryCount < maxRetries) {
+              retryCount++;
+              setTimeout(() => {
+                createSubscription();
+              }, 2000 * retryCount);
+            } else {
+              startPolling();
+            }
           }
         });
 
       return channel;
     };
 
-    const handleSubscriptionError = () => {
-      if (retryCount < maxRetries) {
-        retryCount++;
-        console.log(`HomeScreen subscription yeniden deneniyor (${retryCount}/${maxRetries})`);
-        setTimeout(() => {
-          createSubscription();
-        }, 2000 * retryCount);
-      } else {
-        console.error('HomeScreen subscription maksimum retry sayısına ulaştı');
-      }
-    };
-
-    const channel = createSubscription();
+    // İlk bağlantıyı dene
+    createSubscription();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
     };
   }, [phoneToken]);
 
@@ -269,6 +292,18 @@ export default function HomeScreen() {
       modalSlideAnim.setValue(0);
     }
   }, [selectedProduct]);
+
+  // Modal açıkken geri tuşu desteği
+  useEffect(() => {
+    if (productModalVisible) {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        handleCloseModal();
+        return true; // Event'i handle ettik
+      });
+
+      return () => backHandler.remove();
+    }
+  }, [productModalVisible]);
 
 
   const handleCategorySelect = (category) => {
@@ -530,6 +565,7 @@ export default function HomeScreen() {
       <TableHeader 
         onQRScan={handleQRScan} 
         onSidebarPress={() => setSidebarVisible(true)}
+        onInfoPress={() => navigation.navigate('InfoScreen')}
       />
 
       {/* Siparişler Dropdown - Sadece aktif siparişler (beklemede, hazirlaniyor, hazir) göster */}
@@ -727,16 +763,23 @@ export default function HomeScreen() {
               <Text style={styles.sectionTitle}>
                 {selectedCategory ? selectedCategory.ad : 'Tüm Ürünler'}
               </Text>
-              {selectedSortFilter && (
+              {selectedSortFilter.length > 0 && (
                 <View style={styles.sortFilterBadge}>
-                  <Ionicons 
-                    name={selectedSortFilter === 'populer' ? 'flame' : 'sparkles'} 
-                    size={14} 
-                    color="#8B4513" 
-                  />
-                  <Text style={styles.sortFilterText}>
-                    {selectedSortFilter === 'populer' ? 'Popüler' : 'Yeni'}
-                  </Text>
+                  {selectedSortFilter.includes('populer') && (
+                    <View style={styles.badgeItem}>
+                      <Ionicons name="flame" size={getResponsiveValue(10, 11, 12, 13)} color="#8B4513" />
+                      <Text style={styles.sortFilterText}>Popüler</Text>
+                    </View>
+                  )}
+                  {selectedSortFilter.includes('populer') && selectedSortFilter.includes('yeni') && (
+                    <View style={styles.badgeSeparator} />
+                  )}
+                  {selectedSortFilter.includes('yeni') && (
+                    <View style={styles.badgeItem}>
+                      <Ionicons name="sparkles" size={getResponsiveValue(10, 11, 12, 13)} color="#8B4513" />
+                      <Text style={styles.sortFilterText}>Yeni</Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -770,22 +813,30 @@ export default function HomeScreen() {
             <View style={styles.sortFiltersContainer}>
               <View style={styles.sortFiltersRow}>
                 <TouchableOpacity
-                  onPress={() => setSelectedSortFilter(selectedSortFilter === 'populer' ? null : 'populer')}
+                  onPress={() => {
+                    if (selectedSortFilter.includes('populer')) {
+                      // Eğer zaten seçiliyse, kaldır
+                      setSelectedSortFilter(selectedSortFilter.filter(f => f !== 'populer'));
+                    } else {
+                      // Eğer seçili değilse, ekle
+                      setSelectedSortFilter([...selectedSortFilter, 'populer']);
+                    }
+                  }}
                   style={[
                     styles.chip,
-                    selectedSortFilter === 'populer' && styles.chipActive,
+                    selectedSortFilter.includes('populer') && styles.chipActive,
                   ]}
                 >
                   <View style={styles.chipContent}>
                     <Ionicons 
                       name="flame-outline" 
                       size={16} 
-                      color={selectedSortFilter === 'populer' ? 'white' : '#6B7280'} 
+                      color={selectedSortFilter.includes('populer') ? 'white' : '#6B7280'} 
                     />
                     <Text
                       style={[
                         styles.chipText,
-                        selectedSortFilter === 'populer' && styles.chipTextActive,
+                        selectedSortFilter.includes('populer') && styles.chipTextActive,
                         styles.chipLabel,
                       ]}
                     >
@@ -795,22 +846,30 @@ export default function HomeScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={() => setSelectedSortFilter(selectedSortFilter === 'yeni' ? null : 'yeni')}
+                  onPress={() => {
+                    if (selectedSortFilter.includes('yeni')) {
+                      // Eğer zaten seçiliyse, kaldır
+                      setSelectedSortFilter(selectedSortFilter.filter(f => f !== 'yeni'));
+                    } else {
+                      // Eğer seçili değilse, ekle
+                      setSelectedSortFilter([...selectedSortFilter, 'yeni']);
+                    }
+                  }}
                   style={[
                     styles.chip,
-                    selectedSortFilter === 'yeni' && styles.chipActive,
+                    selectedSortFilter.includes('yeni') && styles.chipActive,
                   ]}
                 >
                   <View style={styles.chipContent}>
                     <Ionicons 
                       name="sparkles-outline" 
                       size={16} 
-                      color={selectedSortFilter === 'yeni' ? 'white' : '#6B7280'} 
+                      color={selectedSortFilter.includes('yeni') ? 'white' : '#6B7280'} 
                     />
                     <Text
                       style={[
                         styles.chipText,
-                        selectedSortFilter === 'yeni' && styles.chipTextActive,
+                        selectedSortFilter.includes('yeni') && styles.chipTextActive,
                         styles.chipLabel,
                       ]}
                     >
@@ -1064,14 +1123,25 @@ const styles = StyleSheet.create({
   sortFilterBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: getResponsiveValue(6, 8, 10, 12),
     backgroundColor: '#FEF3C7',
-    paddingHorizontal: getResponsiveValue(8, 10, 12, 14),
-    paddingVertical: getResponsiveValue(4, 5, 6, 8),
-    borderRadius: 12,
+    paddingHorizontal: getResponsiveValue(6, 8, 10, 12),
+    paddingVertical: getResponsiveValue(3, 4, 5, 6),
+    borderRadius: getResponsiveValue(10, 12, 14, 16),
+  },
+  badgeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveValue(3, 4, 5, 6),
+  },
+  badgeSeparator: {
+    width: 1,
+    height: getResponsiveValue(12, 14, 16, 18),
+    backgroundColor: '#8B4513',
+    opacity: 0.3,
   },
   sortFilterText: {
-    fontSize: getResponsiveValue(11, 12, 13, 14),
+    fontSize: getResponsiveValue(10, 11, 12, 13),
     fontWeight: '600',
     color: '#8B4513',
     fontFamily: 'System',
