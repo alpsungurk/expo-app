@@ -54,17 +54,38 @@ export default function SettingsScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Loading state
+  const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // İlk yüklemede profil bilgilerini set et
+  // İlk yüklemede profil bilgilerini set et ve loading'i kapat
   React.useEffect(() => {
-    if (userProfile) {
-      setAd(userProfile.ad || '');
-      setSoyad(userProfile.soyad || '');
-      setTelefon(userProfile.telefon || '');
-    }
-  }, [userProfile]);
+    const loadProfile = async () => {
+      setIsLoading(true);
+      
+      // Eğer giriş yapılmışsa ve profil yoksa, profili yükle
+      if (isLoggedIn && user && !userProfile) {
+        if (loadUserProfile && typeof loadUserProfile === 'function') {
+          await loadUserProfile(user.id);
+        }
+      }
+      
+      // Profil bilgilerini set et
+      if (userProfile) {
+        setAd(userProfile.ad || '');
+        setSoyad(userProfile.soyad || '');
+        setTelefon(userProfile.telefon || '');
+      }
+      
+      // Kısa bir gecikme ile loading'i kapat (daha iyi UX için)
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 300);
+    };
+    
+    loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile, isLoggedIn, user?.id]);
 
   const handleBackPress = () => {
     navigation.goBack();
@@ -264,12 +285,27 @@ export default function SettingsScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        {isLoading ? (
+          // Loading Spinner
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator 
+              size="large" 
+              color="#8B4513" 
+            />
+            <Text style={[
+              styles.loadingText,
+              { fontSize: getResponsiveValue(16, 17, 18, 20) }
+            ]}>
+              Yükleniyor...
+            </Text>
+          </View>
+        ) : (
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
           {!isLoggedIn ? (
             // Giriş yapılmamışsa
             <View style={styles.notLoggedInContainer}>
@@ -572,7 +608,8 @@ export default function SettingsScreen() {
               </View>
             </>
           )}
-        </ScrollView>
+          </ScrollView>
+        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -788,6 +825,18 @@ const styles = StyleSheet.create({
     marginTop: getResponsiveValue(4, 5, 6, 8),
     fontFamily: 'System',
     fontStyle: 'italic',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: getResponsiveValue(60, 80, 100, 120),
+  },
+  loadingText: {
+    marginTop: getResponsiveValue(16, 18, 20, 22),
+    color: '#6B7280',
+    fontWeight: '500',
+    fontFamily: 'System',
   },
 });
 

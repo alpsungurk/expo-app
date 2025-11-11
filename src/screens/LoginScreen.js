@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -15,9 +15,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { supabase } from '../config/supabase';
 import { useAppStore } from '../store/appStore';
 import { showError, showSuccess, showInfo } from '../utils/toast';
+
+// WebBrowser'ın OAuth sonrası oturumu kapatması için
+WebBrowser.maybeCompleteAuthSession();
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -40,8 +45,18 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isPageLoading, setIsPageLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Sayfa açılırken loading göster
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsPageLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -126,9 +141,254 @@ export default function LoginScreen() {
     navigation.goBack();
   };
 
-  const handleGoogleAuth = () => {
-    // Google auth işlemi (şimdilik sadece görünüm)
-    showInfo('Google ile giriş yakında eklenecek.');
+  const handleGoogleAuth = async () => {
+    setIsGoogleLoading(true);
+
+    try {
+      // expo-auth-session ile otomatik redirect URI oluştur
+      // useProxy: false -> IP adresi kullanır (localhost bazı durumlarda çalışmaz)
+      // Development (Expo Go): exp://<IP>:8081/--/auth/callback
+      // Production build: com.kahvedukkani.app://auth/callback
+      const redirectUrl = AuthSession.makeRedirectUri({
+        path: 'auth/callback', 
+        useProxy: false, // IP adresi kullan (localhost Android'de çalışmayabilir)
+      });
+      
+      console.log('Redirect URL:', redirectUrl);
+      
+      // Supabase OAuth ile Google girişi başlat
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
+        },
+      });
+
+      if (error) {
+        console.error('OAuth error:', error);
+        showError(error.message || 'Google ile giriş yapılırken bir hata oluştu.');
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      // OAuth URL'i aç
+      if (data?.url) {
+        console.log('Opening OAuth URL:', data.url);
+        let result;
+        try {
+          result = await WebBrowser.openAuthSessionAsync(
+            data.url,
+            redirectUrl
+          );
+        } catch (browserError) {
+          // WebBrowser hatası oluşabilir ama OAuth deep linking ile devam edebilir
+          console.log('WebBrowser error (OAuth may continue via deep linking):', browserError);
+          // Hata mesajı gösterme, deep linking ile OAuth devam edebilir
+          setIsGoogleLoading(false);
+          return;
+        }
+        
+        console.log('OAuth result:', result);
+
+        if (result.type === 'success') {
+          // URL'den hash fragment veya query params'ı al
+          const url = result.url;
+          let hashFragment = '';
+          let queryParams = '';
+          
+          if (url.includes('#')) {
+            hashFragment = url.split('#')[1];
+          } else if (url.includes('?')) {
+            queryParams = url.split('?')[1];
+          }
+          
+          // Hash fragment'ten veya query params'tan token'ları çıkar
+          const urlParams = new URLSearchParams(hashFragment || queryParams);
+          const accessToken = urlParams.get('access_token');
+          const refreshToken = urlParams.get('refresh_token');
+          const errorParam = urlParams.get('error');
+          const errorDescription = urlParams.get('error_description');
+
+          if (errorParam) {
+            showError(errorDescription || errorParam || 'Google ile giriş yapılırken bir hata oluştu.');
+            setIsGoogleLoading(false);
+            return;
+          }
+
+          if (accessToken && refreshToken) {
+            // Session'ı set et
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) {
+              console.error('Session error:', sessionError);
+              showError('Oturum oluşturulurken bir hata oluştu: ' + sessionError.message);
+              setIsGoogleLoading(false);
+              return;
+            }
+
+            if (sessionData?.user) {
+              // Kullanıcı profilini yükle
+              let profile = null;
+              if (loadUserProfile && typeof loadUserProfile === 'function') {
+                profile = await loadUserProfile(sessionData.user.id);
+              } else {
+                // Fallback: Direkt Supabase'den profil yükle
+                console.warn('loadUserProfile fonksiyonu bulunamadı, direkt Supabase\'den yükleniyor');
+                const { data: profileData, error: profileError } = await supabase
+                  .from('kullanici_profilleri')
+                  .select('*, roller(*)')
+                  .eq('id', sessionData.user.id)
+                  .single();
+                
+                if (!profileError && profileData) {
+                  profile = profileData;
+                  if (appStore?.setUserProfile) {
+                    appStore.setUserProfile(profileData);
+                  }
+                }
+              }
+
+              // Eğer profil yoksa, Google'dan gelen bilgilerle oluştur
+              if (!profile) {
+                const userMetadata = sessionData.user.user_metadata;
+                // Google'dan gelen isim bilgisini parse et
+                const fullName = userMetadata?.full_name || userMetadata?.name || '';
+                const nameParts = fullName.trim().split(/\s+/);
+                const ad = nameParts[0] || 'Kullanıcı';
+                const soyad = nameParts.slice(1).join(' ') || '';
+                
+                // Önce profil var mı kontrol et
+                const { data: existingProfile, error: checkError } = await supabase
+                  .from('kullanici_profilleri')
+                  .select('id')
+                  .eq('id', sessionData.user.id)
+                  .maybeSingle(); // maybeSingle() kullan - kayıt yoksa null döner, hata vermez
+
+                let profileError = null;
+
+                // checkError varsa ve PGRST116 değilse (kayıt bulunamadı hatası normal)
+                if (checkError && checkError.code !== 'PGRST116') {
+                  console.error('Profil kontrolü hatası:', checkError);
+                }
+
+                if (existingProfile) {
+                  // Profil varsa güncelle
+                  const { error: updateError } = await supabase
+                    .from('kullanici_profilleri')
+                    .update({
+                      ad: ad,
+                      soyad: soyad,
+                      telefon: null,
+                      rol_id: 2, // Varsayılan rol: kullanıcı
+                      aktif: true,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', sessionData.user.id);
+                  
+                  profileError = updateError;
+                } else {
+                  // Profil yoksa oluştur
+                  const { error: insertError } = await supabase
+                    .from('kullanici_profilleri')
+                    .insert({
+                      id: sessionData.user.id,
+                      ad: ad,
+                      soyad: soyad,
+                      telefon: null,
+                      rol_id: 2, // Varsayılan rol: kullanıcı
+                      aktif: true,
+                    });
+                  
+                  profileError = insertError;
+                }
+
+                if (!profileError) {
+                  // Profili tekrar yükle
+                  if (loadUserProfile && typeof loadUserProfile === 'function') {
+                    profile = await loadUserProfile(sessionData.user.id);
+                  } else {
+                    const { data: profileData } = await supabase
+                      .from('kullanici_profilleri')
+                      .select('*, roller(*)')
+                      .eq('id', sessionData.user.id)
+                      .single();
+                    if (profileData) {
+                      profile = profileData;
+                      if (appStore?.setUserProfile) {
+                        appStore.setUserProfile(profileData);
+                      }
+                    }
+                  }
+                } else {
+                  console.error('Profil oluşturma hatası:', profileError);
+                  console.error('Hata detayları:', JSON.stringify(profileError, null, 2));
+                }
+              }
+              
+              // Aktif kontrolü - Pasif kullanıcılar giriş yapamaz
+              if (profile && profile.aktif === false) {
+                await supabase.auth.signOut();
+                showError('Hesabınız pasif durumda. Giriş yapamazsınız. Lütfen yönetici ile iletişime geçin.');
+                setIsGoogleLoading(false);
+                return;
+              }
+              
+              // Loading state'i kapat (navigation'dan önce)
+              setIsGoogleLoading(false);
+              
+              // Navigation'ı InteractionManager ile yap
+              InteractionManager.runAfterInteractions(() => {
+                if (profile) {
+                  // Rol kontrolü - Kasa rolü (id: 3) ise KasaScreen'e yönlendir
+                  if (profile.rol_id === 3) {
+                    navigation.navigate('KasaScreen');
+                  } else {
+                    navigation.goBack();
+                  }
+                } else {
+                  navigation.goBack();
+                }
+                
+                // Toast mesajını göster
+                showSuccess('Giriş yapıldı', 'Hoş geldiniz!');
+              });
+            }
+          }
+        } else if (result.type === 'cancel') {
+          showInfo('Google ile giriş iptal edildi.');
+          setIsGoogleLoading(false);
+        } else if (result.type === 'dismiss') {
+          showInfo('Google ile giriş penceresi kapatıldı.');
+          setIsGoogleLoading(false);
+        } else {
+          // OAuth başka bir durumda (deep linking ile devam edebilir)
+          console.log('OAuth result type:', result.type);
+          console.log('OAuth result:', result);
+          // Loading state'i kapat, deep linking ile OAuth devam edebilir
+          setIsGoogleLoading(false);
+        }
+      } else {
+        console.error('OAuth URL alınamadı');
+        showError('OAuth URL alınamadı. Lütfen tekrar deneyin.');
+        setIsGoogleLoading(false);
+      }
+    } catch (error) {
+      console.error('Google ile giriş yapılırken hata:', error);
+      // WebBrowser hataları genellikle OAuth deep linking ile devam edebilir
+      // Bu yüzden sadece gerçek kritik hatalarda kullanıcıya mesaj göster
+      if (error.message && !error.message.includes('WebBrowser')) {
+        showError('Google ile giriş yapılırken bir hata oluştu: ' + error.message);
+      } else {
+        // WebBrowser hatası - OAuth deep linking ile devam edebilir, sessizce logla
+        console.log('WebBrowser hatası (OAuth deep linking ile devam edebilir):', error);
+      }
+    } finally {
+      // finally bloğunda loading state'i kapatma - her durumda zaten kapatılıyor
+    }
   };
 
   const handleSignUpPress = () => {
@@ -156,8 +416,23 @@ export default function LoginScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        {/* Giriş Formu */}
-        <ScrollView 
+        {isPageLoading ? (
+          // Loading Spinner
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator 
+              size="large" 
+              color="#8B4513" 
+            />
+            <Text style={[
+              styles.loadingText,
+              { fontSize: getResponsiveValue(16, 17, 18, 20) }
+            ]}>
+              Yükleniyor...
+            </Text>
+          </View>
+        ) : (
+          /* Giriş Formu */
+          <ScrollView 
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContentContainer}
           showsVerticalScrollIndicator={false}
@@ -326,7 +601,11 @@ export default function LoginScreen() {
               }
             ]}
             onPress={handleGoogleAuth}
+            disabled={isGoogleLoading || isLoading}
           >
+            {isGoogleLoading ? (
+              <ActivityIndicator size="small" color="#4285F4" />
+            ) : (
             <View style={styles.googleButtonContent}>
               <Ionicons 
                 name="logo-google" 
@@ -340,6 +619,7 @@ export default function LoginScreen() {
                 Google ile Giriş Yap
               </Text>
             </View>
+            )}
           </TouchableOpacity>
 
           {/* Kayıt Ol Linki */}
@@ -361,6 +641,7 @@ export default function LoginScreen() {
           </View>
         </View>
         </ScrollView>
+        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -544,6 +825,18 @@ const styles = StyleSheet.create({
   signUpLinkButton: {
     color: '#8B4513',
     fontWeight: '600',
+    fontFamily: 'System',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: getResponsiveValue(60, 80, 100, 120),
+  },
+  loadingText: {
+    marginTop: getResponsiveValue(16, 18, 20, 22),
+    color: '#6B7280',
+    fontWeight: '500',
     fontFamily: 'System',
   },
 });

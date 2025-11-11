@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,9 +7,13 @@ import {
   ScrollView,
   Modal,
   Dimensions,
-  Linking,
-  InteractionManager
+  Alert,
+  Animated,
+  InteractionManager,
+  Platform,
+  ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
 import { useNavigation } from '@react-navigation/native';
@@ -30,209 +34,119 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
   return small;
 };
 
-// Sistem Ayarları Listesi Bileşeni
-const SistemAyarlariListesi = () => {
-  const { getSistemAyarı } = useAppStore();
-  const [activeTab, setActiveTab] = useState('bilgi');
-  
-  const bilgiAyarlari = [
-    { key: 'calisma_saatleri', label: 'Çalışma Saatleri', icon: 'time', value: getSistemAyarı('calisma_saatleri') },
-    { key: 'aciklama', label: 'Açıklama', icon: 'information-circle', value: getSistemAyarı('aciklama') },
-  ];
-
-  const iletisimAyarlari = [
-    { key: 'telefon', label: 'Telefon', icon: 'call', value: getSistemAyarı('telefon'), action: 'call' },
-    { key: 'email', label: 'E-posta', icon: 'mail', value: getSistemAyarı('email'), action: 'email' },
-    { key: 'adres', label: 'Adres', icon: 'location', value: getSistemAyarı('adres'), action: 'map' },
-    { key: 'website', label: 'Website', icon: 'globe', value: getSistemAyarı('website'), action: 'website' },
-  ];
-
-  const handleAction = (action, value) => {
-    switch (action) {
-      case 'call':
-        if (value) {
-          Linking.openURL(`tel:${value}`);
-        }
-        break;
-      case 'email':
-        if (value) {
-          Linking.openURL(`mailto:${value}`);
-        }
-        break;
-      case 'map':
-        if (value) {
-          const encodedAddress = encodeURIComponent(value);
-          Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`);
-        }
-        break;
-      case 'website':
-        if (value) {
-          Linking.openURL(value.startsWith('http') ? value : `https://${value}`);
-        }
-        break;
-    }
-  };
-
-  const renderAyarItem = (ayar) => (
-    <TouchableOpacity
-      key={ayar.key}
-      style={[
-        styles.ayarItem,
-        {
-          paddingVertical: getResponsiveValue(16, 18, 20, 22),
-          paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
-          marginBottom: getResponsiveValue(12, 14, 16, 18),
-          borderRadius: getResponsiveValue(12, 14, 16, 18),
-        }
-      ]}
-      onPress={() => ayar.action && handleAction(ayar.action, ayar.value)}
-      disabled={!ayar.action}
-    >
-      <View style={styles.ayarHeader}>
-        <View style={[
-          styles.ayarIcon,
-          {
-            width: getResponsiveValue(40, 44, 48, 52),
-            height: getResponsiveValue(40, 44, 48, 52),
-            borderRadius: getResponsiveValue(20, 22, 24, 26),
-          }
-        ]}>
-          <Ionicons 
-            name={ayar.icon} 
-            size={getResponsiveValue(20, 22, 24, 26)} 
-            color="#8B4513" 
-          />
-        </View>
-        <Text style={[
-          styles.ayarLabel,
-          { fontSize: getResponsiveValue(16, 17, 18, 20) }
-        ]}>
-          {ayar.label}
-        </Text>
-        {ayar.action && (
-          <Ionicons 
-            name="chevron-forward" 
-            size={getResponsiveValue(16, 18, 20, 22)} 
-            color="#8B4513" 
-          />
-        )}
-      </View>
-      
-      {ayar.value && (
-        <Text style={[
-          styles.ayarValue,
-          { 
-            fontSize: getResponsiveValue(14, 15, 16, 18),
-            marginTop: getResponsiveValue(8, 10, 12, 14),
-            lineHeight: getResponsiveValue(20, 22, 24, 26),
-          }
-        ]}>
-          {ayar.value}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
-
-  return (
-    <View style={styles.ayarlarContainer}>
-      {/* Sekmeler */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            activeTab === 'bilgi' && styles.activeTab,
-            {
-              paddingVertical: getResponsiveValue(12, 14, 16, 18),
-              paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
-              borderRadius: getResponsiveValue(8, 10, 12, 14),
-            }
-          ]}
-          onPress={() => setActiveTab('bilgi')}
-        >
-          <Text style={[
-            styles.tabText,
-            activeTab === 'bilgi' && styles.activeTabText,
-            { fontSize: getResponsiveValue(14, 15, 16, 18) }
-          ]}>
-            Bilgi
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            activeTab === 'iletisim' && styles.activeTab,
-            {
-              paddingVertical: getResponsiveValue(12, 14, 16, 18),
-              paddingHorizontal: getResponsiveValue(16, 18, 20, 22),
-              borderRadius: getResponsiveValue(8, 10, 12, 14),
-            }
-          ]}
-          onPress={() => setActiveTab('iletisim')}
-        >
-          <Text style={[
-            styles.tabText,
-            activeTab === 'iletisim' && styles.activeTabText,
-            { fontSize: getResponsiveValue(14, 15, 16, 18) }
-          ]}>
-            İletişim
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* İçerik */}
-      <View style={styles.tabContent}>
-        {activeTab === 'bilgi' && (
-          <View>
-            {bilgiAyarlari.map(renderAyarItem)}
-          </View>
-        )}
-        
-        {activeTab === 'iletisim' && (
-          <View>
-            {iletisimAyarlari.map(renderAyarItem)}
-          </View>
-        )}
-      </View>
-    </View>
-  );
-};
-
 // Ana Sidebar Component
 const SistemAyarlariSidebar = ({ visible, onClose }) => {
   const navigation = useNavigation();
-  const { getSistemAyarı, user, userProfile } = useAppStore();
+  const { getSistemAyarı, user, userProfile, setUser, setUserProfile } = useAppStore();
   
   const kafeAdi = getSistemAyarı('kafe_adi');
   const isLoggedIn = !!user;
+  
+  // Sidebar animasyonu için Animated değeri
+  const slideAnim = useRef(new Animated.Value(-width)).current;
+  const isClosingRef = useRef(false);
+  
+  // Çıkış onay modalı için state
+  const [showLogoutModal, setShowLogoutModal] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
-  const handleLoginPress = () => {
-    // Navigation'ı hemen yap (kullanıcı deneyimi için önemli)
-    navigation.navigate('LoginScreen');
-    // Modal'ı animasyonlar tamamlandıktan sonra kapat
-    InteractionManager.runAfterInteractions(() => {
+  // Sidebar görünürlüğü değiştiğinde animasyonu çalıştır
+  useEffect(() => {
+    if (visible) {
+      // Her açılışta soldan sağa animasyon
+      isClosingRef.current = false;
+      slideAnim.setValue(-width);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+    // visible false olduğunda animasyon yapma, handleClose içinde yapılacak
+  }, [visible]);
+
+  // Kapatma fonksiyonu - animasyon ile kapat
+  const handleClose = () => {
+    if (isClosingRef.current) return; // Zaten kapanıyor
+    isClosingRef.current = true;
+    
+    // Sidebar'ın mevcut konumundan (0'dan) sola doğru (-width'e) animasyon
+    Animated.timing(slideAnim, {
+      toValue: -width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      // Animasyon tamamlandıktan sonra modal'ı kapat
+      isClosingRef.current = false;
+      slideAnim.setValue(-width);
       onClose();
     });
   };
 
-  const handleLogoutPress = async () => {
+  const handleLoginPress = () => {
+    // Sidebar'ı kapatmadan direkt giriş ekranına git
+    navigation.navigate('LoginScreen');
+    // Sidebar'ı kapat
+    onClose();
+  };
+
+  const handleLogoutPress = () => {
+    // Onay modalını göster
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = async () => {
+    setIsLoggingOut(true);
     try {
-      await supabase.auth.signOut();
-      onClose(); // Sidebar'ı kapat
-      showSuccess('Çıkış yapıldı.');
+      // Çıkış yap - işlemin tamamlanmasını bekle
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Çıkış hatası:', error);
+        showError('Çıkış yapılırken bir hata oluştu: ' + error.message);
+        setIsLoggingOut(false);
+        setShowLogoutModal(false);
+        return;
+      }
+      
+      // SignOut işleminin tamamlanması için kısa bir bekleme
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // State'i güncelle
+      setUser(null);
+      setUserProfile(null);
+      
+      // Modal'ı kapat
+      setShowLogoutModal(false);
+      
+      // Sidebar'ı kapat
+      onClose();
+      
+      // Ana ekrana dön - biraz daha gecikme ile
+      setTimeout(() => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
+        showSuccess('Çıkış yapıldı.');
+      }, 100);
     } catch (error) {
       console.error('Çıkış hatası:', error);
       showError('Çıkış yapılırken bir hata oluştu.');
+      setIsLoggingOut(false);
+      setShowLogoutModal(false);
     }
   };
 
-  const handleSettingsPress = () => {
-    // Navigation'ı hemen yap (kullanıcı deneyimi için önemli)
+  const handleLogoutCancel = () => {
+    setShowLogoutModal(false);
+  };
+
+  const handleProfilePress = () => {
+    // Önce direkt ayarlar sayfasına git (sidebar animasyonu beklemeden)
     navigation.navigate('SettingsScreen');
-    // Modal'ı animasyonlar tamamlandıktan sonra kapat
-    InteractionManager.runAfterInteractions(() => {
-      onClose();
-    });
+    // Sidebar'ı animasyon olmadan hemen kapat
+    onClose();
   };
 
   // Kullanıcı adını oluştur
@@ -247,25 +161,36 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
   };
 
   return (
+    <>
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="none"
       transparent={true}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
+      hardwareAccelerated={true}
+      statusBarTranslucent={true}
     >
       <View style={styles.modalContainer}>
-        <View 
+        <Animated.View
           style={[
             styles.sidebar,
             {
-              width: getResponsiveValue(width * 0.85, width * 0.75, width * 0.65, width * 0.55)
+              width: getResponsiveValue(width * 0.85, width * 0.75, width * 0.65, width * 0.55),
+              transform: [{ translateX: slideAnim }]
             }
           ]}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
         >
-          {/* Kafe Adı Header Bar - En Üstte */}
-          <View style={styles.kafeAdiHeaderBar}>
+        <SafeAreaView 
+          style={styles.sidebarSafeArea}
+          edges={['top', 'left', 'right']}
+        >
+          <View 
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+            style={styles.sidebarInner}
+          >
+            {/* Kafe Adı Header Bar - En Üstte */}
+            <View style={styles.kafeAdiHeaderBar}>
             <View style={styles.kafeAdiHeaderContent}>
               <View style={[
                 styles.kafeAdiIcon,
@@ -297,7 +222,7 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                   borderRadius: getResponsiveValue(16, 18, 20, 22),
                 }
               ]}
-              onPress={onClose}
+              onPress={handleClose}
             >
               <Ionicons name="close" size={getResponsiveValue(18, 20, 22, 24)} color="#8B4513" />
             </TouchableOpacity>
@@ -311,14 +236,16 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
             >
               {/* Profile Card - Giriş yapılmışsa göster */}
               {isLoggedIn && (
-                <View style={[
+                <View
+                  style={[
                   styles.profileCard,
                   {
                     padding: getResponsiveValue(16, 18, 20, 22),
                     borderRadius: getResponsiveValue(12, 14, 16, 18),
                     marginBottom: getResponsiveValue(20, 24, 28, 32),
                   }
-                ]}>
+                  ]}
+                >
                   <View style={[
                     styles.profileIcon,
                     {
@@ -334,56 +261,205 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                       color="#8B4513" 
                     />
                   </View>
-                  <Text style={[
-                    styles.profileName,
-                    { fontSize: getResponsiveValue(18, 20, 22, 24) }
-                  ]}>
+                  <Text 
+                    style={[
+                      styles.profileName,
+                      { fontSize: getResponsiveValue(18, 20, 22, 24) }
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
                     {getUserName()}
                   </Text>
-                  {userProfile?.roller && (
-                    <Text style={[
-                      styles.profileRole,
-                      { fontSize: getResponsiveValue(14, 15, 16, 18) }
-                    ]}>
-                      {userProfile.roller?.ad || 'Kullanıcı'}
-                    </Text>
-                  )}
+                  <Text 
+                    style={[
+                      styles.profileEmail,
+                      { fontSize: getResponsiveValue(13, 14, 15, 16) }
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {user?.email || ''}
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.settingsButton,
+                      {
+                        paddingVertical: getResponsiveValue(10, 12, 14, 16),
+                        paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+                        borderRadius: getResponsiveValue(8, 10, 12, 14),
+                        marginTop: getResponsiveValue(12, 14, 16, 18),
+                      }
+                    ]}
+                    onPress={handleProfilePress}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.settingsButtonContent}>
+                      <Ionicons 
+                        name="settings-outline" 
+                        size={getResponsiveValue(18, 20, 22, 24)} 
+                        color="white" 
+                      />
+                      <Text style={[
+                        styles.settingsButtonText,
+                        { fontSize: getResponsiveValue(14, 15, 16, 18) }
+                      ]}>
+                        Ayarlar
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
                 </View>
               )}
 
-              <SistemAyarlariListesi />
+              {/* Uygulama Özellikleri Bölümü */}
+              <View style={styles.appFeaturesSection}>
+                {/* Hoş Geldiniz Mesajı */}
+                {!isLoggedIn && (
+                  <View style={[
+                    styles.welcomeMessageCard,
+                    {
+                      padding: getResponsiveValue(12, 14, 16, 18),
+                      borderRadius: getResponsiveValue(12, 14, 16, 18),
+                      marginBottom: getResponsiveValue(10, 12, 14, 16),
+                    }
+                  ]}>
+                    <View style={styles.welcomeMessageContent}>
+                      <Ionicons 
+                        name="gift" 
+                        size={getResponsiveValue(20, 22, 24, 26)} 
+                        color="#8B4513" 
+                        style={{ marginRight: getResponsiveValue(8, 10, 12, 14) }}
+                      />
+                      <Text style={[
+                        styles.welcomeMessageText,
+                        { fontSize: getResponsiveValue(14, 15, 16, 17) }
+                      ]}>
+                        Kampanyalar için giriş yapın, üye olun!
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* QR Kod ile Hızlı Sipariş */}
+                <View style={[
+                  styles.featureItem,
+                  {
+                    padding: getResponsiveValue(14, 16, 18, 20),
+                    borderRadius: getResponsiveValue(12, 14, 16, 18),
+                    marginBottom: getResponsiveValue(12, 14, 16, 18),
+                  }
+                ]}>
+                  <View style={[
+                    styles.featureIconContainer,
+                    {
+                      width: getResponsiveValue(44, 48, 52, 56),
+                      height: getResponsiveValue(44, 48, 52, 56),
+                      borderRadius: getResponsiveValue(22, 24, 26, 28),
+                    }
+                  ]}>
+                    <Ionicons 
+                      name="qr-code" 
+                      size={getResponsiveValue(22, 24, 26, 28)} 
+                      color="#8B4513" 
+                    />
+                  </View>
+                  <View style={styles.featureTextContainer}>
+                    <Text style={[
+                      styles.featureTitle,
+                      { fontSize: getResponsiveValue(15, 16, 17, 18) }
+                    ]}>
+                      QR Kod ile Hızlı Sipariş
+                    </Text>
+                    <Text style={[
+                      styles.featureDescription,
+                      { fontSize: getResponsiveValue(13, 14, 15, 16) }
+                    ]}>
+                      Masanızın üzerindeki QR kodu tarayarak hızlıca sipariş verebilirsiniz.
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Geniş Ürün Yelpazesi */}
+                <View style={[
+                  styles.featureItem,
+                  {
+                    padding: getResponsiveValue(14, 16, 18, 20),
+                    borderRadius: getResponsiveValue(12, 14, 16, 18),
+                    marginBottom: getResponsiveValue(12, 14, 16, 18),
+                  }
+                ]}>
+                  <View style={[
+                    styles.featureIconContainer,
+                    {
+                      width: getResponsiveValue(44, 48, 52, 56),
+                      height: getResponsiveValue(44, 48, 52, 56),
+                      borderRadius: getResponsiveValue(22, 24, 26, 28),
+                    }
+                  ]}>
+                    <Ionicons 
+                      name="restaurant" 
+                      size={getResponsiveValue(22, 24, 26, 28)} 
+                      color="#8B4513" 
+                    />
+                  </View>
+                  <View style={styles.featureTextContainer}>
+                    <Text style={[
+                      styles.featureTitle,
+                      { fontSize: getResponsiveValue(15, 16, 17, 18) }
+                    ]}>
+                      Geniş Ürün Yelpazesi
+                    </Text>
+                    <Text style={[
+                      styles.featureDescription,
+                      { fontSize: getResponsiveValue(13, 14, 15, 16) }
+                    ]}>
+                      Çeşitli kategorilerden oluşan zengin menümüzü keşfedin.
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Sipariş Takibi */}
+                <View style={[
+                  styles.featureItem,
+                  {
+                    padding: getResponsiveValue(14, 16, 18, 20),
+                    borderRadius: getResponsiveValue(12, 14, 16, 18),
+                    marginBottom: 0,
+                  }
+                ]}>
+                  <View style={[
+                    styles.featureIconContainer,
+                    {
+                      width: getResponsiveValue(44, 48, 52, 56),
+                      height: getResponsiveValue(44, 48, 52, 56),
+                      borderRadius: getResponsiveValue(22, 24, 26, 28),
+                    }
+                  ]}>
+                    <Ionicons 
+                      name="notifications" 
+                      size={getResponsiveValue(22, 24, 26, 28)} 
+                      color="#8B4513" 
+                    />
+                  </View>
+                  <View style={styles.featureTextContainer}>
+                    <Text style={[
+                      styles.featureTitle,
+                      { fontSize: getResponsiveValue(15, 16, 17, 18) }
+                    ]}>
+                      Sipariş Takibi
+                    </Text>
+                    <Text style={[
+                      styles.featureDescription,
+                      { fontSize: getResponsiveValue(13, 14, 15, 16) }
+                    ]}>
+                      Siparişlerinizi kolayca yönetin ve takip edin
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </ScrollView>
 
-            {/* Ayarlar Butonu */}
-            <View style={styles.settingsButtonContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.settingsButton,
-                  {
-                    paddingVertical: getResponsiveValue(16, 18, 20, 22),
-                    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-                    borderRadius: getResponsiveValue(16, 18, 20, 22),
-                  }
-                ]}
-                onPress={handleSettingsPress}
-              >
-                <View style={styles.settingsButtonContent}>
-                  <Ionicons 
-                    name="settings-outline" 
-                    size={getResponsiveValue(22, 24, 26, 28)} 
-                    color="#8B4513" 
-                  />
-                  <Text style={[
-                    styles.settingsButtonText,
-                    { fontSize: getResponsiveValue(16, 17, 18, 20) }
-                  ]}>
-                    Ayarlar
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Giriş Yap / Çıkış Yap Butonu - En Altta */}
+            {/* Giriş Yap / Çıkış Yap Butonu */}
             <View style={styles.loginButtonContainer}>
               {isLoggedIn ? (
                 <TouchableOpacity
@@ -396,6 +472,7 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                     }
                   ]}
                   onPress={handleLogoutPress}
+                  activeOpacity={0.7}
                 >
                   <View style={styles.loginButtonContent}>
                     <Ionicons 
@@ -422,6 +499,7 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                     }
                   ]}
                   onPress={handleLoginPress}
+                  activeOpacity={0.7}
                 >
                   <View style={styles.loginButtonContent}>
                     <Ionicons 
@@ -440,14 +518,117 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
               )}
             </View>
           </View>
-        </View>
+          </View>
+        </SafeAreaView>
+        </Animated.View>
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={onClose}
+          onPress={handleClose}
         />
       </View>
     </Modal>
+    
+    {/* Çıkış Onay Modalı */}
+    <Modal
+      visible={showLogoutModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={handleLogoutCancel}
+    >
+      <View style={styles.logoutModalContainer}>
+        <TouchableOpacity
+          style={styles.logoutModalOverlay}
+          activeOpacity={1}
+          onPress={handleLogoutCancel}
+        />
+        <View style={[
+          styles.logoutModalContent,
+          {
+            padding: getResponsiveValue(24, 28, 32, 36),
+            borderRadius: getResponsiveValue(16, 18, 20, 22),
+          }
+        ]}>
+          <View style={[
+            styles.logoutModalIcon,
+            {
+              width: getResponsiveValue(60, 64, 68, 72),
+              height: getResponsiveValue(60, 64, 68, 72),
+              borderRadius: getResponsiveValue(30, 32, 34, 36),
+              marginBottom: getResponsiveValue(16, 18, 20, 22),
+            }
+          ]}>
+            <Ionicons 
+              name="log-out" 
+              size={getResponsiveValue(32, 36, 40, 44)} 
+              color="#EF4444" 
+            />
+          </View>
+          
+          <Text style={[
+            styles.logoutModalTitle,
+            { fontSize: getResponsiveValue(20, 22, 24, 26) }
+          ]}>
+            Çıkış Yap
+          </Text>
+          
+          <Text style={[
+            styles.logoutModalMessage,
+            { fontSize: getResponsiveValue(15, 16, 17, 18) }
+          ]}>
+            Çıkış yapmak istediğinize emin misiniz?
+          </Text>
+          
+          <View style={styles.logoutModalButtons}>
+            <TouchableOpacity
+              style={[
+                styles.logoutModalCancelButton,
+                {
+                  paddingVertical: getResponsiveValue(14, 16, 18, 20),
+                  paddingHorizontal: getResponsiveValue(24, 28, 32, 36),
+                  borderRadius: getResponsiveValue(12, 14, 16, 18),
+                  marginRight: getResponsiveValue(12, 14, 16, 18),
+                }
+              ]}
+              onPress={handleLogoutCancel}
+              disabled={isLoggingOut}
+            >
+              <Text style={[
+                styles.logoutModalCancelText,
+                { fontSize: getResponsiveValue(16, 17, 18, 20) }
+              ]}>
+                İptal
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.logoutModalConfirmButton,
+                {
+                  paddingVertical: getResponsiveValue(14, 16, 18, 20),
+                  paddingHorizontal: getResponsiveValue(24, 28, 32, 36),
+                  borderRadius: getResponsiveValue(12, 14, 16, 18),
+                }
+              ]}
+              onPress={handleLogoutConfirm}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={[
+                  styles.logoutModalConfirmText,
+                  { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                ]}>
+                  Çıkış Yap
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 };
 
@@ -459,7 +640,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(107, 114, 128, 0.6)',
+    backgroundColor: 'transparent',
   },
   sidebar: {
     height: '100%',
@@ -470,6 +651,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 15,
     elevation: 15,
+  },
+  sidebarSafeArea: {
+    flex: 1,
+  },
+  sidebarInner: {
+    flex: 1,
   },
   kafeAdiHeaderBar: {
     flexDirection: 'row',
@@ -506,85 +693,18 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: getResponsiveValue(8, 10, 12, 14),
-    paddingBottom: getResponsiveValue(100, 110, 120, 130),
-  },
-  settingsButtonContainer: {
-    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
-    paddingTop: getResponsiveValue(16, 18, 20, 22),
-    paddingBottom: getResponsiveValue(12, 14, 16, 18),
-    backgroundColor: '#F9FAFB',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  settingsButton: {
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 69, 19, 0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  settingsButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: getResponsiveValue(10, 12, 14, 16),
-  },
-  settingsButtonText: {
-    color: '#8B4513',
-    fontWeight: '600',
-    fontFamily: 'System',
-    letterSpacing: 0.3,
+    paddingBottom: getResponsiveValue(8, 10, 12, 14),
   },
   loginButtonContainer: {
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
     paddingVertical: getResponsiveValue(12, 14, 16, 18),
-    paddingBottom: getResponsiveValue(24, 28, 32, 36),
+    paddingBottom: getResponsiveValue(12, 14, 16, 18),
     backgroundColor: '#F9FAFB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 5,
-  },
-  
-  // Sistem Ayarları Stilleri
-  ayarlarContainer: {
-    paddingBottom: getResponsiveValue(20, 24, 28, 32),
-  },
-  ayarItem: {
-    backgroundColor: 'white',
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  ayarHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ayarIcon: {
-    backgroundColor: 'rgba(139, 69, 19, 0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: getResponsiveValue(14, 16, 18, 20),
-  },
-  ayarLabel: {
-    fontWeight: '600',
-    fontFamily: 'System',
-    color: '#1F2937',
-    flex: 1,
-    letterSpacing: 0.2,
-  },
-  ayarValue: {
-    color: '#6B7280',
-    fontWeight: '400',
-    fontFamily: 'System',
-    lineHeight: getResponsiveValue(20, 22, 24, 26),
   },
   
   // Kafe Adı Stilleri
@@ -599,43 +719,6 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: '#8B4513',
     letterSpacing: 0.3,
-  },
-  
-  // Sekme Stilleri
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: getResponsiveValue(12, 14, 16, 18),
-    padding: getResponsiveValue(4, 5, 6, 8),
-    marginBottom: getResponsiveValue(24, 28, 32, 36),
-    gap: getResponsiveValue(4, 5, 6, 8),
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: getResponsiveValue(10, 12, 14, 16),
-  },
-  activeTab: {
-    backgroundColor: '#8B4513',
-    shadowColor: '#8B4513',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  tabText: {
-    color: '#6B7280',
-    fontWeight: '600',
-    fontFamily: 'System',
-  },
-  activeTabText: {
-    color: 'white',
-    fontWeight: '700',
-    fontFamily: 'System',
-  },
-  tabContent: {
-    flex: 1,
   },
   
   // Profile Card Stilleri
@@ -658,11 +741,156 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: '#1F2937',
     marginBottom: getResponsiveValue(4, 5, 6, 8),
+    textAlign: 'center',
+    width: '100%',
   },
-  profileRole: {
-    color: '#6B7280',
-    fontWeight: '500',
+  profileEmail: {
+    fontWeight: '400',
     fontFamily: 'System',
+    color: '#6B7280',
+    marginBottom: getResponsiveValue(4, 5, 6, 8),
+    textAlign: 'center',
+    width: '100%',
+  },
+  settingsButton: {
+    backgroundColor: '#8B4513',
+    shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+    width: '100%',
+  },
+  settingsButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: getResponsiveValue(8, 10, 12, 14),
+  },
+  settingsButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  // Welcome Card Stilleri
+  welcomeCard: {
+    backgroundColor: 'white',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  welcomeIcon: {
+    backgroundColor: 'rgba(139, 69, 19, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  welcomeTitle: {
+    fontWeight: '700',
+    fontFamily: 'System',
+    color: '#1F2937',
+    marginBottom: getResponsiveValue(6, 8, 10, 12),
+    textAlign: 'center',
+  },
+  welcomeText: {
+    color: '#6B7280',
+    fontWeight: '400',
+    fontFamily: 'System',
+    textAlign: 'center',
+    lineHeight: getResponsiveValue(20, 22, 24, 26),
+  },
+  // Welcome Message Card Stilleri
+  welcomeMessageCard: {
+    backgroundColor: 'rgba(139, 69, 19, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 69, 19, 0.15)',
+  },
+  welcomeMessageContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  welcomeMessageText: {
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: '#8B4513',
+    flex: 1,
+    textAlign: 'center',
+  },
+  // Uygulama Özellikleri Stilleri
+  appFeaturesSection: {
+    marginTop: getResponsiveValue(-12, -10, -8, -6),
+    marginBottom: getResponsiveValue(16, 18, 20, 22),
+  },
+  appFeaturesTitle: {
+    fontWeight: '700',
+    fontFamily: 'System',
+    color: '#1F2937',
+    marginBottom: getResponsiveValue(16, 18, 20, 22),
+  },
+  featureItem: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    alignItems: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  featureItemLarge: {
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  featureLargeHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: getResponsiveValue(16, 18, 20, 22),
+  },
+  featureList: {
+    marginTop: getResponsiveValue(8, 10, 12, 14),
+  },
+  featureListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: getResponsiveValue(10, 12, 14, 16),
+    gap: getResponsiveValue(10, 12, 14, 16),
+  },
+  featureListItemText: {
+    flex: 1,
+    color: '#6B7280',
+    fontWeight: '400',
+    fontFamily: 'System',
+    lineHeight: getResponsiveValue(20, 22, 24, 26),
+  },
+  featureIconContainer: {
+    backgroundColor: 'rgba(139, 69, 19, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: getResponsiveValue(12, 14, 16, 18),
+    flexShrink: 0,
+  },
+  featureTextContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  featureTitle: {
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: '#1F2937',
+    marginBottom: getResponsiveValue(4, 5, 6, 7),
+  },
+  featureDescription: {
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: '#6B7280',
+    lineHeight: getResponsiveValue(18, 20, 22, 24),
   },
   // Login Button Stilleri
   loginButton: {
@@ -692,6 +920,83 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'System',
     letterSpacing: 0.5,
+  },
+  // Çıkış Onay Modalı Stilleri
+  logoutModalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: getResponsiveValue(20, 24, 28, 32),
+  },
+  logoutModalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  logoutModalContent: {
+    backgroundColor: 'white',
+    width: '100%',
+    maxWidth: getResponsiveValue(320, 360, 400, 440),
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 1,
+  },
+  logoutModalIcon: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutModalTitle: {
+    fontWeight: '700',
+    fontFamily: 'System',
+    color: '#1F2937',
+    marginBottom: getResponsiveValue(8, 10, 12, 14),
+    textAlign: 'center',
+  },
+  logoutModalMessage: {
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: getResponsiveValue(24, 28, 32, 36),
+    lineHeight: getResponsiveValue(22, 24, 26, 28),
+  },
+  logoutModalButtons: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'center',
+  },
+  logoutModalCancelButton: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutModalCancelText: {
+    color: '#374151',
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  logoutModalConfirmButton: {
+    backgroundColor: '#EF4444',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  logoutModalConfirmText: {
+    color: 'white',
+    fontWeight: '700',
+    fontFamily: 'System',
   },
 });
 

@@ -113,23 +113,58 @@ export default function SignUpScreen() {
       }
 
       if (authData.user) {
-        // Kullanıcı profilini oluştur (varsayılan rol: kullanıcı - id: 2)
-        // id: UUID auth.users tablosundan geliyor
-        const { error: profileError } = await supabase
+        // Önce profil var mı kontrol et
+        const { data: existingProfile, error: checkError } = await supabase
           .from('kullanici_profilleri')
-          .insert({
-            id: authData.user.id, // UUID - auth.users'dan geliyor
-            ad: ad.trim(),
-            soyad: soyad.trim(),
-            telefon: telefon.trim() || null, // Telefon opsiyonel
-            rol_id: 2, // Varsayılan rol: kullanıcı
-            aktif: true,
-            // created_at ve updated_at otomatik olarak ekleniyor (default now())
-          });
+          .select('id')
+          .eq('id', authData.user.id)
+          .maybeSingle(); // maybeSingle() kullan - kayıt yoksa null döner, hata vermez
+
+        let profileError = null;
+
+        // checkError varsa ve PGRST116 değilse (kayıt bulunamadı hatası normal)
+        if (checkError && checkError.code !== 'PGRST116') {
+          console.error('Profil kontrolü hatası:', checkError);
+        }
+
+        if (existingProfile) {
+          // Profil varsa güncelle
+          const { error: updateError } = await supabase
+            .from('kullanici_profilleri')
+            .update({
+              ad: ad.trim(),
+              soyad: soyad.trim(),
+              telefon: telefon.trim() || null,
+              rol_id: 2, // Varsayılan rol: kullanıcı
+              aktif: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', authData.user.id);
+          
+          profileError = updateError;
+        } else {
+          // Profil yoksa oluştur
+          const { error: insertError } = await supabase
+            .from('kullanici_profilleri')
+            .insert({
+              id: authData.user.id, // UUID - auth.users'dan geliyor
+              ad: ad.trim(),
+              soyad: soyad.trim(),
+              telefon: telefon.trim() || null, // Telefon opsiyonel
+              rol_id: 2, // Varsayılan rol: kullanıcı
+              aktif: true,
+              // created_at ve updated_at otomatik olarak ekleniyor (default now())
+            });
+          
+          profileError = insertError;
+        }
 
         if (profileError) {
           console.error('Profil oluşturma hatası:', profileError);
-          showInfo('Hesap oluşturuldu ancak profil bilgileri kaydedilemedi. Lütfen giriş yapıp tekrar deneyin.');
+          console.error('Hata detayları:', JSON.stringify(profileError, null, 2));
+          showError(`Profil kaydedilemedi: ${profileError.message || 'Bilinmeyen hata'}`);
+          // Hata durumunda da çıkış yap
+          await supabase.auth.signOut();
           setTimeout(() => {
             navigation.navigate('LoginScreen');
           }, 2000);
@@ -137,24 +172,10 @@ export default function SignUpScreen() {
           return;
         }
 
-        // Profili yükle
-        if (loadUserProfile && typeof loadUserProfile === 'function') {
-          await loadUserProfile(authData.user.id);
-        } else {
-          // Fallback: Direkt Supabase'den profil yükle
-          console.warn('loadUserProfile fonksiyonu bulunamadı, direkt Supabase\'den yükleniyor');
-          const { data: profileData, error: profileError } = await supabase
-            .from('kullanici_profilleri')
-            .select('*, roller(*)')
-            .eq('id', authData.user.id)
-            .single();
-          
-          if (!profileError && profileData && appStore?.setUserProfile) {
-            appStore.setUserProfile(profileData);
-          }
-        }
+        // Kayıt başarılı - kullanıcıyı çıkış yaptır (otomatik giriş yapmasın)
+        await supabase.auth.signOut();
 
-        showSuccess('Kayıt işlemi başarıyla tamamlandı!');
+        showSuccess('Kayıt işlemi başarıyla tamamlandı!', 'Lütfen giriş yapın.');
         setTimeout(() => {
           navigation.navigate('LoginScreen');
         }, 2000);

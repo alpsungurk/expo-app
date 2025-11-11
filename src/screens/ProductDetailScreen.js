@@ -238,12 +238,18 @@ export default function ProductDetailScreen({ route, navigation }) {
         </View>
 
         <View style={styles.priceContainer}>
-          <Text style={styles.totalPrice}>{formatPrice(calculateTotalPrice())}</Text>
+          <Text style={styles.totalPrice} numberOfLines={1} ellipsizeMode="tail">
+            {formatPrice(calculateTotalPrice())}
+          </Text>
         </View>
 
         <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
           <Ionicons name="cart" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="white" />
-          <Text style={styles.addToCartText}>Sepete Ekle</Text>
+          {!isSmallScreen && (
+            <Text style={styles.addToCartText} numberOfLines={1}>
+              Ekle
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -451,7 +457,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 12,
     paddingTop: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
     backgroundColor: 'white',
     borderTopWidth: 1,
@@ -470,7 +476,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderRadius: isLargeScreen ? 30 : isMediumScreen ? 25 : 20,
     paddingHorizontal: isLargeScreen ? 6 : isMediumScreen ? 4 : 2,
-    minWidth: isLargeScreen ? 120 : isMediumScreen ? 100 : 80,
+    minWidth: isLargeScreen ? 120 : isMediumScreen ? 100 : 70,
+    flexShrink: 0,
+    marginRight: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
   },
   quantityButton: {
     width: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
@@ -497,19 +505,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
-    minWidth: isLargeScreen ? 100 : isMediumScreen ? 80 : 60,
+    minWidth: 0, // Text overflow için önemli
+    flexShrink: 1,
+    marginRight: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
   },
   totalPrice: {
-    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 12,
+    fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
     fontWeight: 'bold',
     color: '#8B4513',
   },
   addToCartButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#8B4513',
-    paddingHorizontal: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 16 : isSmallScreen ? 14 : 12,
     paddingVertical: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     borderRadius: isLargeScreen ? 30 : isMediumScreen ? 25 : 20,
     shadowColor: '#8B4513',
@@ -517,13 +527,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
-    minWidth: isLargeScreen ? 100 : isMediumScreen ? 85 : 70,
+    flexShrink: 0,
+    minWidth: isSmallScreen ? 50 : isLargeScreen ? 140 : isMediumScreen ? 120 : 100,
   },
   addToCartText: {
     color: 'white',
     fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     fontWeight: 'bold',
     marginLeft: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
+    flexShrink: 1,
   },
   // Malzemeler Styles
   ingredientsContainer: {

@@ -6,6 +6,7 @@ export default {
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
+    scheme: 'com.kahvedukkani.app',
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
@@ -43,6 +44,7 @@ export default {
           mode: 'production',
         },
       ],
+      'expo-web-browser',
     ],
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,

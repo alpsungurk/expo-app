@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { NavigationContainer, getFocusedRouteNameFromRoute, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import ProductDetailScreen from '../screens/ProductDetailScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import InfoScreen from '../screens/InfoScreen';
 import KasaScreen from '../screens/KasaScreen';
 import KasaOrderDetailScreen from '../screens/KasaOrderDetailScreen';
 
@@ -250,46 +251,61 @@ function KasaStack() {
 
 export default function AppNavigator() {
   const { getTotalItems } = useCartStore();
-  const { isProductModalOpen, getActiveOrdersCount } = useAppStore();
+  const { isProductModalOpen, getActiveOrdersCount, userProfile } = useAppStore();
+
+  // Role_id 3 (Kasa) kontrolü
+  const isKasaRole = userProfile?.rol_id === 3;
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-        <Stack.Screen name="LoginScreen" component={LoginScreen} />
-        <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
-        <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
-        <Stack.Screen name="KasaScreen" component={KasaStack} />
-        <Stack.Screen 
-          name="AnnouncementDetail" 
-          component={AnnouncementDetailScreen}
-          options={{
-            presentation: 'transparentModal',
-            cardOverlayEnabled: true,
-            gestureEnabled: true,
-            gestureDirection: 'vertical',
-            cardStyleInterpolator: ({ current, layouts }) => {
-              return {
-                cardStyle: {
-                  transform: [
-                    {
-                      translateY: current.progress.interpolate({
+        {isKasaRole ? (
+          // Kasa rolü için sadece Kasa ekranları
+          <>
+            <Stack.Screen name="KasaScreen" component={KasaStack} />
+            <Stack.Screen name="LoginScreen" component={LoginScreen} />
+            <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
+          </>
+        ) : (
+          // Diğer roller için normal navigator
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+            <Stack.Screen name="LoginScreen" component={LoginScreen} />
+            <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
+            <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
+            <Stack.Screen name="InfoScreen" component={InfoScreen} />
+            <Stack.Screen 
+              name="AnnouncementDetail" 
+              component={AnnouncementDetailScreen}
+              options={{
+                presentation: 'transparentModal',
+                cardOverlayEnabled: true,
+                gestureEnabled: true,
+                gestureDirection: 'vertical',
+                cardStyleInterpolator: ({ current, layouts }) => {
+                  return {
+                    cardStyle: {
+                      transform: [
+                        {
+                          translateY: current.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [layouts.screen.height, 0],
+                          }),
+                        },
+                      ],
+                    },
+                    overlayStyle: {
+                      opacity: current.progress.interpolate({
                         inputRange: [0, 1],
-                        outputRange: [layouts.screen.height, 0],
+                        outputRange: [0, 0.5],
                       }),
                     },
-                  ],
+                  };
                 },
-                overlayStyle: {
-                  opacity: current.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, 0.5],
-                  }),
-                },
-              };
-            },
-          }}
-        />
+              }}
+            />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -297,8 +313,17 @@ export default function AppNavigator() {
 
 function MainTabNavigator() {
   const { getTotalItems } = useCartStore();
-  const { isProductModalOpen, getActiveOrdersCount } = useAppStore();
+  const { isProductModalOpen, getActiveOrdersCount, userProfile } = useAppStore();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+
+  // Role_id 3 (Kasa) kontrolü - Bu navigator'a erişemez
+  React.useEffect(() => {
+    if (userProfile && userProfile.rol_id === 3) {
+      // Kasa rolü ise KasaScreen'e yönlendir
+      navigation.navigate('KasaScreen');
+    }
+  }, [userProfile, navigation]);
 
   // Tab bar için base height ve padding hesaplama
   const baseTabBarHeight = 60;

@@ -75,7 +75,7 @@ export default function ProductCard({ product, onPress, onAddToCart, onProductDe
       >
         <View style={[
           styles.imageContainer,
-          { height: isLargeScreen ? 200 : isMediumScreen ? 180 : 160 }
+          { height: isLargeScreen ? 180 : isMediumScreen ? 160 : 140 }
         ]}>
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.image} />
@@ -124,32 +124,31 @@ export default function ProductCard({ product, onPress, onAddToCart, onProductDe
           )}
         </View>
 
-        <View style={[
-          styles.content,
-          { padding: isLargeScreen ? 20 : isMediumScreen ? 18 : 16 }
-        ]}>
+        <View style={styles.content}>
           <Text style={[
             styles.title,
             {
               fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
-              marginBottom: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
+              marginBottom: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
               lineHeight: isLargeScreen ? 22 : isMediumScreen ? 20 : 18,
             }
           ]} numberOfLines={2} ellipsizeMode="tail">
             {product.ad}
           </Text>
 
-          {product.aciklama && (
+          {product.aciklama ? (
             <Text style={[
               styles.description,
               {
                 fontSize: isLargeScreen ? 15 : isMediumScreen ? 14 : 12,
                 lineHeight: isLargeScreen ? 22 : isMediumScreen ? 20 : 16,
-                marginBottom: isLargeScreen ? 14 : isMediumScreen ? 12 : 10,
+                marginBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
               }
             ]} numberOfLines={2} ellipsizeMode="tail">
               {product.aciklama}
             </Text>
+          ) : (
+            <View style={{ height: isLargeScreen ? 12 : isMediumScreen ? 10 : 8 }} />
           )}
 
           <View style={styles.footer}>
@@ -208,7 +207,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     minWidth: 0,
-    height: isLargeScreen ? 380 : isMediumScreen ? 340 : 300,
+    height: isLargeScreen ? 360 : isMediumScreen ? 320 : 280,
     backgroundColor: 'white',
     borderRadius: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
     marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
@@ -266,8 +265,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
+    paddingHorizontal: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    paddingTop: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    paddingBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
     justifyContent: 'space-between',
+    minHeight: 0,
   },
   title: {
     fontWeight: 'bold',
@@ -281,7 +283,8 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    marginTop: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
   },
   priceContainer: {
     flex: 1,

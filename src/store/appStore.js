@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
 
@@ -172,6 +172,12 @@ export const AppProvider = ({ children }) => {
     }
   }, [setUserProfile]);
 
+  // loadUserProfile'ı ref ile sakla (useEffect dependency sorununu önlemek için)
+  const loadUserProfileRef = useRef(loadUserProfile);
+  useEffect(() => {
+    loadUserProfileRef.current = loadUserProfile;
+  }, [loadUserProfile]);
+
   // Phone token'ı yükle
   useEffect(() => {
     const loadPhoneToken = async () => {
@@ -193,41 +199,54 @@ export const AppProvider = ({ children }) => {
 
   // Auth state listener
   useEffect(() => {
+    let isMounted = true;
+
     // Mevcut session'ı kontrol et
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!isMounted) return;
+      
       if (session) {
         setUser(session.user);
-        const profile = await loadUserProfile(session.user.id);
+        const profile = await loadUserProfileRef.current(session.user.id);
         // Aktif kontrolü - Pasif kullanıcıları otomatik çıkış yaptır
         if (profile && profile.aktif === false) {
           await supabase.auth.signOut();
-          setUser(null);
-          setUserProfile(null);
+          if (isMounted) {
+            setUser(null);
+            setUserProfile(null);
+          }
         }
       }
     });
 
     // Auth state değişikliklerini dinle
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
       if (session) {
         setUser(session.user);
-        const profile = await loadUserProfile(session.user.id);
+        const profile = await loadUserProfileRef.current(session.user.id);
         // Aktif kontrolü - Pasif kullanıcıları otomatik çıkış yaptır
         if (profile && profile.aktif === false) {
           await supabase.auth.signOut();
+          if (isMounted) {
+            setUser(null);
+            setUserProfile(null);
+          }
+        }
+      } else {
+        if (isMounted) {
           setUser(null);
           setUserProfile(null);
         }
-      } else {
-        setUser(null);
-        setUserProfile(null);
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, [loadUserProfile]);
+  }, []); // Boş dependency array - sadece mount/unmount'ta çalışır
   
 
   const getActiveCampaigns = () => {
