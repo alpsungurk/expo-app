@@ -9,6 +9,8 @@ import {
   Dimensions,
   StatusBar,
   ActivityIndicator,
+  BackHandler,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -29,16 +31,34 @@ const AnnouncementDetailScreen = ({ route }) => {
   const isCampaign = announcement.tur === 'kampanya' || announcement.baslik?.toLowerCase().includes('kampanya');
   const pageTitle = isCampaign ? 'Kampanya Detayı' : 'Duyuru Detayı';
 
-  // Geri buton handler
+  // Geri buton handler - Announcements sayfasına git
   const handleGoBack = () => {
-    navigation.goBack();
+    navigation.navigate('Duyurular', {
+      screen: 'AnnouncementsMain'
+    });
   };
+
+  // Hardware back button handler - Announcements sayfasına git
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.navigate('Duyurular', {
+        screen: 'AnnouncementsMain'
+      });
+      return true; // Event'i handle ettik
+    });
+
+    return () => backHandler.remove();
+  }, [navigation]);
 
   // Database'den detaylı veri çek
   const fetchAnnouncementDetails = async () => {
-    if (!announcement.id) return;
+    if (!announcement.id) {
+      setLoading(false);
+      return;
+    }
     
     setLoading(true);
+    
     try {
       let query;
       
@@ -64,6 +84,24 @@ const AnnouncementDetailScreen = ({ route }) => {
       
       if (error) {
         console.error('Veri çekme hatası:', error);
+        setLoading(false);
+        // Hata durumunda kullanıcıya bilgi ver
+        Alert.alert(
+          'Yükleme Hatası',
+          'Detaylar yüklenemedi. Lütfen tekrar deneyin.',
+          [
+            {
+              text: 'Tekrar Dene',
+              onPress: () => {
+                fetchAnnouncementDetails();
+              }
+            },
+            {
+              text: 'Tamam',
+              style: 'cancel'
+            }
+          ]
+        );
         return;
       }
       
@@ -72,6 +110,23 @@ const AnnouncementDetailScreen = ({ route }) => {
       }
     } catch (error) {
       console.error('Beklenmeyen hata:', error);
+      setLoading(false);
+      Alert.alert(
+        'Hata',
+        'Detaylar yüklenirken bir hata oluştu. Lütfen tekrar deneyin.',
+        [
+          {
+            text: 'Tekrar Dene',
+            onPress: () => {
+              fetchAnnouncementDetails();
+            }
+          },
+          {
+            text: 'Tamam',
+            style: 'cancel'
+          }
+        ]
+      );
     } finally {
       setLoading(false);
     }

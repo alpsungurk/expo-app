@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import { supabase, TABLES } from '../config/supabase';
 
 // Telefon token oluştur veya al
@@ -246,22 +249,52 @@ export const CartProvider = ({ children }) => {
       const orderNumber = generateOrderNumber();
       const totalAmount = getTotalPrice();
 
-      // Push token ID'sini bul (telefon_token ile eşleştir)
+      // Push token ID'sini bul (expo push token ve telefon_token ile eşleştir)
       let pushTokenId = null;
       try {
-        // Önce device_info içinde telefon_token ara
-        const { data: pushTokenData, error: pushTokenError } = await supabase
-          .from('push_tokens')
-          .select('id')
-          .eq('is_active', true)
-          .eq('device_info->>telefon_token', phoneToken)
-          .maybeSingle();
-        
-        if (!pushTokenError && pushTokenData?.id) {
-          pushTokenId = pushTokenData.id;
-          console.log('Push token ID bulundu (device_info):', pushTokenId);
-        } else {
-          // device_info'da bulunamadıysa device_id ile dene
+        // 1. Önce expo push token ile ara (en güvenilir yöntem)
+        let expoPushToken = null;
+        try {
+          // Expo push token'ı al
+          const tokenResponse = await Notifications.getExpoPushTokenAsync({
+            projectId: 'f2793cf7-6dcf-4754-8d0a-92d5b4859b33'
+          });
+          expoPushToken = tokenResponse?.data;
+          
+          if (expoPushToken) {
+            const { data: expoTokenData, error: expoTokenError } = await supabase
+              .from('push_tokens')
+              .select('id')
+              .eq('is_active', true)
+              .eq('push_token', expoPushToken)
+              .maybeSingle();
+            
+            if (!expoTokenError && expoTokenData?.id) {
+              pushTokenId = expoTokenData.id;
+              console.log('Push token ID bulundu (expo push token):', pushTokenId);
+            }
+          }
+        } catch (e) {
+          console.log('Expo push token alınamadı:', e);
+        }
+
+        // 2. Expo push token ile bulunamadıysa, device_info içinde telefon_token ara
+        if (!pushTokenId) {
+          const { data: pushTokenData, error: pushTokenError } = await supabase
+            .from('push_tokens')
+            .select('id')
+            .eq('is_active', true)
+            .eq('device_info->>telefon_token', phoneToken)
+            .maybeSingle();
+          
+          if (!pushTokenError && pushTokenData?.id) {
+            pushTokenId = pushTokenData.id;
+            console.log('Push token ID bulundu (device_info->telefon_token):', pushTokenId);
+          }
+        }
+
+        // 3. Hala bulunamadıysa device_id ile dene
+        if (!pushTokenId) {
           const { data: deviceIdData, error: deviceIdError } = await supabase
             .from('push_tokens')
             .select('id')
@@ -272,9 +305,77 @@ export const CartProvider = ({ children }) => {
           if (!deviceIdError && deviceIdData?.id) {
             pushTokenId = deviceIdData.id;
             console.log('Push token ID bulundu (device_id):', pushTokenId);
-          } else {
-            console.log('Push token ID bulunamadı, telefon_token:', phoneToken);
           }
+        }
+
+        // 4. Eğer hala bulunamadıysa ve expo push token varsa, push token'ı kaydet
+        if (!pushTokenId && expoPushToken) {
+          try {
+            console.log('Push token bulunamadı, yeni kayıt oluşturuluyor...');
+            
+            // Cihaz bilgilerini topla
+            const deviceInfo = {
+              platform: Platform.OS,
+              modelName: Device.modelName || 'Unknown',
+              osName: Device.osName || 'Unknown',
+              osVersion: Device.osVersion || 'Unknown',
+              brand: Device.brand || 'Unknown',
+              manufacturer: Device.manufacturer || 'Unknown',
+              telefon_token: phoneToken,
+            };
+
+            const deviceId = `${Platform.OS}_${Device.modelName || 'unknown'}_${Device.osVersion || 'unknown'}`.replace(/\s+/g, '_');
+
+            // Push token'ı kaydet
+            const { data: newTokenData, error: insertError } = await supabase
+              .from('push_tokens')
+              .insert({
+                push_token: expoPushToken,
+                device_info: deviceInfo,
+                device_id: deviceId,
+                is_active: true,
+                last_active: new Date().toISOString(),
+              })
+              .select('id')
+              .single();
+
+            if (!insertError && newTokenData?.id) {
+              pushTokenId = newTokenData.id;
+              console.log('Push token kaydedildi ve ID alındı:', pushTokenId);
+            } else {
+              console.error('Push token kaydetme hatası:', insertError);
+              
+              // Eğer unique constraint hatası varsa (duplicate key), güncelle
+              if (insertError?.code === '23505') {
+                console.log('⚠️ Token zaten var (unique constraint), güncelleniyor...');
+                const { data: updatedTokenData, error: updateError } = await supabase
+                  .from('push_tokens')
+                  .update({
+                    device_info: deviceInfo,
+                    device_id: deviceId,
+                    is_active: true,
+                    last_active: new Date().toISOString(),
+                  })
+                  .eq('push_token', expoPushToken)
+                  .select('id')
+                  .single();
+
+                if (!updateError && updatedTokenData?.id) {
+                  pushTokenId = updatedTokenData.id;
+                  console.log('✅ Push token başarıyla güncellendi (upsert), ID:', pushTokenId);
+                } else {
+                  console.error('❌ Push token güncelleme hatası:', updateError);
+                }
+              }
+            }
+          } catch (saveError) {
+            console.error('Push token kaydetme hatası:', saveError);
+          }
+        }
+
+        if (!pushTokenId) {
+          console.log('Push token ID bulunamadı ve kaydedilemedi, telefon_token:', phoneToken);
+          console.log('Sipariş push_token_id olmadan oluşturulacak');
         }
       } catch (error) {
         console.error('Push token ID bulma hatası:', error);

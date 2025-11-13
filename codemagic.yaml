@@ -30,7 +30,6 @@ workflows:
           eas build --platform android --profile preview --non-interactive
     artifacts:
       - build/**/*.apk
-      - build/**/*.aab
     publishing:
       email:
         recipients:

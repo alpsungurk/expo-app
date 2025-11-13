@@ -7,57 +7,39 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
-  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../config/supabase';
+import { useNotification } from '../contexts/NotificationContext';
+import { useAppStore } from '../store/appStore';
 
 const { width } = Dimensions.get('window');
 
 const NotificationsScreen = ({ onClose }) => {
+  const { cachedNotifications } = useNotification();
+  const { user } = useAppStore(); // Giriş kontrolü için
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Geri buton handler
   const handleGoBack = () => {
     onClose();
   };
 
-  // Component mount olduğunda verileri yükle
+  // Context'teki cached bildirimleri kullan - sadece giriş yapılmışsa göster
   useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  // Bildirimleri getir
-  const fetchNotifications = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('bildirimler')
-        .select('*')
-        .eq('aktif', true)
-        .order('olusturma_tarihi', { ascending: false });
-
-      if (error) {
-        console.error('Bildirimler yüklenirken hata:', error);
-        return;
+    if (user) {
+      // Giriş yapılmışsa bildirimleri göster
+      if (cachedNotifications && cachedNotifications.length > 0) {
+        setNotifications(cachedNotifications);
+      } else {
+        setNotifications([]);
       }
-
-      setNotifications(data || []);
-    } catch (error) {
-      console.error('Bildirimler yüklenirken hata:', error);
-    } finally {
-      setLoading(false);
+    } else {
+      // Giriş yapılmamışsa boş liste
+      setNotifications([]);
     }
-  };
-
-  // Pull to refresh
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchNotifications();
-    setRefreshing(false);
-  };
+    setLoading(false);
+  }, [cachedNotifications, user]);
 
   // Tarih formatla
   const formatDate = (dateString) => {
@@ -156,26 +138,26 @@ const NotificationsScreen = ({ onClose }) => {
       <ScrollView 
         style={styles.content} 
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#8B4513']}
-            tintColor="#8B4513"
-          />
-        }
       >
         {loading ? (
           <View style={styles.loadingContainer}>
             <Ionicons name="notifications" size={40} color="#8B4513" />
             <Text style={styles.loadingText}>Bildirimler yükleniyor...</Text>
           </View>
+        ) : !user ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="lock-closed-outline" size={60} color="#D1D5DB" />
+            <Text style={styles.emptyTitle}>Giriş Yapın</Text>
+            <Text style={styles.emptyText}>
+              Bildirimleri görmek için lütfen giriş yapın
+            </Text>
+          </View>
         ) : notifications.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-outline" size={60} color="#D1D5DB" />
             <Text style={styles.emptyTitle}>Henüz bildirim yok</Text>
             <Text style={styles.emptyText}>
-              Yeni kampanyalar ve güncellemeler burada görünecek
+              Yeni bildirimler burada görünecek
             </Text>
           </View>
         ) : (

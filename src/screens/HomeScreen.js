@@ -109,7 +109,9 @@ export default function HomeScreen() {
     setSistemAyarlari,
     isLoading,
     setLoading,
-    setProductModalOpen
+    setProductModalOpen,
+    user,
+    userProfile
   } = useAppStore();
 
   const { tableNumber, tableId, phoneToken, addItem } = useCartStore();
@@ -142,11 +144,12 @@ export default function HomeScreen() {
   };
 
   // Sayfa her açıldığında verileri yenile
+  // LoginScreen'den geri dönüldüğünde de yenile
   useFocusEffect(
     React.useCallback(() => {
       loadData();
       loadOrdersData();
-    }, [phoneToken])
+    }, [phoneToken, user, userProfile])
   );
 
   useEffect(() => {

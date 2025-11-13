@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,14 +8,14 @@ import {
   Modal,
   Dimensions,
   Alert,
-  Animated,
-  InteractionManager,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
+import { useCartStore } from '../store/cartStore';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { showError, showSuccess } from '../utils/toast';
@@ -38,56 +38,97 @@ const getResponsiveValue = (small, medium, large, tablet = large) => {
 const SistemAyarlariSidebar = ({ visible, onClose }) => {
   const navigation = useNavigation();
   const { getSistemAyarı, user, userProfile, setUser, setUserProfile } = useAppStore();
+  const { clearCart, clearTableInfo } = useCartStore();
   
   const kafeAdi = getSistemAyarı('kafe_adi');
   const isLoggedIn = !!user;
-  
-  // Sidebar animasyonu için Animated değeri
-  const slideAnim = useRef(new Animated.Value(-width)).current;
-  const isClosingRef = useRef(false);
   
   // Çıkış onay modalı için state
   const [showLogoutModal, setShowLogoutModal] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
-  // Sidebar görünürlüğü değiştiğinde animasyonu çalıştır
-  useEffect(() => {
+  // Animasyon değerleri
+  const slideAnim = React.useRef(new Animated.Value(0)).current;
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
+  // Sidebar açılma/kapanma animasyonu
+  React.useEffect(() => {
     if (visible) {
-      // Her açılışta soldan sağa animasyon
-      isClosingRef.current = false;
-      slideAnim.setValue(-width);
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+      // Açılma animasyonu
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Kapanma animasyonu - daha hızlı
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
-    // visible false olduğunda animasyon yapma, handleClose içinde yapılacak
   }, [visible]);
+
+  // Sidebar genişliğini hesapla
+  const sidebarWidth = getResponsiveValue(width * 0.85, width * 0.75, width * 0.65, width * 0.55);
+  
+  // Animasyon stilleri
+  const sidebarAnimatedStyle = {
+    transform: [
+      {
+        translateX: slideAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [-sidebarWidth, 0],
+        }),
+      },
+    ],
+  };
+
+  const overlayAnimatedStyle = {
+    opacity: fadeAnim,
+  };
 
   // Kapatma fonksiyonu - animasyon ile kapat
   const handleClose = () => {
-    if (isClosingRef.current) return; // Zaten kapanıyor
-    isClosingRef.current = true;
-    
-    // Sidebar'ın mevcut konumundan (0'dan) sola doğru (-width'e) animasyon
-    Animated.timing(slideAnim, {
-      toValue: -width,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      // Animasyon tamamlandıktan sonra modal'ı kapat
-      isClosingRef.current = false;
-      slideAnim.setValue(-width);
+    // Kapanma animasyonunu başlat - daha hızlı tepki için
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Animasyon tamamlandıktan sonra kapat
       onClose();
     });
   };
 
   const handleLoginPress = () => {
-    // Sidebar'ı kapatmadan direkt giriş ekranına git
-    navigation.navigate('LoginScreen');
-    // Sidebar'ı kapat
-    onClose();
+    // Sidebar'ı kapat, sonra giriş ekranına git
+    handleClose();
+    setTimeout(() => {
+      navigation.navigate('LoginScreen');
+    }, 250);
   };
 
   const handleLogoutPress = () => {
@@ -112,24 +153,29 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
       // SignOut işleminin tamamlanması için kısa bir bekleme
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      // State'i güncelle
+      // Tüm state'leri temizle
       setUser(null);
       setUserProfile(null);
+      clearCart(); // Sepeti temizle
+      clearTableInfo(); // Masa bilgilerini temizle
       
       // Modal'ı kapat
       setShowLogoutModal(false);
       
-      // Sidebar'ı kapat
-      onClose();
+      // Sidebar'ı kapat (animasyon ile)
+      handleClose();
       
-      // Ana ekrana dön - biraz daha gecikme ile
+      // Ana ekrana dön - navigation reset ile tüm state'leri temizle
       setTimeout(() => {
         navigation.reset({
           index: 0,
           routes: [{ name: 'MainTabs' }],
         });
+        
+        // Başarı mesajını göster
         showSuccess('Çıkış yapıldı.');
-      }, 100);
+        setIsLoggingOut(false);
+      }, 550);
     } catch (error) {
       console.error('Çıkış hatası:', error);
       showError('Çıkış yapılırken bir hata oluştu.');
@@ -143,10 +189,11 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
   };
 
   const handleProfilePress = () => {
-    // Önce direkt ayarlar sayfasına git (sidebar animasyonu beklemeden)
-    navigation.navigate('SettingsScreen');
-    // Sidebar'ı animasyon olmadan hemen kapat
-    onClose();
+    // Sidebar'ı kapat, sonra ayarlar sayfasına git
+    handleClose();
+    setTimeout(() => {
+      navigation.navigate('SettingsScreen');
+    }, 300);
   };
 
   // Kullanıcı adını oluştur
@@ -171,13 +218,29 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
       statusBarTranslucent={true}
     >
       <View style={styles.modalContainer}>
+        <Animated.View 
+          style={[styles.modalOverlay, overlayAnimatedStyle]}
+          pointerEvents="box-none"
+        >
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: sidebarWidth,
+              right: 0,
+              bottom: 0,
+            }}
+            activeOpacity={1}
+            onPress={handleClose}
+          />
+        </Animated.View>
         <Animated.View
           style={[
             styles.sidebar,
             {
-              width: getResponsiveValue(width * 0.85, width * 0.75, width * 0.65, width * 0.55),
-              transform: [{ translateX: slideAnim }]
-            }
+              width: sidebarWidth,
+            },
+            sidebarAnimatedStyle
           ]}
         >
         <SafeAreaView 
@@ -459,8 +522,8 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
               </View>
             </ScrollView>
 
-            {/* Giriş Yap / Çıkış Yap Butonu */}
-            <View style={styles.loginButtonContainer}>
+            {/* Giriş Yap / Çıkış Yap Butonu - SafeAreaView ile sarıldı */}
+            <SafeAreaView style={styles.loginButtonContainer} edges={['bottom']}>
               {isLoggedIn ? (
                 <TouchableOpacity
                   style={[
@@ -516,16 +579,11 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                   </View>
                 </TouchableOpacity>
               )}
-            </View>
+            </SafeAreaView>
           </View>
           </View>
         </SafeAreaView>
         </Animated.View>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleClose}
-        />
       </View>
     </Modal>
     
@@ -639,7 +697,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   modalOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
   },
   sidebar: {
@@ -651,6 +709,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 15,
     elevation: 15,
+    zIndex: 1000,
   },
   sidebarSafeArea: {
     flex: 1,

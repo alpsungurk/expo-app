@@ -47,11 +47,14 @@ export default {
       'expo-web-browser',
     ],
     extra: {
-      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
-      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-      expoPushApiUrl: process.env.EXPO_PUBLIC_EXPO_PUSH_API_URL,
-      s3StorageUrl: process.env.EXPO_PUBLIC_S3_STORAGE_URL,
+      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || undefined,
+      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || undefined,
+      expoPushApiUrl: process.env.EXPO_PUBLIC_EXPO_PUSH_API_URL || undefined,
+      s3StorageUrl: process.env.EXPO_PUBLIC_S3_STORAGE_URL || undefined,
+      // Google OAuth Configuration
+      googleClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || undefined,
       // Expo Project ID - EAS project ID'si kullanılacak
+      // Bu değer standalone build'lerde push token almak için kritik
       projectId: 'f2793cf7-6dcf-4754-8d0a-92d5b4859b33',
       eas: {
         projectId: 'f2793cf7-6dcf-4754-8d0a-92d5b4859b33',

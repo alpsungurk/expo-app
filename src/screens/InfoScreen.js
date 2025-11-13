@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,8 +8,9 @@ import {
   Dimensions,
   Linking,
   ActivityIndicator,
-  SafeAreaView
+  BackHandler
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAppStore } from '../store/appStore';
@@ -152,6 +153,16 @@ export default function InfoScreen() {
       return () => clearTimeout(timer);
     }, [])
   );
+
+  // Geri tuşu desteği - stack mantığıyla çalışsın
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.goBack();
+      return true; // Event'i handle ettik
+    });
+
+    return () => backHandler.remove();
+  }, [navigation]);
 
   const handleAction = (action, value) => {
     switch (action) {

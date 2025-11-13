@@ -208,6 +208,12 @@ export const AppProvider = ({ children }) => {
       if (session) {
         setUser(session.user);
         const profile = await loadUserProfileRef.current(session.user.id);
+        
+        // Profil state'ini güncelle
+        if (profile) {
+          setUserProfile(profile);
+        }
+        
         // Aktif kontrolü - Pasif kullanıcıları otomatik çıkış yaptır
         if (profile && profile.aktif === false) {
           await supabase.auth.signOut();
@@ -223,9 +229,17 @@ export const AppProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       
+      console.log('Auth state change event:', event, session?.user?.email);
+      
       if (session) {
         setUser(session.user);
         const profile = await loadUserProfileRef.current(session.user.id);
+        
+        // Profil state'ini güncelle
+        if (profile) {
+          setUserProfile(profile);
+        }
+        
         // Aktif kontrolü - Pasif kullanıcıları otomatik çıkış yaptır
         if (profile && profile.aktif === false) {
           await supabase.auth.signOut();

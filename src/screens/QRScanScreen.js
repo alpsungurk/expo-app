@@ -169,10 +169,30 @@ export default function QRScanScreen() {
 
     } catch (error) {
       console.error('QR kod okuma hatası:', error);
-      Alert.alert('Hata', 'QR kod okunamadı veya masa bulunamadı. Lütfen tekrar deneyin.');
-      setScanned(false);
-    } finally {
       setIsLoading(false);
+      setScanned(false);
+      
+      Alert.alert(
+        'Masa Bulunamadı',
+        'QR kod okunamadı veya masa bulunamadı. Lütfen tekrar deneyin.',
+        [
+          {
+            text: 'Tekrar Okut',
+            onPress: () => {
+              setScanned(false);
+              // QR okuma state'ini reset et, tekrar okutabilir
+            }
+          },
+          {
+            text: 'İptal',
+            style: 'cancel',
+            onPress: () => {
+              setScanned(false);
+              setShowCamera(false);
+            }
+          }
+        ]
+      );
     }
   };
 

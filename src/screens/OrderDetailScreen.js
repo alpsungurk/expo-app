@@ -9,6 +9,7 @@ import {
   StatusBar,
   TextInput,
   Alert,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -31,10 +32,24 @@ const OrderDetailScreen = ({ route }) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [deletedItems, setDeletedItems] = useState([]);
 
-  // Geri buton handler
+  // Geri buton handler - OrderStatus'a git
   const handleGoBack = () => {
-    navigation.goBack();
+    navigation.navigate('Siparişlerim', {
+      screen: 'OrderStatusMain'
+    });
   };
+
+  // Hardware back button handler - OrderStatus'a git
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.navigate('Siparişlerim', {
+        screen: 'OrderStatusMain'
+      });
+      return true; // Event'i handle ettik
+    });
+
+    return () => backHandler.remove();
+  }, [navigation]);
 
 
   // Realtime subscription for order updates

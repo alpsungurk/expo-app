@@ -362,20 +362,21 @@ export default function KasaScreen() {
         return;
       }
       
-      // SignOut işleminin tamamlanması için kısa bir bekleme
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // SignOut işleminin tamamlanması için bekleme
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // State'i güncelle
+      // Tüm state'leri temizle
       setUser(null);
       setUserProfile(null);
       
-      // Ana ekrana yönlendir
-      setTimeout(() => {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
-      }, 100);
+      // Auth state listener'ın state'leri güncellemesi için bekleme
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Login ekranına yönlendir (kasa rolü için MainTabs yok)
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'LoginScreen' }],
+      });
     } catch (error) {
       console.error('Çıkış hatası:', error);
       Alert.alert('Hata', 'Çıkış yapılırken bir hata oluştu.');
