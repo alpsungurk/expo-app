@@ -1,0 +1,123 @@
+workflows:
+  android-workflow:
+    name: Android Build
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        - expo_credentials # Codemagic'de Expo credentials grubunu oluşturun
+      vars:
+        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
+        EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
+        EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
+        EXPO_PUBLIC_GOOGLE_CLIENT_ID: $EXPO_PUBLIC_GOOGLE_CLIENT_ID
+        EXPO_TOKEN: $EXPO_TOKEN # Expo access token
+      node: 20.18.0
+      npm: 10.8.2
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+      - name: Install Expo CLI
+        script: |
+          npm install -g @expo/cli eas-cli
+      - name: Setup Expo credentials
+        script: |
+          echo "Setting up Expo credentials..."
+      - name: Build Android APK
+        script: |
+          eas build --platform android --profile preview --non-interactive
+    artifacts:
+      - build/**/*.apk
+      - build/**/*.aab
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: false
+      scripts:
+        - name: Upload to Codemagic
+          script: |
+            echo "Build completed successfully"
+
+  ios-workflow:
+    name: iOS Build
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        - expo_credentials
+        - app_store_credentials # iOS için App Store credentials
+      vars:
+        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
+        EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
+        EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
+        EXPO_PUBLIC_GOOGLE_CLIENT_ID: $EXPO_PUBLIC_GOOGLE_CLIENT_ID
+        EXPO_TOKEN: $EXPO_TOKEN
+      node: 20.18.0
+      npm: 10.8.2
+      xcode: latest
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+      - name: Install Expo CLI
+        script: |
+          npm install -g @expo/cli eas-cli
+      - name: Setup Expo credentials
+        script: |
+          echo "Setting up Expo credentials..."
+      - name: Build iOS
+        script: |
+          eas build --platform ios --profile preview --non-interactive
+    artifacts:
+      - build/**/*.ipa
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: false
+
+  android-production:
+    name: Android Production Build
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        - expo_credentials
+      vars:
+        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
+        EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
+        EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
+        EXPO_PUBLIC_GOOGLE_CLIENT_ID: $EXPO_PUBLIC_GOOGLE_CLIENT_ID
+        EXPO_TOKEN: $EXPO_TOKEN
+      node: 20.18.0
+      npm: 10.8.2
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+      - name: Install Expo CLI
+        script: |
+          npm install -g @expo/cli eas-cli
+      - name: Build Android Production
+        script: |
+          eas build --platform android --profile production --non-interactive
+    artifacts:
+      - build/**/*.apk
+      - build/**/*.aab
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: false
+
