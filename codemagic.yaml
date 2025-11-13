@@ -22,20 +22,21 @@ workflows:
       - name: Install Expo CLI
         script: |
           npm install -g @expo/cli
+      - name: Prebuild Android
+        script: |
+          npx expo prebuild --platform android --clean
       - name: Setup Android keystore
         script: |
           if [ -z "$CM_KEYSTORE_PATH" ]; then
             echo "Keystore credentials not found. Creating debug keystore..."
+            mkdir -p android/app
             keytool -genkeypair -v -storetype PKCS12 -keystore android/app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           else
             echo "Using provided keystore..."
             cp $CM_KEYSTORE_PATH android/app/my-release-key.keystore
-            cp $CM_KEYSTORE_PASSWORD android/app/keystore-password.txt
-            cp $CM_KEYSTORE_ALIAS android/app/keystore-alias.txt
+            echo "$CM_KEYSTORE_PASSWORD" > android/app/keystore-password.txt
+            echo "$CM_KEYSTORE_ALIAS" > android/app/keystore-alias.txt
           fi
-      - name: Prebuild Android
-        script: |
-          npx expo prebuild --platform android --clean
       - name: Build Android APK
         script: |
           cd android
