@@ -81,7 +81,7 @@ export default function OrderStatusScreen() {
   const [phoneToken, setPhoneToken] = useState(null);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
   const { currentOrder, setCurrentOrder, activeOrder, setActiveOrder, setAllOrders } = useAppStore();
 
   // Phone token'ı al
@@ -189,10 +189,9 @@ export default function OrderStatusScreen() {
         duration: 600,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
         useNativeDriver: true,
       })
     ]).start();
@@ -434,7 +433,7 @@ export default function OrderStatusScreen() {
           styles.scrollView,
           {
             opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
+            transform: [{ translateY: slideAnim }]
           }
         ]}
         contentContainerStyle={styles.scrollContent}

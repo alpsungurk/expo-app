@@ -32,6 +32,10 @@ export default function AnnouncementsScreen() {
   const [displayedAnnouncementsCount, setDisplayedAnnouncementsCount] = useState(4);
   const [displayedCampaignsCount, setDisplayedCampaignsCount] = useState(4);
 
+  // Animasyon değişkenleri
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
   const { 
     campaigns, 
     announcements, 
@@ -44,6 +48,22 @@ export default function AnnouncementsScreen() {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Sayfa açılış animasyonu
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      })
+    ]).start();
   }, []);
 
 
@@ -299,8 +319,14 @@ export default function AnnouncementsScreen() {
     <View style={styles.container}>
       <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
 
-      <ScrollView
-        style={styles.scrollView}
+      <Animated.ScrollView
+        style={[
+          styles.scrollView,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -364,7 +390,7 @@ export default function AnnouncementsScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
     </View>

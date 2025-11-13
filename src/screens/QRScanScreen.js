@@ -41,7 +41,7 @@ export default function QRScanScreen() {
 
   // Animasyon değişkenleri
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
 
   // Sayfa açılış animasyonu
   useEffect(() => {
@@ -51,10 +51,9 @@ export default function QRScanScreen() {
         duration: 600,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
         useNativeDriver: true,
       })
     ]).start();
@@ -288,7 +287,7 @@ export default function QRScanScreen() {
             styles.mainContainer,
             {
               opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }]
+              transform: [{ translateY: slideAnim }]
             }
           ]}>
             {/* Hero Section */}

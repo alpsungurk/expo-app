@@ -95,9 +95,14 @@ export default function LoginScreen() {
             .from('kullanici_profilleri')
             .select('*, roller(*)')
             .eq('id', data.user.id)
-            .single();
+            .maybeSingle(); // .single() yerine .maybeSingle() kullan - profil yoksa null döner, hata vermez
           
-          if (!profileError && profileData) {
+          if (profileError) {
+            // PGRST116 hatası (profil bulunamadı) normal bir durum, hata olarak loglamayalım
+            if (profileError.code !== 'PGRST116') {
+              console.error('Profil yükleme hatası:', profileError);
+            }
+          } else if (profileData) {
             profile = profileData;
             if (appStore?.setUserProfile) {
               appStore.setUserProfile(profileData);
@@ -193,13 +198,34 @@ export default function LoginScreen() {
       const googleUser = userInfo.data.user;
       const googleId = googleUser.id;
       const email = googleUser.email;
-      const name = googleUser.name;
+      const name = googleUser.name || googleUser.displayName || '';
       const picture = googleUser.photo;
       
-      // Kullanıcı bilgilerini parse et
-      const nameParts = (name || '').trim().split(/\s+/);
-      const ad = nameParts[0] || 'Kullanıcı';
-      const soyad = nameParts.slice(1).join(' ') || '';
+      // Kullanıcı bilgilerini parse et - Display name'i ad ve soyad'a ayır
+      let ad = '';
+      let soyad = '';
+      
+      if (name && name.trim()) {
+        // İsmi boşluklara göre ayır
+        const nameParts = name.trim().split(/\s+/).filter(part => part.length > 0);
+        
+        if (nameParts.length === 1) {
+          // Sadece tek kelime varsa, ad olarak kullan
+          ad = nameParts[0];
+          soyad = '';
+        } else if (nameParts.length >= 2) {
+          // İlk kelime ad, geri kalanı soyad
+          ad = nameParts[0];
+          soyad = nameParts.slice(1).join(' ');
+        }
+      }
+      
+      // Eğer ad hala boşsa, email'den al
+      if (!ad || ad.trim() === '') {
+        const emailName = email.split('@')[0];
+        ad = emailName || 'Kullanıcı';
+        soyad = '';
+      }
 
         // Supabase'de kullanıcı profilini kontrol et veya oluştur
         let profile = null;
@@ -273,7 +299,34 @@ export default function LoginScreen() {
           }
 
           if (existingProfile) {
-            profile = existingProfile;
+            // Mevcut profil varsa, ad/soyad boşsa veya "Kullanıcı" ise güncelle
+            const needsUpdate = !existingProfile.ad || 
+                               existingProfile.ad === 'Kullanıcı' || 
+                               !existingProfile.soyad || 
+                               existingProfile.soyad.trim() === '';
+            
+            if (needsUpdate && ad && ad !== 'Kullanıcı') {
+              const { data: updatedProfile, error: updateError } = await supabase
+                .from('kullanici_profilleri')
+                .update({
+                  ad: ad,
+                  soyad: soyad || existingProfile.soyad || '',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', userId)
+                .select('*, roller(*)')
+                .single();
+
+              if (updateError) {
+                console.error('Profil güncelleme hatası:', updateError);
+                // Hata olsa bile mevcut profili kullan
+                profile = existingProfile;
+              } else {
+                profile = updatedProfile;
+              }
+            } else {
+              profile = existingProfile;
+            }
           } else {
             // Profil yoksa oluştur
             const { data: newProfile, error: insertError } = await supabase

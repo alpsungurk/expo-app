@@ -157,15 +157,23 @@ export const AppProvider = ({ children }) => {
         .from('kullanici_profilleri')
         .select('*, roller(*)')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // .single() yerine .maybeSingle() kullan - profil yoksa null döner, hata vermez
 
       if (error) {
-        console.error('Kullanıcı profili yükleme hatası:', error);
+        // PGRST116 hatası (profil bulunamadı) normal bir durum, hata olarak loglamayalım
+        if (error.code !== 'PGRST116') {
+          console.error('Kullanıcı profili yükleme hatası:', error);
+        }
         return null;
       }
 
-      setUserProfile(data);
-      return data;
+      if (data) {
+        setUserProfile(data);
+        return data;
+      }
+
+      // Profil bulunamadı
+      return null;
     } catch (error) {
       console.error('Kullanıcı profili yükleme hatası:', error);
       return null;

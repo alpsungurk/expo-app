@@ -372,10 +372,10 @@ export default function KasaScreen() {
       // Auth state listener'ın state'leri güncellemesi için bekleme
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Login ekranına yönlendir (kasa rolü için MainTabs yok)
+      // HomeScreen'e (MainTabs) yönlendir
       navigation.reset({
         index: 0,
-        routes: [{ name: 'LoginScreen' }],
+        routes: [{ name: 'MainTabs' }],
       });
     } catch (error) {
       console.error('Çıkış hatası:', error);
