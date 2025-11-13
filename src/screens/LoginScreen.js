@@ -16,17 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { supabase } from '../config/supabase';
 import { 
-  GOOGLE_CLIENT_ID, 
-  GOOGLE_AUTH_URL, 
-  GOOGLE_TOKEN_URL,
-  GOOGLE_REVOKE_URL,
+  GOOGLE_CLIENT_ID,
   GOOGLE_USERINFO_URL,
-  GOOGLE_SCOPES,
-  GOOGLE_REDIRECT_PATH 
-} from '../config/constants';
+} from '../config/googleAuth';
 import { useAppStore } from '../store/appStore';
 import { showError, showSuccess, showInfo } from '../utils/toast';
 
@@ -174,277 +169,180 @@ export default function LoginScreen() {
         return;
       }
 
-      // Redirect URI oluştur - useProxy: true kullan
-      // Expo proxy URL'ini manuel oluştur (app.config.js'deki scheme'i override etmek için)
-      let redirectUrl = AuthSession.makeRedirectUri({
-        path: GOOGLE_REDIRECT_PATH,
-        useProxy: true, // Expo proxy sunucusunu kullan
-        native: false, // Native scheme'i kullanma
+      // Google Sign-In'i yapılandır (Android Client ID ile)
+      // Not: Android Client ID için webClientId gerekmez, sadece package name ve SHA-1 yeterli
+      // offlineAccess: false - Android Client ID ile çalışır, refresh token gerekmez
+      GoogleSignin.configure({
+        // webClientId: Android Client ID ile gerekmez, sadece server-side verification için
+        offlineAccess: false, // Android Client ID ile offlineAccess false olmalı
       });
+
+      // Google Sign-In başlat
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
       
-      // Eğer hala custom scheme kullanıyorsa, manuel olarak Expo proxy URL'ini oluştur
-      if (redirectUrl.startsWith('com.kahvedukkani.app://') || redirectUrl.startsWith('exp://')) {
-        // Expo proxy URL formatı: https://auth.expo.io/@username/slug
-        redirectUrl = `https://auth.expo.io/@alpsungurk/expo-app`;
-        console.log('⚠️ Custom scheme tespit edildi, Expo proxy URL kullanılıyor:', redirectUrl);
+      console.log('Google Sign-In başarılı:', userInfo);
+
+      if (!userInfo.data || !userInfo.data.user) {
+        showError('Google giriş bilgileri alınamadı. Lütfen tekrar deneyin.');
+        setIsGoogleLoading(false);
+        return;
       }
 
-      console.log('🔗 Redirect URL:', redirectUrl);
-      console.log('📋 Bu URL\'yi Google Cloud Console\'a ekleyin!');
-      console.log('🔑 Client ID:', GOOGLE_CLIENT_ID);
-      console.log('📝 Redirect Path:', GOOGLE_REDIRECT_PATH);
-      console.log('🌐 Auth URL:', GOOGLE_AUTH_URL);
+      // Google'dan gelen kullanıcı bilgileri
+      const googleUser = userInfo.data.user;
+      const googleId = googleUser.id;
+      const email = googleUser.email;
+      const name = googleUser.name;
+      const picture = googleUser.photo;
       
-      // Redirect URL'i sakla (token exchange'de aynı URL'i kullanmak için)
-      const savedRedirectUrl = redirectUrl;
-
-      // Google OAuth discovery document
-      const discovery = {
-        authorizationEndpoint: GOOGLE_AUTH_URL,
-        tokenEndpoint: GOOGLE_TOKEN_URL,
-        revocationEndpoint: GOOGLE_REVOKE_URL,
-      };
-
-      // OAuth request oluştur
-      const request = new AuthSession.AuthRequest({
-        clientId: GOOGLE_CLIENT_ID,
-        scopes: GOOGLE_SCOPES,
-        responseType: AuthSession.ResponseType.Code,
-        redirectUri: redirectUrl,
-        extraParams: {
-          access_type: 'offline', // Refresh token almak için
-        },
-        additionalParameters: {},
-      });
-
-      // OAuth akışını başlat
-      const result = await request.promptAsync(discovery, {
-        useProxy: true, // Expo proxy sunucusunu kullan
-        showInRecents: true,
-      });
-
-      console.log('OAuth result type:', result.type);
-      console.log('OAuth result params:', result.params);
-      if (result.type === 'error') {
-        console.error('❌ OAuth error:', result.error);
-        console.error('❌ OAuth error description:', result.params?.error_description);
-      }
-
-      if (result.type === 'success') {
-        try {
-          const { code } = result.params;
-
-          if (!code) {
-            console.error('❌ OAuth code bulunamadı. Result params:', result.params);
-            showError('Google OAuth kodu alınamadı. Lütfen tekrar deneyin.');
-            setIsGoogleLoading(false);
-            return;
-          }
-
-          console.log('✅ OAuth code alındı, token exchange başlatılıyor...');
-
-        // Access token almak için code'u exchange et
-        // ÖNEMLİ: Authorization'da kullanılan redirect_uri ile token exchange'de kullanılan redirect_uri TAM OLARAK aynı olmalı
-        const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            client_id: GOOGLE_CLIENT_ID,
-            code: code,
-            grant_type: 'authorization_code',
-            redirect_uri: savedRedirectUrl, // Authorization'da kullanılan aynı redirect URI
-          }).toString(),
-        });
-        
-        console.log('🔄 Token exchange - Redirect URI:', savedRedirectUrl);
-
-        if (!tokenResponse.ok) {
-          const errorText = await tokenResponse.text();
-          console.error('❌ Token exchange error:', errorText);
-          console.error('📤 Request URL:', GOOGLE_TOKEN_URL);
-          console.error('📤 Redirect URI:', redirectUrl);
-          console.error('📤 Client ID:', GOOGLE_CLIENT_ID);
-          try {
-            const errorJson = JSON.parse(errorText);
-            console.error('📋 Error details:', JSON.stringify(errorJson, null, 2));
-            showError(`Google token alınamadı: ${errorJson.error_description || errorJson.error || 'Bilinmeyen hata'}`);
-          } catch {
-            showError(`Google token alınamadı: ${errorText}`);
-          }
-          setIsGoogleLoading(false);
-          return;
-        }
-
-        const tokenData = await tokenResponse.json();
-        const { access_token } = tokenData;
-
-        if (!access_token) {
-          showError('Google access token alınamadı. Lütfen tekrar deneyin.');
-          setIsGoogleLoading(false);
-          return;
-        }
-
-        // Google API'den kullanıcı bilgilerini al
-        const userInfoResponse = await fetch(GOOGLE_USERINFO_URL, {
-          headers: {
-            Authorization: `Bearer ${access_token}`,
-          },
-        });
-
-        if (!userInfoResponse.ok) {
-          showError('Kullanıcı bilgileri alınamadı. Lütfen tekrar deneyin.');
-          setIsGoogleLoading(false);
-          return;
-        }
-
-        const userInfo = await userInfoResponse.json();
-        console.log('Google user info:', userInfo);
-
-        // Kullanıcı bilgilerini parse et
-        const { id: googleId, email, name, picture } = userInfo;
-        const nameParts = (name || '').trim().split(/\s+/);
-        const ad = nameParts[0] || 'Kullanıcı';
-        const soyad = nameParts.slice(1).join(' ') || '';
+      // Kullanıcı bilgilerini parse et
+      const nameParts = (name || '').trim().split(/\s+/);
+      const ad = nameParts[0] || 'Kullanıcı';
+      const soyad = nameParts.slice(1).join(' ') || '';
 
         // Supabase'de kullanıcı profilini kontrol et veya oluştur
         let profile = null;
         let userId = null;
 
         try {
-          // Önce email ile mevcut kullanıcıyı kontrol et (eğer email kolonu varsa)
-          // Eğer email kolonu yoksa, Google ID'yi kullanarak kontrol et
-          // Şimdilik direkt yeni UUID oluştur ve insert et
+          // Önce profil tablosunda email ile kullanıcıyı kontrol et
+          // (Email kolonu varsa - yoksa direkt signUp yap)
+          let existingUserId = null;
           
-          // Yeni kullanıcı için UUID oluştur
-          userId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-            const r = Math.random() * 16 | 0;
-            const v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
+          // Profil tablosunda email ile arama yap (eğer email kolonu varsa)
+          // Şimdilik direkt signUp yap, eğer kullanıcı zaten varsa hata alırız
+          
+          // Yeni kullanıcı için Supabase'de auth oluştur
+          const randomPassword = `google_${googleId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          const { data: newAuthUser, error: signUpError } = await supabase.auth.signUp({
+            email: email,
+            password: randomPassword,
+            options: {
+              data: {
+                full_name: name,
+                avatar_url: picture,
+                google_id: googleId,
+              },
+            },
           });
-          
-          // Supabase'de profil oluştur
-          const { data: newProfile, error: insertError } = await supabase
-            .from('kullanici_profilleri')
-            .insert({
-              id: userId,
-              ad: ad,
-              soyad: soyad,
-              telefon: null,
-              rol_id: 2, // Varsayılan rol: kullanıcı
-              aktif: true,
-            })
-            .select('*, roller(*)')
-            .single();
 
-          if (insertError) {
-            // Eğer duplicate key hatası varsa, rastgele UUID çakışması olmuş demektir
-            // Tekrar UUID oluştur ve dene (max 3 deneme)
-            if (insertError.code === '23505') {
-              console.log('⚠️ UUID çakışması, yeni UUID oluşturuluyor...');
-              let retryCount = 0;
-              const maxRetries = 3;
+          if (signUpError) {
+            console.error('Supabase auth signup error:', signUpError);
+            // Eğer kullanıcı zaten varsa, mevcut session'ı kontrol et
+            if (signUpError.message.includes('already registered') || signUpError.message.includes('User already registered')) {
+              // Mevcut session'ı kontrol et
+              const { data: { session } } = await supabase.auth.getSession();
               
-              while (retryCount < maxRetries) {
-                userId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-                  const r = Math.random() * 16 | 0;
-                  const v = c === 'x' ? r : (r & 0x3 | 0x8);
-                  return v.toString(16);
-                });
-                
-                const { data: retryProfile, error: retryError } = await supabase
-                  .from('kullanici_profilleri')
-                  .insert({
-                    id: userId,
-                    ad: ad,
-                    soyad: soyad,
-                    telefon: null,
-                    rol_id: 2,
-                    aktif: true,
-                  })
-                  .select('*, roller(*)')
-                  .single();
-                
-                if (!retryError && retryProfile) {
-                  profile = retryProfile;
-                  break;
-                }
-                
-                retryCount++;
-              }
-              
-              if (!profile) {
-                console.error('Profil oluşturma hatası (UUID çakışması):', insertError);
-                showError('Profil oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+              if (session?.user) {
+                userId = session.user.id;
+              } else {
+                // Email ile magic link gönder veya kullanıcıya normal giriş yapmasını söyle
+                showError('Bu email ile kayıtlı bir hesap var. Lütfen normal giriş yapın.');
                 setIsGoogleLoading(false);
                 return;
               }
             } else {
+              showError('Kullanıcı oluşturulurken bir hata oluştu: ' + signUpError.message);
+              setIsGoogleLoading(false);
+              return;
+            }
+          } else if (newAuthUser?.user) {
+            userId = newAuthUser.user.id;
+            // Yeni kullanıcı için session'ı set et
+            if (newAuthUser.session) {
+              // Session zaten oluşturulmuş
+            }
+          }
+
+          if (!userId) {
+            showError('Kullanıcı oluşturulamadı. Lütfen tekrar deneyin.');
+            setIsGoogleLoading(false);
+            return;
+          }
+
+          // Profil kontrolü
+          const { data: existingProfile, error: checkError } = await supabase
+            .from('kullanici_profilleri')
+            .select('*, roller(*)')
+            .eq('id', userId)
+            .maybeSingle();
+
+          if (checkError && checkError.code !== 'PGRST116') {
+            console.error('Profil kontrolü hatası:', checkError);
+          }
+
+          if (existingProfile) {
+            profile = existingProfile;
+          } else {
+            // Profil yoksa oluştur
+            const { data: newProfile, error: insertError } = await supabase
+              .from('kullanici_profilleri')
+              .insert({
+                id: userId,
+                ad: ad,
+                soyad: soyad,
+                telefon: null,
+                rol_id: 2,
+                aktif: true,
+              })
+              .select('*, roller(*)')
+              .single();
+
+            if (insertError) {
               console.error('Profil oluşturma hatası:', insertError);
               showError('Profil oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
               setIsGoogleLoading(false);
               return;
             }
-          } else {
+
             profile = newProfile;
           }
-        } catch (profileError) {
-          console.error('Profil işleme hatası:', profileError);
-          showError('Profil oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
-          setIsGoogleLoading(false);
-          return;
-        }
 
-        // Aktif kontrolü
-        if (profile && profile.aktif === false) {
-          showError('Hesabınız pasif durumda. Giriş yapamazsınız. Lütfen yönetici ile iletişime geçin.');
-          setIsGoogleLoading(false);
-          return;
-        }
-
-        // appStore'da state'leri güncelle
-        // User objesi oluştur (Supabase auth formatına benzer)
-        const userObject = {
-          id: userId,
-          email: email,
-          user_metadata: {
-            full_name: name,
-            avatar_url: picture,
-            email: email,
-          },
-        };
-
-        if (appStore?.setUser) {
-          appStore.setUser(userObject);
-        }
-
-        if (appStore?.setUserProfile && profile) {
-          appStore.setUserProfile(profile);
-        }
-
-        // Profili tekrar yükle (roller ile birlikte)
-        if (loadUserProfile && typeof loadUserProfile === 'function') {
-          try {
-            const fullProfile = await loadUserProfile(userId);
-            if (fullProfile) {
-              profile = fullProfile;
-            }
-          } catch (loadError) {
-            console.error('Profil yükleme hatası:', loadError);
-            // Profil yüklenemese bile devam et
+          // Aktif kontrolü
+          if (profile && profile.aktif === false) {
+            await supabase.auth.signOut();
+            showError('Hesabınız pasif durumda. Giriş yapamazsınız. Lütfen yönetici ile iletişime geçin.');
+            setIsGoogleLoading(false);
+            return;
           }
-        }
 
-        // Loading state'i kapat
-        setIsGoogleLoading(false);
+          // appStore'da state'leri güncelle
+          if (appStore?.setUser && profile) {
+            appStore.setUser({
+              id: userId,
+              email: email,
+              user_metadata: {
+                full_name: name,
+                avatar_url: picture,
+              },
+            });
+          }
 
-        // Navigation'ı yap
-        const targetRoute = profile?.rol_id === 3 ? 'KasaScreen' : 'MainTabs';
+          if (appStore?.setUserProfile && profile) {
+            appStore.setUserProfile(profile);
+          }
 
-        console.log('✅ Google OAuth başarılı, yönlendiriliyor:', targetRoute, 'Profil:', profile?.rol_id);
+          // Profili tekrar yükle (roller ile birlikte)
+          if (loadUserProfile && typeof loadUserProfile === 'function') {
+            try {
+              const fullProfile = await loadUserProfile(userId);
+              if (fullProfile) {
+                profile = fullProfile;
+              }
+            } catch (loadError) {
+              console.error('Profil yükleme hatası:', loadError);
+            }
+          }
 
-        try {
+          // Loading state'i kapat
+          setIsGoogleLoading(false);
+
+          // Navigation'ı yap
+          const targetRoute = profile?.rol_id === 3 ? 'KasaScreen' : 'MainTabs';
+
+          console.log('Google OAuth başarılı, yönlendiriliyor:', targetRoute, 'Profil:', profile?.rol_id);
+
           navigation.reset({
             index: 0,
             routes: [{ name: targetRoute }],
@@ -453,29 +351,25 @@ export default function LoginScreen() {
           setTimeout(() => {
             showSuccess('Giriş yapıldı', 'Hoş geldiniz!');
           }, 300);
-        } catch (navError) {
-          console.error('Navigation hatası:', navError);
-          showError('Yönlendirme sırasında bir hata oluştu. Lütfen uygulamayı yeniden başlatın.');
-        }
-        } catch (successError) {
-          console.error('❌ Google OAuth success bloğu hatası:', successError);
-          console.error('Hata detayları:', JSON.stringify(successError, null, 2));
-          showError('Giriş işlemi sırasında bir hata oluştu: ' + (successError.message || 'Bilinmeyen hata'));
+        } catch (profileError) {
+          console.error('Profil işleme hatası:', profileError);
           setIsGoogleLoading(false);
+          showError('Profil oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
         }
-      } else if (result.type === 'cancel') {
-        showInfo('Google ile giriş iptal edildi.');
-        setIsGoogleLoading(false);
-      } else if (result.type === 'dismiss') {
-        showInfo('Google ile giriş penceresi kapatıldı.');
-        setIsGoogleLoading(false);
-      } else {
-        console.log('OAuth result type:', result.type);
-        setIsGoogleLoading(false);
-      }
     } catch (error) {
       console.error('Google ile giriş yapılırken hata:', error);
-      showError('Google ile giriş yapılırken bir hata oluştu: ' + (error.message || 'Bilinmeyen hata'));
+      
+      // Google Sign-In hata kodları
+      if (error.code === 'SIGN_IN_CANCELLED') {
+        showInfo('Google ile giriş iptal edildi.');
+      } else if (error.code === 'IN_PROGRESS') {
+        showInfo('Google ile giriş zaten devam ediyor.');
+      } else if (error.code === 'PLAY_SERVICES_NOT_AVAILABLE') {
+        showError('Google Play Services mevcut değil. Lütfen Google Play Services\'i yükleyin.');
+      } else {
+        showError('Google ile giriş yapılırken bir hata oluştu: ' + (error.message || 'Bilinmeyen hata'));
+      }
+      
       setIsGoogleLoading(false);
     }
   };

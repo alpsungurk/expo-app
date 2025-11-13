@@ -217,86 +217,58 @@ export const NotificationProvider = ({ children }) => {
         deviceInfo
       });
 
-      // push_tokens tablosuna kaydet veya güncelle
-      // Eğer aynı token varsa güncelle, yoksa yeni kayıt ekle
-      const { data: existingToken, error: checkError } = await supabase
+      // push_tokens tablosuna kaydet veya güncelle - upsert kullan (daha güvenli)
+      // upsert: eğer kayıt varsa güncelle, yoksa ekle
+      console.log('Token upsert yapılıyor...');
+      const { data: upsertData, error: upsertError } = await supabase
         .from('push_tokens')
-        .select('id, push_token, device_id')
-        .eq('push_token', token)
-        .single();
-
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found
-        console.error('Token kontrol hatası:', checkError);
-      }
-
-      if (existingToken) {
-        // Token zaten var, güncelle
-        console.log('Mevcut token bulundu, güncelleniyor...', existingToken.id);
-        const { data: updatedData, error: updateError } = await supabase
-          .from('push_tokens')
-          .update({
-            device_info: deviceInfo,
-            device_id: deviceId,
-            is_active: true,
-            last_active: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('push_token', token)
-          .select();
-
-        if (updateError) {
-          console.error('❌ Push token güncelleme hatası:', updateError);
-          console.error('Hata kodu:', updateError.code);
-          console.error('Hata mesajı:', updateError.message);
-        } else {
-          console.log('✅ Push token başarıyla güncellendi (mevcut token)');
-          console.log('Güncellenen kayıt:', updatedData);
-        }
-      } else {
-        // Yeni token ekle
-        console.log('Yeni token ekleniyor...');
-        const { data: insertedData, error: insertError } = await supabase
-          .from('push_tokens')
-          .insert({
+        .upsert(
+          {
             push_token: token,
             device_info: deviceInfo,
             device_id: deviceId,
             is_active: true,
             last_active: new Date().toISOString(),
-          })
-          .select();
-
-        if (insertError) {
-          console.error('❌ Push token ekleme hatası:', insertError);
-          console.error('Hata kodu:', insertError.code);
-          console.error('Hata mesajı:', insertError.message);
-          console.error('Hata detayları:', insertError.details);
-          
-          // Eğer unique constraint hatası varsa (başka bir kayıt aynı token'a sahip), güncelle
-          if (insertError.code === '23505') {
-            console.log('⚠️ Token zaten var (unique constraint), güncelleniyor...');
-            const { data: upsertData, error: upsertError } = await supabase
-              .from('push_tokens')
-              .update({
-                device_info: deviceInfo,
-                device_id: deviceId,
-                is_active: true,
-                last_active: new Date().toISOString(),
-              })
-              .eq('push_token', token)
-              .select();
-
-            if (upsertError) {
-              console.error('❌ Push token upsert hatası:', upsertError);
-            } else {
-              console.log('✅ Push token başarıyla güncellendi (upsert)');
-              console.log('Güncellenen kayıt:', upsertData);
-            }
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: 'push_token', // push_token kolonuna göre conflict kontrolü
+            ignoreDuplicates: false, // Duplicate'leri ignore etme, güncelle
           }
-        } else {
-          console.log('✅ Push token başarıyla kaydedildi (yeni token)');
-          console.log('Eklenen kayıt:', insertedData);
+        )
+        .select();
+
+      if (upsertError) {
+        console.error('❌ Push token upsert hatası:', upsertError);
+        console.error('Hata kodu:', upsertError.code);
+        console.error('Hata mesajı:', upsertError.message);
+        console.error('Hata detayları:', upsertError.details);
+        
+        // Eğer upsert başarısız olursa (onConflict çalışmazsa), manuel update dene
+        if (upsertError.code === '23505' || upsertError.message?.includes('unique constraint')) {
+          console.log('⚠️ Upsert başarısız, manuel update deneniyor...');
+          const { data: updateData, error: updateError } = await supabase
+            .from('push_tokens')
+            .update({
+              device_info: deviceInfo,
+              device_id: deviceId,
+              is_active: true,
+              last_active: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('push_token', token)
+            .select();
+
+          if (updateError) {
+            console.error('❌ Manuel update hatası:', updateError);
+          } else {
+            console.log('✅ Push token başarıyla güncellendi (manuel update)');
+            console.log('Güncellenen kayıt:', updateData);
+          }
         }
+      } else {
+        console.log('✅ Push token başarıyla kaydedildi/güncellendi (upsert)');
+        console.log('Kayıt:', upsertData);
       }
 
       // Aynı cihazın eski token'larını pasif yap (eğer farklı bir token varsa)

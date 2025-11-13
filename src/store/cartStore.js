@@ -344,29 +344,6 @@ export const CartProvider = ({ children }) => {
               console.log('Push token kaydedildi ve ID alındı:', pushTokenId);
             } else {
               console.error('Push token kaydetme hatası:', insertError);
-              
-              // Eğer unique constraint hatası varsa (duplicate key), güncelle
-              if (insertError?.code === '23505') {
-                console.log('⚠️ Token zaten var (unique constraint), güncelleniyor...');
-                const { data: updatedTokenData, error: updateError } = await supabase
-                  .from('push_tokens')
-                  .update({
-                    device_info: deviceInfo,
-                    device_id: deviceId,
-                    is_active: true,
-                    last_active: new Date().toISOString(),
-                  })
-                  .eq('push_token', expoPushToken)
-                  .select('id')
-                  .single();
-
-                if (!updateError && updatedTokenData?.id) {
-                  pushTokenId = updatedTokenData.id;
-                  console.log('✅ Push token başarıyla güncellendi (upsert), ID:', pushTokenId);
-                } else {
-                  console.error('❌ Push token güncelleme hatası:', updateError);
-                }
-              }
             }
           } catch (saveError) {
             console.error('Push token kaydetme hatası:', saveError);
