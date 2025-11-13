@@ -12,7 +12,6 @@
     "prebuild": "expo prebuild",
     "prebuild:clean": "expo prebuild --clean",
     "android:studio": "adb reverse tcp:8081 tcp:8081 && echo ADB reverse port forwarding başarıyla kuruldu. Şimdi Metro bundler'ı başlatın: npm start",
-    "metro": "expo start --port 8081",
     "build:android": "eas build --platform android --profile preview",
     "build:android:dev": "eas build --platform android --profile development",
     "build:android:local": "npx expo export:embed && cd android && gradlew.bat assembleRelease",
