@@ -5,32 +5,51 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       groups:
-        - expo_credentials # Codemagic'de Expo credentials grubunu oluşturun
+        - keystore_credentials # Android keystore için
       vars:
         EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
         EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
         EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
         EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
         EXPO_PUBLIC_GOOGLE_CLIENT_ID: $EXPO_PUBLIC_GOOGLE_CLIENT_ID
-        EXPO_TOKEN: $EXPO_TOKEN # Expo access token
       node: 20.18.0
       npm: 10.8.2
+      java: 17
     scripts:
       - name: Install dependencies
         script: |
           npm ci
       - name: Install Expo CLI
         script: |
-          npm install -g @expo/cli eas-cli
-      - name: Setup Expo credentials
+          npm install -g @expo/cli
+      - name: Setup Android keystore
         script: |
-          echo "Setting up Expo credentials..."
+          if [ -z "$CM_KEYSTORE_PATH" ]; then
+            echo "Keystore credentials not found. Creating debug keystore..."
+            keytool -genkeypair -v -storetype PKCS12 -keystore android/app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          else
+            echo "Using provided keystore..."
+            cp $CM_KEYSTORE_PATH android/app/my-release-key.keystore
+            cp $CM_KEYSTORE_PASSWORD android/app/keystore-password.txt
+            cp $CM_KEYSTORE_ALIAS android/app/keystore-alias.txt
+          fi
+      - name: Prebuild Android
+        script: |
+          npx expo prebuild --platform android --clean
       - name: Build Android APK
         script: |
-          eas build --platform android --profile preview --non-interactive
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
+          cd ..
+      - name: Build Android AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+          cd ..
     artifacts:
-      - build/**/*.apk
-      - build/**/*.aab
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
     publishing:
       email:
         recipients:
@@ -38,10 +57,46 @@ workflows:
         notify:
           success: true
           failure: false
-      scripts:
-        - name: Upload to Codemagic
-          script: |
-            echo "Build completed successfully"
+
+  android-debug:
+    name: Android Debug Build
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      vars:
+        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
+        EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
+        EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
+        EXPO_PUBLIC_GOOGLE_CLIENT_ID: $EXPO_PUBLIC_GOOGLE_CLIENT_ID
+      node: 20.18.0
+      npm: 10.8.2
+      java: 17
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+      - name: Install Expo CLI
+        script: |
+          npm install -g @expo/cli
+      - name: Prebuild Android
+        script: |
+          npx expo prebuild --platform android --clean
+      - name: Build Android Debug APK
+        script: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+          cd ..
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: false
 
   ios-workflow:
     name: iOS Build
@@ -49,7 +104,6 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       groups:
-        - expo_credentials
         - app_store_credentials # iOS için App Store credentials
       vars:
         EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
@@ -57,25 +111,55 @@ workflows:
         EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
         EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
         EXPO_PUBLIC_GOOGLE_CLIENT_ID: $EXPO_PUBLIC_GOOGLE_CLIENT_ID
-        EXPO_TOKEN: $EXPO_TOKEN
       node: 20.18.0
       npm: 10.8.2
       xcode: latest
+      cocoapods: default
     scripts:
       - name: Install dependencies
         script: |
           npm ci
       - name: Install Expo CLI
         script: |
-          npm install -g @expo/cli eas-cli
-      - name: Setup Expo credentials
+          npm install -g @expo/cli
+      - name: Prebuild iOS
         script: |
-          echo "Setting up Expo credentials..."
+          npx expo prebuild --platform ios --clean
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios
+          pod install
+          cd ..
+      - name: Set up code signing settings
+        script: |
+          xcode-project use-profiles
       - name: Build iOS
         script: |
-          eas build --platform ios --profile preview --non-interactive
+          xcodebuild build \
+            -workspace ios/*.xcworkspace \
+            -scheme expo-app \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Build iOS IPA
+        script: |
+          xcodebuild archive \
+            -workspace ios/*.xcworkspace \
+            -scheme expo-app \
+            -configuration Release \
+            -archivePath build/ios/exp-app.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+          xcodebuild -exportArchive \
+            -archivePath build/ios/exp-app.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
     artifacts:
-      - build/**/*.ipa
+      - build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
@@ -83,41 +167,3 @@ workflows:
         notify:
           success: true
           failure: false
-
-  android-production:
-    name: Android Production Build
-    max_build_duration: 120
-    instance_type: mac_mini_m1
-    environment:
-      groups:
-        - expo_credentials
-      vars:
-        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
-        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
-        EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
-        EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
-        EXPO_PUBLIC_GOOGLE_CLIENT_ID: $EXPO_PUBLIC_GOOGLE_CLIENT_ID
-        EXPO_TOKEN: $EXPO_TOKEN
-      node: 20.18.0
-      npm: 10.8.2
-    scripts:
-      - name: Install dependencies
-        script: |
-          npm ci
-      - name: Install Expo CLI
-        script: |
-          npm install -g @expo/cli eas-cli
-      - name: Build Android Production
-        script: |
-          eas build --platform android --profile production --non-interactive
-    artifacts:
-      - build/**/*.apk
-      - build/**/*.aab
-    publishing:
-      email:
-        recipients:
-          - your-email@example.com
-        notify:
-          success: true
-          failure: false
-
