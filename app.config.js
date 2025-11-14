@@ -25,8 +25,8 @@ export default {
       package: 'com.kahvedukkani.app',
       // Firebase için google-services.json dosyasının yolu
       // EAS Build sırasında bu dosya otomatik olarak yüklenir
-      // Önce git'ten dosyayı bulmaya çalışır, bulamazsa EAS secret'tan alır
-      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || './android/app/google-services.json',
+      // Proje root'unda olmalı (EAS Build için)
+      googleServicesFile: './google-services.json',
       permissions: [
         'android.permission.CAMERA',
         'android.permission.RECORD_AUDIO',
