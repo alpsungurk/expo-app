@@ -326,9 +326,9 @@ function MainTabNavigator() {
   }, [userProfile, navigation]);
 
   // Tab bar için base height ve padding hesaplama
-  const baseTabBarHeight = 60;
-  const basePaddingTop = 8;
-  const basePaddingBottom = 8;
+  const baseTabBarHeight = 50;
+  const basePaddingTop = 5;
+  const basePaddingBottom = 5;
   const tabBarHeight = baseTabBarHeight + insets.bottom;
   const tabBarPaddingBottom = basePaddingBottom + insets.bottom;
   const tabBarPaddingTop = basePaddingTop;
@@ -338,11 +338,10 @@ function MainTabNavigator() {
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
-            let iconSize = size;
+            let iconSize = 20; // İkon boyutunu küçülttük
 
             if (route.name === 'Menü') {
               iconName = focused ? 'cafe' : 'cafe-outline';
-              iconSize = size; // Normal boyut
             } else if (route.name === 'Sepet') {
               iconName = focused ? 'cart' : 'cart-outline';
             } else if (route.name === 'Sipariş Ver') {
@@ -357,6 +356,10 @@ function MainTabNavigator() {
           },
           tabBarActiveTintColor: '#8B4513',
           tabBarInactiveTintColor: '#9CA3AF',
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontWeight: '500',
+          },
           tabBarStyle: {
             paddingBottom: tabBarPaddingBottom,
             paddingTop: tabBarPaddingTop,
