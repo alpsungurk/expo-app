@@ -16,6 +16,8 @@ workflows:
       - name: Install dependencies
         script: |
           npm install
+          # Verify React Native gradle plugin is installed
+          node -e "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })" || echo "Warning: @react-native/gradle-plugin not found"
       - name: Generate JavaScript bundle
         script: |
           npx expo export:embed --platform android
