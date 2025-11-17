@@ -1,0 +1,80 @@
+workflows:
+  expo-android-workflow:
+    name: Expo Android Build
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        - expo_credentials # Expo credentials grubu
+      vars:
+        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
+        EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
+        EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
+        EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB: $EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB
+        EXPO_TOKEN: $EXPO_TOKEN # Codemagic'te tanımlanmalı
+      node: 20.18.0
+      npm: 10.8.2
+    scripts:
+      - name: Install EAS CLI
+        script: |
+          npm install -g eas-cli
+      - name: Install dependencies
+        script: |
+          npm install
+      - name: Set up Expo
+        script: |
+          eas login --non-interactive --token $EXPO_TOKEN
+      - name: Build Android APK
+        script: |
+          eas build --platform android --profile preview --non-interactive
+    artifacts:
+      - build/**/*.apk
+      - build/**/*.aab
+    publishing:
+      email:
+        recipients:
+          - alpsungurk@hotmail.com
+        notify:
+          success: true
+          failure: false
+
+  expo-ios-workflow:
+    name: Expo iOS Build
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        - expo_credentials # Expo credentials grubu
+      vars:
+        EXPO_PUBLIC_SUPABASE_URL: $EXPO_PUBLIC_SUPABASE_URL
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: $EXPO_PUBLIC_SUPABASE_ANON_KEY
+        EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
+        EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
+        EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB: $EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB
+        EXPO_TOKEN: $EXPO_TOKEN # Codemagic'te tanımlanmalı
+      node: 20.18.0
+      npm: 10.8.2
+    scripts:
+      - name: Install EAS CLI
+        script: |
+          npm install -g eas-cli
+      - name: Install dependencies
+        script: |
+          npm install
+      - name: Set up Expo
+        script: |
+          eas login --non-interactive --token $EXPO_TOKEN
+      - name: Build iOS
+        script: |
+          eas build --platform ios --profile preview --non-interactive
+    artifacts:
+      - build/**/*.ipa
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: false
+
