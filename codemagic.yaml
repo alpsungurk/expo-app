@@ -19,10 +19,13 @@ workflows:
       - name: Generate native Android project
         script: |
           npx expo prebuild --platform android --clean
+      - name: Fix Kotlin version
+        script: |
+          sed -i '' "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24')/g" android/build.gradle || sed -i "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24')/g" android/build.gradle
       - name: Build Android APK
         script: |
           cd android
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace --info
       - name: Build Android AAB (optional)
         script: |
           cd android
