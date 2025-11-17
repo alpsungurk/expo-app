@@ -19,13 +19,17 @@ workflows:
       - name: Generate native Android project
         script: |
           npx expo prebuild --platform android --clean
-      - name: Fix Kotlin version
+      - name: Fix Kotlin version and package name
         script: |
+          # Fix Kotlin version
           sed -i '' "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24')/g" android/build.gradle || sed -i "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24')/g" android/build.gradle
+          # Fix package name in Kotlin files
+          find android/app/src -name "*.kt" -type f -exec sed -i '' 's/package com\.ilkcoffee/package com.kahvedukkani.app/g' {} \; || find android/app/src -name "*.kt" -type f -exec sed -i 's/package com\.ilkcoffee/package com.kahvedukkani.app/g' {} \;
       - name: Build Android APK
         script: |
           cd android
-          ./gradlew assembleRelease --stacktrace --info
+          ./gradlew clean
+          ./gradlew assembleRelease --stacktrace --debug 2>&1 | tee build.log || (cat build.log && exit 1)
       - name: Build Android AAB (optional)
         script: |
           cd android
