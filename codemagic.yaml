@@ -1,6 +1,6 @@
 workflows:
   expo-android-workflow:
-    name: Expo Android Build
+    name: Expo Android Build (Native)
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
@@ -12,25 +12,26 @@ workflows:
         EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
         EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
         EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB: $EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB
-        EXPO_TOKEN: $EXPO_TOKEN # Codemagic'te tanımlanmalı
       node: 20.18.0
       npm: 10.8.2
     scripts:
-      - name: Install EAS CLI
-        script: |
-          npm install -g eas-cli
       - name: Install dependencies
         script: |
           npm install
-      - name: Set up Expo
+      - name: Generate native Android project
         script: |
-          eas login --non-interactive --token $EXPO_TOKEN
+          npx expo prebuild --platform android --clean
       - name: Build Android APK
         script: |
-          eas build --platform android --profile preview --non-interactive
+          cd android
+          ./gradlew assembleRelease
+      - name: Build Android AAB (optional)
+        script: |
+          cd android
+          ./gradlew bundleRelease
     artifacts:
-      - build/**/*.apk
-      - build/**/*.aab
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
     publishing:
       email:
         recipients:
@@ -40,7 +41,7 @@ workflows:
           failure: false
 
   expo-ios-workflow:
-    name: Expo iOS Build
+    name: Expo iOS Build (Native)
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
@@ -52,28 +53,49 @@ workflows:
         EXPO_PUBLIC_EXPO_PUSH_API_URL: $EXPO_PUBLIC_EXPO_PUSH_API_URL
         EXPO_PUBLIC_S3_STORAGE_URL: $EXPO_PUBLIC_S3_STORAGE_URL
         EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB: $EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB
-        EXPO_TOKEN: $EXPO_TOKEN # Codemagic'te tanımlanmalı
+        APP_STORE_ID: $APP_STORE_ID
+        APPLE_ID: $APPLE_ID
+        APPLE_APP_SPECIFIC_PASSWORD: $APPLE_APP_SPECIFIC_PASSWORD
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
       node: 20.18.0
       npm: 10.8.2
+      xcode: latest
     scripts:
-      - name: Install EAS CLI
-        script: |
-          npm install -g eas-cli
       - name: Install dependencies
         script: |
           npm install
-      - name: Set up Expo
+      - name: Generate native iOS project
         script: |
-          eas login --non-interactive --token $EXPO_TOKEN
+          npx expo prebuild --platform ios --clean
+      - name: Set up code signing settings on Xcode project
+        script: |
+          xcode-project use-profiles
       - name: Build iOS
         script: |
-          eas build --platform ios --profile preview --non-interactive
+          xcodebuild \
+            -workspace ios/*.xcworkspace \
+            -scheme $(xcode-project detect-scheme) \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/ios/$(xcode-project detect-scheme).xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Export iOS IPA
+        script: |
+          xcodebuild -exportArchive \
+            -archivePath build/ios/$(xcode-project detect-scheme).xcarchive \
+            -exportOptionsPlist ios/exportOptions.plist \
+            -exportPath build/ios/ipa
     artifacts:
-      - build/**/*.ipa
+      - build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
-          - your-email@example.com
+          - alpsungurk@hotmail.com
         notify:
           success: true
           failure: false
