@@ -100,7 +100,7 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
         {showBackButton ? (
           <AnimatedButton
@@ -108,7 +108,7 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
             onPress={onBackPress}
           >
             <View style={styles.buttonInner}>
-              <Ionicons name="arrow-back" size={isLargeScreen ? 28 : isMediumScreen ? 26 : 24} color="white" />
+              <Ionicons name="arrow-back" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
             </View>
           </AnimatedButton>
         ) : (
@@ -117,7 +117,7 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
             onPress={onSidebarPress}
           >
             <View style={styles.buttonInner}>
-              <Ionicons name="menu" size={isLargeScreen ? 28 : isMediumScreen ? 26 : 24} color="white" />
+              <Ionicons name="menu" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
             </View>
           </AnimatedButton>
         )}
@@ -139,7 +139,7 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
           onPress={showNotifications}
         >
           <View style={styles.buttonInner}>
-            <Ionicons name="notifications" size={isLargeScreen ? 28 : isMediumScreen ? 26 : 24} color="white" />
+            <Ionicons name="notifications" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
           </View>
         </AnimatedButton>
       </View>
@@ -150,7 +150,7 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#8B4513',
-    paddingBottom: 16,
+    paddingBottom: 8,
     paddingHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -164,8 +164,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sidebarButton: {
-    width: isLargeScreen ? 52 : isMediumScreen ? 50 : 48,
-    height: isLargeScreen ? 52 : isMediumScreen ? 50 : 48,
+    width: isLargeScreen ? 44 : isMediumScreen ? 42 : 40,
+    height: isLargeScreen ? 44 : isMediumScreen ? 42 : 40,
     borderRadius: 4,
     backgroundColor: 'transparent',
   },
@@ -182,12 +182,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   logoImage: {
-    width: isLargeScreen ? 120 : isMediumScreen ? 110 : 100,
-    height: isLargeScreen ? 120 : isMediumScreen ? 110 : 100,
+    width: isLargeScreen ? 80 : isMediumScreen ? 75 : 70,
+    height: isLargeScreen ? 80 : isMediumScreen ? 75 : 70,
   },
   notificationButton: {
-    width: isLargeScreen ? 52 : isMediumScreen ? 50 : 48,
-    height: isLargeScreen ? 52 : isMediumScreen ? 50 : 48,
+    width: isLargeScreen ? 44 : isMediumScreen ? 42 : 40,
+    height: isLargeScreen ? 44 : isMediumScreen ? 42 : 40,
     borderRadius: 4,
     backgroundColor: 'transparent',
   },

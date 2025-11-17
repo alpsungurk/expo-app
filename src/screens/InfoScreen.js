@@ -8,7 +8,8 @@ import {
   Dimensions,
   Linking,
   ActivityIndicator,
-  BackHandler
+  BackHandler,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -233,10 +234,10 @@ export default function InfoScreen() {
             <View style={styles.kafeAdiContainer}>
               <View style={styles.kafeAdiCard}>
                 <View style={styles.kafeAdiIconContainer}>
-                  <Ionicons 
-                    name="cafe" 
-                    size={getResponsiveValue(32, 36, 40, 44)} 
-                    color="#8B4513" 
+                  <Image 
+                    source={require('../../assets/logo.png')} 
+                    style={styles.logoImage}
+                    resizeMode="contain"
                   />
                 </View>
                 <Text style={[
@@ -482,13 +483,15 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   kafeAdiIconContainer: {
-    width: getResponsiveValue(56, 64, 72, 80),
-    height: getResponsiveValue(56, 64, 72, 80),
-    borderRadius: getResponsiveValue(28, 32, 36, 40),
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
+    width: getResponsiveValue(100, 110, 120,130),
+    height: getResponsiveValue(100, 110, 120,130),
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: getResponsiveValue(16, 18, 20, 22),
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   kafeAdiText: {
     fontWeight: '700',
