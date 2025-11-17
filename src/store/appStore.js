@@ -157,16 +157,15 @@ export const AppProvider = ({ children }) => {
         .from('kullanici_profilleri')
         .select('*, roller(*)')
         .eq('id', userId)
-        .maybeSingle(); // .single() yerine .maybeSingle() kullan - profil yoksa null döner, hata vermez
+        .maybeSingle(); // maybeSingle() kullan - profil yoksa null döner, hata vermez
 
-      if (error) {
-        // PGRST116 hatası (profil bulunamadı) normal bir durum, hata olarak loglamayalım
-        if (error.code !== 'PGRST116') {
-          console.error('Kullanıcı profili yükleme hatası:', error);
-        }
+      // PGRST116 hatası normal (profil bulunamadı), diğer hataları logla
+      if (error && error.code !== 'PGRST116') {
+        console.error('Kullanıcı profili yükleme hatası:', error);
         return null;
       }
 
+      // Profil bulunduysa set et
       if (data) {
         setUserProfile(data);
         return data;
@@ -210,8 +209,26 @@ export const AppProvider = ({ children }) => {
     let isMounted = true;
 
     // Mevcut session'ı kontrol et
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (!isMounted) return;
+      
+      // Refresh token hatası durumunda session'ı temizle
+      if (error) {
+        console.error('Session error:', error);
+        if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
+          console.log('Refresh token hatası tespit edildi, session temizleniyor...');
+          try {
+            await supabase.auth.signOut();
+          } catch (signOutError) {
+            console.error('Sign out error:', signOutError);
+          }
+          if (isMounted) {
+            setUser(null);
+            setUserProfile(null);
+          }
+          return;
+        }
+      }
       
       if (session) {
         setUser(session.user);
@@ -231,6 +248,16 @@ export const AppProvider = ({ children }) => {
           }
         }
       }
+    }).catch((error) => {
+      console.error('getSession catch error:', error);
+      if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
+        console.log('Refresh token hatası tespit edildi, session temizleniyor...');
+        supabase.auth.signOut().catch(console.error);
+        if (isMounted) {
+          setUser(null);
+          setUserProfile(null);
+        }
+      }
     });
 
     // Auth state değişikliklerini dinle
@@ -239,21 +266,48 @@ export const AppProvider = ({ children }) => {
       
       console.log('Auth state change event:', event, session?.user?.email);
       
-      if (session) {
-        setUser(session.user);
-        const profile = await loadUserProfileRef.current(session.user.id);
-        
-        // Profil state'ini güncelle
-        if (profile) {
-          setUserProfile(profile);
+      // TOKEN_REFRESHED veya SIGNED_OUT event'lerini özel olarak işle
+      if (event === 'TOKEN_REFRESHED' && !session) {
+        console.log('Token refresh başarısız, session temizleniyor...');
+        if (isMounted) {
+          setUser(null);
+          setUserProfile(null);
         }
-        
-        // Aktif kontrolü - Pasif kullanıcıları otomatik çıkış yaptır
-        if (profile && profile.aktif === false) {
-          await supabase.auth.signOut();
-          if (isMounted) {
-            setUser(null);
-            setUserProfile(null);
+        return;
+      }
+      
+      if (session) {
+        try {
+          setUser(session.user);
+          const profile = await loadUserProfileRef.current(session.user.id);
+          
+          // Profil state'ini güncelle
+          if (profile) {
+            setUserProfile(profile);
+          }
+          
+          // Aktif kontrolü - Pasif kullanıcıları otomatik çıkış yaptır
+          if (profile && profile.aktif === false) {
+            await supabase.auth.signOut();
+            if (isMounted) {
+              setUser(null);
+              setUserProfile(null);
+            }
+          }
+        } catch (error) {
+          console.error('Auth state change error:', error);
+          // Refresh token hatası durumunda session'ı temizle
+          if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
+            console.log('Refresh token hatası tespit edildi, session temizleniyor...');
+            try {
+              await supabase.auth.signOut();
+            } catch (signOutError) {
+              console.error('Sign out error:', signOutError);
+            }
+            if (isMounted) {
+              setUser(null);
+              setUserProfile(null);
+            }
           }
         }
       } else {

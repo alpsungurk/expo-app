@@ -10,7 +10,8 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
-  Animated
+  Animated,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -258,15 +259,18 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
               <View style={[
                 styles.kafeAdiIcon,
                 {
-                  width: getResponsiveValue(40, 44, 48, 52),
-                  height: getResponsiveValue(40, 44, 48, 52),
-                  borderRadius: getResponsiveValue(20, 22, 24, 26),
+                  width: getResponsiveValue(80, 90, 100, 110),
+                  height: getResponsiveValue(80, 90, 100, 110),
+                  borderRadius: getResponsiveValue(40, 45, 50, 55),
                 }
               ]}>
-                <Ionicons 
-                  name="cafe" 
-                  size={getResponsiveValue(22, 24, 26, 28)} 
-                  color="#8B4513" 
+                <Image 
+                  source={require('../../assets/logo.png')} 
+                  style={{
+                    width: getResponsiveValue(80, 90, 100, 110),
+                    height: getResponsiveValue(80, 90, 100, 110),
+                  }}
+                  resizeMode="contain"
                 />
               </View>
               <Text style={[
@@ -294,8 +298,10 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
           <View style={styles.sidebarWrapper}>
             <ScrollView 
               style={styles.sidebarContent} 
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
               contentContainerStyle={styles.scrollContent}
+              nestedScrollEnabled={true}
+              bounces={true}
             >
               {/* Profile Card - Giriş yapılmışsa göster */}
               {isLoggedIn && (
@@ -751,8 +757,9 @@ const styles = StyleSheet.create({
     paddingTop: getResponsiveValue(16, 18, 20, 22),
   },
   scrollContent: {
+    flexGrow: 1,
     paddingTop: getResponsiveValue(8, 10, 12, 14),
-    paddingBottom: getResponsiveValue(8, 10, 12, 14),
+    paddingBottom: getResponsiveValue(20, 24, 28, 32),
   },
   loginButtonContainer: {
     paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
@@ -768,7 +775,7 @@ const styles = StyleSheet.create({
   
   // Kafe Adı Stilleri
   kafeAdiIcon: {
-    backgroundColor: 'rgba(139, 69, 19, 0.12)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: getResponsiveValue(12, 14, 16, 18),

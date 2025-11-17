@@ -53,6 +53,7 @@ export default function ProductDetailScreen({ route, navigation }) {
 
 
   const calculateTotalPrice = () => {
+    if (!product?.fiyat) return 0;
     return product.fiyat * quantity;
   };
 
@@ -156,7 +157,7 @@ export default function ProductDetailScreen({ route, navigation }) {
         style={styles.scrollView} 
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: (isLargeScreen ? 140 : isMediumScreen ? 120 : 100) + insets.bottom }
+          { paddingBottom: (isLargeScreen ? 160 : isMediumScreen ? 140 : 120) + insets.bottom }
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -221,36 +222,42 @@ export default function ProductDetailScreen({ route, navigation }) {
 
       {/* Alt Bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + (isLargeScreen ? 20 : isMediumScreen ? 16 : 12) }]}>
-        <View style={styles.quantityContainer}>
-          <TouchableOpacity
-            style={styles.quantityButton}
-            onPress={() => setQuantity(Math.max(1, quantity - 1))}
-          >
-            <Ionicons name="remove" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
-          </TouchableOpacity>
-          <Text style={styles.quantityText}>{quantity}</Text>
-          <TouchableOpacity
-            style={styles.quantityButton}
-            onPress={() => setQuantity(quantity + 1)}
-          >
-            <Ionicons name="add" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
-          </TouchableOpacity>
+        {/* Adet ve Fiyat - Üstte */}
+        <View style={styles.bottomRow}>
+          <View style={styles.quantityContainer}>
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => setQuantity(Math.max(1, quantity - 1))}
+            >
+              <Ionicons name="remove" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
+            </TouchableOpacity>
+            <Text style={styles.quantityText}>{quantity}</Text>
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => setQuantity(quantity + 1)}
+            >
+              <Ionicons name="add" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="#8B4513" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.priceContainer}>
+            {product?.fiyat && (
+              <Text style={styles.totalPrice} numberOfLines={1} ellipsizeMode="tail">
+                {formatPrice(calculateTotalPrice())}
+              </Text>
+            )}
+          </View>
         </View>
 
-        <View style={styles.priceContainer}>
-          <Text style={styles.totalPrice} numberOfLines={1} ellipsizeMode="tail">
-            {formatPrice(calculateTotalPrice())}
-          </Text>
-        </View>
-
-        <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
-          <Ionicons name="cart" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="white" />
-          {!isSmallScreen && (
+        {/* Sepete Ekle Butonu - Altta */}
+        <View style={styles.addToCartContainer}>
+          <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
+            <Ionicons name="cart" size={isLargeScreen ? 22 : isMediumScreen ? 20 : 18} color="white" />
             <Text style={styles.addToCartText} numberOfLines={1}>
-              Ekle
+              Sepete Ekle
             </Text>
-          )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
@@ -299,7 +306,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: isLargeScreen ? 140 : isMediumScreen ? 120 : 100, // Bottom bar için boşluk
+    paddingBottom: isLargeScreen ? 160 : isMediumScreen ? 140 : 120, // Bottom bar için boşluk
   },
   imageContainer: {
     position: 'relative',
@@ -454,11 +461,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: isLargeScreen ? 24 : isMediumScreen ? 20 : 12,
-    paddingTop: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
+    paddingTop: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
@@ -468,6 +472,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     zIndex: 1000, // Tab bar'ın üstünde olması için
+  },
+  addToCartContainer: {
+    alignItems: 'center',
+    marginTop: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    width: '100%',
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
   },
   quantityContainer: {
     flexDirection: 'row',
@@ -519,7 +534,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#8B4513',
-    paddingHorizontal: isLargeScreen ? 20 : isMediumScreen ? 16 : isSmallScreen ? 14 : 12,
+    paddingHorizontal: isLargeScreen ? 32 : isMediumScreen ? 28 : 24,
     paddingVertical: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     borderRadius: isLargeScreen ? 30 : isMediumScreen ? 25 : 20,
     shadowColor: '#8B4513',
@@ -527,15 +542,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
-    flexShrink: 0,
-    minWidth: isSmallScreen ? 50 : isLargeScreen ? 140 : isMediumScreen ? 120 : 100,
+    width: '100%',
+    minHeight: isLargeScreen ? 56 : isMediumScreen ? 52 : 48,
   },
   addToCartText: {
     color: 'white',
     fontSize: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     fontWeight: 'bold',
     marginLeft: isLargeScreen ? 10 : isMediumScreen ? 8 : 6,
-    flexShrink: 1,
   },
   // Malzemeler Styles
   ingredientsContainer: {

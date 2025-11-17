@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TouchableWithoutFeedback, Animated, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, TouchableWithoutFeedback, Animated, Dimensions, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartStore } from '../store/cartStore';
@@ -96,12 +96,8 @@ const AnimatedButton = ({ onPress, children, style }) => {
 };
 
 export default function TableHeader({ onQRScan, onSidebarPress, showBackButton = false, onBackPress, onInfoPress }) {
-  const { tableNumber, qrToken } = useCartStore();
-  const { getSistemAyarı } = useAppStore();
   const { showNotifications } = useNotification();
   const insets = useSafeAreaInsets();
-  
-  const kafeAdi = getSistemAyarı('kafe_adi') || 'Kahve Dükkanı';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
@@ -131,15 +127,11 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
           onPress={onInfoPress}
           activeOpacity={0.7}
         >
-          <View style={styles.shopNameContainer}>
-            <Ionicons name="cafe" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
-            <Text style={styles.shopName}>{kafeAdi}</Text>
-          </View>
-          {tableNumber ? (
-            <Text style={styles.tableInfo}>{tableNumber}</Text>
-          ) : (
-            <Text style={styles.tableInfo}>Masa seçilmedi</Text>
-          )}
+          <Image 
+            source={require('../../assets/logo.png')} 
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
 
         <AnimatedButton
@@ -186,27 +178,12 @@ const styles = StyleSheet.create({
   shopInfo: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     marginHorizontal: 16,
   },
-  shopNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  shopName: {
-    fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20,
-    fontWeight: 'bold',
-    fontFamily: 'System',
-    color: 'white',
-    marginLeft: 6,
-    textAlign: 'center',
-  },
-  tableInfo: {
-    fontSize: isLargeScreen ? 15 : isMediumScreen ? 14 : 13,
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '600',
-    fontFamily: 'System',
-    textAlign: 'center',
+  logoImage: {
+    width: isLargeScreen ? 120 : isMediumScreen ? 110 : 100,
+    height: isLargeScreen ? 120 : isMediumScreen ? 110 : 100,
   },
   notificationButton: {
     width: isLargeScreen ? 52 : isMediumScreen ? 50 : 48,

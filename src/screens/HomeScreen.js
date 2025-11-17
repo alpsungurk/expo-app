@@ -96,7 +96,7 @@ export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const categoryScrollX = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
   const {
     categories,
@@ -121,16 +121,17 @@ export default function HomeScreen() {
     loadData();
     loadOrdersData();
 
-    // Staggered animation entrance
+    // Sayfa açılış animasyonu
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 600,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
         useNativeDriver: true,
       })
     ]).start();
@@ -659,7 +660,13 @@ export default function HomeScreen() {
       })()}
 
       <Animated.ScrollView
-        style={[styles.scrollView, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+        style={[
+          styles.scrollView, 
+          { 
+            opacity: fadeAnim, 
+            transform: [{ scale: scaleAnim }] 
+          }
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -889,7 +896,7 @@ export default function HomeScreen() {
               styles.loadingContainer,
               {
                 opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }]
+                transform: [{ scale: scaleAnim }]
               }
             ]}>
               <ActivityIndicator size="large" color="#8B4513" />

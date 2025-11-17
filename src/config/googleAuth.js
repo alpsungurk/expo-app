@@ -1,10 +1,14 @@
 import Constants from 'expo-constants';
 
 // Google OAuth Configuration
-// Android için Google Client ID
-export const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID || 
-                                process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || // Fallback: genel Client ID
-                                Constants.expoConfig?.extra?.googleClientIdAndroid;
+// Sadece Web Application Client ID kullanıyoruz (Android Client ID gerekmez)
+// Web Application Client ID (ID token almak için gerekli)
+export const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || 
+                                    Constants.expoConfig?.extra?.googleClientIdWeb ||
+                                    '567674269605-equcfcmnvkiidevl7hlo1v84ol5r168j.apps.googleusercontent.com'; // Fallback: Doğru Web Client ID
+
+// Eski Android Client ID (artık kullanılmıyor, geriye dönük uyumluluk için)
+export const GOOGLE_CLIENT_ID = GOOGLE_WEB_CLIENT_ID;
 
 // Google OAuth Endpoints
 export const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';

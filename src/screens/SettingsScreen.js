@@ -133,9 +133,14 @@ export default function SettingsScreen() {
           .from('kullanici_profilleri')
           .select('*, roller(*)')
           .eq('id', user.id)
-          .single();
+          .maybeSingle(); // maybeSingle() kullan - profil yoksa null döner, hata vermez
         
-        if (!profileError && profileData && appStore?.setUserProfile) {
+        // PGRST116 hatası normal (profil bulunamadı), diğer hataları logla
+        if (profileError && profileError.code !== 'PGRST116') {
+          console.error('Profil yükleme hatası:', profileError);
+        }
+        
+        if (profileData && appStore?.setUserProfile) {
           appStore.setUserProfile(profileData);
         }
       }

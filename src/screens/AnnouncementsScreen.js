@@ -34,7 +34,7 @@ export default function AnnouncementsScreen() {
 
   // Animasyon değişkenleri
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
   const { 
     campaigns, 
@@ -46,10 +46,6 @@ export default function AnnouncementsScreen() {
     setYeniOneriler
   } = useAppStore();
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   // Sayfa açılış animasyonu
   useEffect(() => {
     Animated.parallel([
@@ -58,12 +54,17 @@ export default function AnnouncementsScreen() {
         duration: 600,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
         useNativeDriver: true,
       })
     ]).start();
+  }, []);
+
+  useEffect(() => {
+    loadData();
   }, []);
 
 
@@ -317,14 +318,17 @@ export default function AnnouncementsScreen() {
 
   return (
     <View style={styles.container}>
-      <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+      <TableHeader 
+        onSidebarPress={() => setSidebarVisible(true)}
+        onInfoPress={() => navigation.navigate('InfoScreen')}
+      />
 
       <Animated.ScrollView
         style={[
           styles.scrollView,
           {
             opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
+            transform: [{ scale: scaleAnim }]
           }
         ]}
         refreshControl={

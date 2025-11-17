@@ -41,7 +41,7 @@ export default function QRScanScreen() {
 
   // Animasyon değişkenleri
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
   // Sayfa açılış animasyonu
   useEffect(() => {
@@ -51,9 +51,10 @@ export default function QRScanScreen() {
         duration: 600,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
         useNativeDriver: true,
       })
     ]).start();
@@ -273,7 +274,10 @@ export default function QRScanScreen() {
   if (!showCamera) {
     return (
       <View style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+        <TableHeader 
+          onSidebarPress={() => setSidebarVisible(true)}
+          onInfoPress={() => navigation.navigate('InfoScreen')}
+        />
 
         <ScrollView 
           style={styles.scrollView}
@@ -287,7 +291,7 @@ export default function QRScanScreen() {
             styles.mainContainer,
             {
               opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
+              transform: [{ scale: scaleAnim }]
             }
           ]}>
             {/* Hero Section */}
@@ -444,7 +448,10 @@ export default function QRScanScreen() {
   if (!permission) {
     return (
       <View style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+        <TableHeader 
+          onSidebarPress={() => setSidebarVisible(true)}
+          onInfoPress={() => navigation.navigate('InfoScreen')}
+        />
 
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Kamera izni isteniyor...</Text>
@@ -458,7 +465,10 @@ export default function QRScanScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+        <TableHeader 
+          onSidebarPress={() => setSidebarVisible(true)}
+          onInfoPress={() => navigation.navigate('InfoScreen')}
+        />
 
         <View style={styles.permissionContainer}>
           <Ionicons name="camera-outline" size={80} color="#9CA3AF" />

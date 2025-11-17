@@ -81,7 +81,7 @@ export default function OrderStatusScreen() {
   const [phoneToken, setPhoneToken] = useState(null);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const { currentOrder, setCurrentOrder, activeOrder, setActiveOrder, setAllOrders } = useAppStore();
 
   // Phone token'ı al
@@ -189,9 +189,10 @@ export default function OrderStatusScreen() {
         duration: 600,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
         useNativeDriver: true,
       })
     ]).start();
@@ -300,7 +301,10 @@ export default function OrderStatusScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+        <TableHeader 
+          onSidebarPress={() => setSidebarVisible(true)}
+          onInfoPress={() => navigation.navigate('InfoScreen')}
+        />
 
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8B4513" />
@@ -402,7 +406,10 @@ export default function OrderStatusScreen() {
   if (!isLoading && orders.length === 0) {
     return (
       <View style={styles.container}>
-        <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+        <TableHeader 
+          onSidebarPress={() => setSidebarVisible(true)}
+          onInfoPress={() => navigation.navigate('InfoScreen')}
+        />
 
         <View style={styles.emptyContainer}>
           <Ionicons name="document-outline" size={80} color="#6B7280" />
@@ -433,7 +440,7 @@ export default function OrderStatusScreen() {
           styles.scrollView,
           {
             opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
+            transform: [{ scale: scaleAnim }]
           }
         ]}
         contentContainerStyle={styles.scrollContent}

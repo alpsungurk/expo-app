@@ -1,6 +1,6 @@
 export default {
   expo: {
-    name: 'expo-app',
+    name: 'İlk Coffee',
     slug: 'expo-app',
     version: '1.0.0',
     orientation: 'portrait',
@@ -21,6 +21,7 @@ export default {
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff',
+        monochromeImage: './assets/icon.png',
       },
       package: 'com.kahvedukkani.app',
       // Firebase için google-services.json dosyasının yolu

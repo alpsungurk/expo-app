@@ -4,11 +4,11 @@ import { createClient, processLock } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
 // Environment variables'dan Supabase bağlantı bilgilerini al
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
+export const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
                    Constants.expoConfig?.extra?.supabaseUrl ||
                    'https://hgxicutwejvfysjsmjcw.supabase.co';
 
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY || 
+export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY || 
                        process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
                        Constants.expoConfig?.extra?.supabaseAnonKey ||
                        Constants.expoConfig?.extra?.supabaseKey;
@@ -25,8 +25,20 @@ export const supabase = createClient(
       detectSessionInUrl: false,
       lock: processLock,
     },
+    global: {
+      headers: {
+        'x-client-info': 'expo-app',
+      },
+    },
   }
 );
+
+// Global error handler - Refresh token hatalarını yakala
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED' && !session) {
+    console.warn('Token refresh başarısız, session geçersiz olabilir');
+  }
+});
 
 // Veritabanı tabloları için type definitions
 export const TABLES = {
