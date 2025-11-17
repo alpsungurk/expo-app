@@ -16,6 +16,9 @@ workflows:
       - name: Install dependencies
         script: |
           npm install
+      - name: Generate JavaScript bundle
+        script: |
+          npx expo export:embed
       - name: Generate native Android project
         script: |
           npx expo prebuild --platform android --clean
@@ -25,13 +28,13 @@ workflows:
           sed -i '' "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24')/g" android/build.gradle || sed -i "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24')/g" android/build.gradle
           # Fix package name in Kotlin files
           find android/app/src -name "*.kt" -type f -exec sed -i '' 's/package com\.ilkcoffee/package com.kahvedukkani.app/g' {} \; || find android/app/src -name "*.kt" -type f -exec sed -i 's/package com\.ilkcoffee/package com.kahvedukkani.app/g' {} \;
+          # Disable minification for debugging (geçici olarak)
+          sed -i '' 's/minifyEnabled enableMinifyInReleaseBuilds/minifyEnabled false/g' android/app/build.gradle || sed -i 's/minifyEnabled enableMinifyInReleaseBuilds/minifyEnabled false/g' android/app/build.gradle
       - name: Build Android APK
         script: |
           cd android
           ./gradlew clean
-          # Generate BuildConfig and R classes first
-          ./gradlew generateBuildConfig generateResValues
-          ./gradlew assembleRelease --stacktrace --debug 2>&1 | tee build.log || (cat build.log && exit 1)
+          ./gradlew assembleRelease --stacktrace
       - name: Build Android AAB (optional)
         script: |
           cd android
