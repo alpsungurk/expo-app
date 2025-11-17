@@ -18,7 +18,7 @@ workflows:
           npm install
       - name: Generate JavaScript bundle
         script: |
-          npx expo export:embed
+          npx expo export:embed --platform android
       - name: Generate native Android project
         script: |
           npx expo prebuild --platform android --clean
