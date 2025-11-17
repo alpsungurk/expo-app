@@ -29,6 +29,8 @@ workflows:
         script: |
           cd android
           ./gradlew clean
+          # Generate BuildConfig and R classes first
+          ./gradlew generateBuildConfig generateResValues
           ./gradlew assembleRelease --stacktrace --debug 2>&1 | tee build.log || (cat build.log && exit 1)
       - name: Build Android AAB (optional)
         script: |
