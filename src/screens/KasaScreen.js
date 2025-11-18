@@ -362,7 +362,7 @@ export default function KasaScreen() {
         return;
       }
       
-      // SignOut işleminin tamamlanması için bekleme
+      // SignOut işleminin tamamlanması için bekleme321
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Tüm state'leri temizle

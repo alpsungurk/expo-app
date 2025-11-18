@@ -16,6 +16,12 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.kahvedukkani.app',
+      buildNumber: '1',
+      infoPlist: {
+        NSCameraUsageDescription: 'Bu uygulama QR kod okumak için kamera erişimine ihtiyaç duyar.',
+        NSPhotoLibraryUsageDescription: 'Bu uygulama fotoğraf seçmek için fotoğraf kütüphanesi erişimine ihtiyaç duyar.',
+        NSUserNotificationsUsageDescription: 'Bu uygulama size bildirimler göndermek için izin gerektirir.',
+      },
     },
     android: {
       adaptiveIcon: {

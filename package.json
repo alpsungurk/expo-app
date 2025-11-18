@@ -16,7 +16,11 @@
     "build:android:dev": "eas build --platform android --profile development",
     "build:android:local": "npx expo export:embed && cd android && gradlew.bat assembleRelease",
     "build:android:bundle": "npx expo export:embed && cd android && gradlew.bat bundleRelease",
-    "build:android:local:full": "npx expo export:embed && cd android && gradlew.bat clean && gradlew.bat assembleRelease"
+    "build:android:local:full": "npx expo export:embed && cd android && gradlew.bat clean && gradlew.bat assembleRelease",
+    "build:ios": "eas build --platform ios --profile preview",
+    "build:ios:dev": "eas build --platform ios --profile development",
+    "build:ios:prod": "eas build --platform ios --profile production",
+    "build:all": "eas build --platform all --profile preview"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
