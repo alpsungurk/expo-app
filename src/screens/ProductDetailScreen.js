@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
+import { useAppStore } from '../store/appStore';
 import { getImageUrl } from '../utils/storage';
 import TableHeader from '../components/TableHeader';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
@@ -41,8 +42,20 @@ export default function ProductDetailScreen({ route, navigation }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [ingredients, setIngredients] = useState([]);
   const [ingredientsLoading, setIngredientsLoading] = useState(true);
+  const [showDiscountDetails, setShowDiscountDetails] = useState(false);
   
-  const { tableNumber, addItem } = useCartStore();
+  const { 
+    tableNumber, 
+    addItem, 
+    items, 
+    getTotalPrice, 
+    getDiscountedPrice, 
+    getDiscountAmount, 
+    selectedGeneralDiscount,
+    loadAvailableDiscounts 
+  } = useCartStore();
+  
+  const { user } = useAppStore();
 
   // Resim URL'sini Supabase Storage'dan al
   const imageUri = getImageUrl(product?.resim_path);
@@ -51,10 +64,36 @@ export default function ProductDetailScreen({ route, navigation }) {
     fetchIngredients();
   }, [product?.id]);
 
+  // Sepet toplamı değiştiğinde indirimleri yükle
+  useEffect(() => {
+    if (items.length > 0) {
+      const totalPrice = getTotalPrice();
+      loadAvailableDiscounts(user?.id || null, totalPrice);
+    }
+  }, [items, user?.id, getTotalPrice, loadAvailableDiscounts]);
+
 
   const calculateTotalPrice = () => {
     if (!product?.fiyat) return 0;
+    const basePrice = product.fiyat * quantity;
+    
+    // Ürün için indirim varsa uygula
+    if (product?.discount) {
+      const discountAmount = product.discount.discountAmount * quantity;
+      return Math.max(0, basePrice - discountAmount);
+    }
+    
+    return basePrice;
+  };
+
+  const getOriginalTotalPrice = () => {
+    if (!product?.fiyat) return 0;
     return product.fiyat * quantity;
+  };
+
+  const getProductDiscountAmount = () => {
+    if (!product?.discount) return 0;
+    return product.discount.discountAmount * quantity;
   };
 
   // Malzemeleri çek
@@ -242,9 +281,88 @@ export default function ProductDetailScreen({ route, navigation }) {
 
           <View style={styles.priceContainer}>
             {product?.fiyat && (
-              <Text style={styles.totalPrice} numberOfLines={1} ellipsizeMode="tail">
-                {formatPrice(calculateTotalPrice())}
-              </Text>
+              <View style={styles.priceInfoContainer}>
+                {/* Ürün indirimi varsa göster */}
+                {product?.discount ? (
+                  <View style={styles.priceInfoColumn}>
+                    <View style={styles.priceInfoRow}>
+                      <Text style={styles.originalPrice} numberOfLines={1} ellipsizeMode="tail">
+                        {formatPrice(getOriginalTotalPrice())}
+                      </Text>
+                      <Text style={styles.totalPrice} numberOfLines={1} ellipsizeMode="tail">
+                        {formatPrice(calculateTotalPrice())}
+                      </Text>
+                      <View style={styles.discountBadge}>
+                        <Ionicons name="pricetag" size={12} color="#10B981" />
+                        <Text style={styles.discountBadgeText}>
+                          {product.discount.discountType === 'yuzde' 
+                            ? `%${product.discount.discountValue}` 
+                            : `${formatPrice(product.discount.discountAmount)}`
+                          }
+                        </Text>
+                      </View>
+                    </View>
+                    {/* İndirim Detayları Dropdown - Fiyatların altında */}
+                    <TouchableOpacity
+                      style={styles.discountDetailsToggle}
+                      onPress={() => setShowDiscountDetails(!showDiscountDetails)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.discountDetailsToggleText}>
+                        İndirim Detayları
+                      </Text>
+                      <Ionicons 
+                        name={showDiscountDetails ? "chevron-up" : "chevron-down"} 
+                        size={16} 
+                        color="#059669" 
+                      />
+                    </TouchableOpacity>
+                    {showDiscountDetails && (
+                      <Animated.View style={styles.discountDetailsContainer}>
+                        <View style={styles.discountDetailsContent}>
+                          <View style={styles.discountDetailsHeader}>
+                            <Ionicons name="pricetag" size={16} color="#10B981" />
+                            <Text style={styles.discountDetailsTitle}>
+                              {product.discount.campaignName || 'İndirim'}
+                            </Text>
+                          </View>
+                          <View style={styles.discountDetailsRow}>
+                            <Text style={styles.discountDetailsLabel}>Normal Fiyat:</Text>
+                            <Text style={styles.discountDetailsOriginalPrice}>
+                              {formatPrice(getOriginalTotalPrice())}
+                            </Text>
+                          </View>
+                          <View style={styles.discountDetailsRow}>
+                            <Text style={styles.discountDetailsLabel}>İndirim:</Text>
+                            <Text style={styles.discountDetailsDiscountAmount}>
+                              -{formatPrice(getProductDiscountAmount())}
+                            </Text>
+                          </View>
+                          <View style={[styles.discountDetailsRow, styles.discountDetailsTotalRow]}>
+                            <Text style={styles.discountDetailsLabel}>İndirimli Fiyat:</Text>
+                            <Text style={styles.discountDetailsDiscountedPrice}>
+                              {formatPrice(calculateTotalPrice())}
+                            </Text>
+                          </View>
+                        </View>
+                      </Animated.View>
+                    )}
+                  </View>
+                ) : (
+                  <Text style={styles.totalPrice} numberOfLines={1} ellipsizeMode="tail">
+                    {formatPrice(calculateTotalPrice())}
+                  </Text>
+                )}
+                {/* Sepet toplamına göre indirim bilgisi */}
+                {items.length > 0 && selectedGeneralDiscount && (
+                  <View style={[styles.discountBadge, styles.cartDiscountBadge]}>
+                    <Ionicons name="pricetag" size={12} color="#10B981" />
+                    <Text style={styles.discountBadgeText}>
+                      Sepette {formatPrice(getDiscountAmount())} indirim
+                    </Text>
+                  </View>
+                )}
+              </View>
             )}
           </View>
         </View>
@@ -524,10 +642,128 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     marginRight: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
   },
+  priceInfoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  priceInfoColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  priceInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: isLargeScreen ? 6 : isMediumScreen ? 5 : 4,
+    justifyContent: 'center',
+  },
   totalPrice: {
     fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
     fontWeight: 'bold',
     color: '#8B4513',
+  },
+  originalPrice: {
+    fontWeight: 'normal',
+    fontSize: isLargeScreen ? 14 : isMediumScreen ? 12 : 11,
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+  },
+  discountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#D1FAE5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  cartDiscountBadge: {
+    marginTop: 4,
+  },
+  discountBadgeText: {
+    fontSize: isLargeScreen ? 12 : isMediumScreen ? 11 : 10,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  discountDetailsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+    paddingVertical: isLargeScreen ? 6 : isMediumScreen ? 5 : 4,
+  },
+  discountDetailsToggleText: {
+    fontSize: isLargeScreen ? 13 : isMediumScreen ? 12 : 11,
+    color: '#059669',
+    fontWeight: '600',
+  },
+  discountDetailsContainer: {
+    width: '100%',
+    marginTop: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+  },
+  discountDetailsContent: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    padding: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    borderWidth: 1,
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  discountDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    paddingBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D1FAE5',
+  },
+  discountDetailsTitle: {
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 15 : 14,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  discountDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+  },
+  discountDetailsTotalRow: {
+    marginTop: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+    paddingTop: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+    borderTopWidth: 1,
+    borderTopColor: '#D1FAE5',
+  },
+  discountDetailsLabel: {
+    fontSize: isLargeScreen ? 14 : isMediumScreen ? 13 : 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  discountDetailsOriginalPrice: {
+    fontSize: isLargeScreen ? 14 : isMediumScreen ? 13 : 12,
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+    fontWeight: '500',
+  },
+  discountDetailsDiscountAmount: {
+    fontSize: isLargeScreen ? 14 : isMediumScreen ? 13 : 12,
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  discountDetailsDiscountedPrice: {
+    fontSize: isLargeScreen ? 16 : isMediumScreen ? 15 : 14,
+    color: '#059669',
+    fontWeight: '700',
   },
   addToCartButton: {
     flexDirection: 'row',

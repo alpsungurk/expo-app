@@ -10,6 +10,7 @@ import {
   TextInput,
   Alert,
   BackHandler,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -56,7 +57,10 @@ const OrderDetailScreen = ({ route }) => {
   useEffect(() => {
     // Önceki subscription'ı temizle
     const channelName = 'order-detail-updates';
-    supabase.removeChannel(supabase.channel(channelName));
+    const existingChannel = supabase.channel(channelName);
+    if (existingChannel) {
+      supabase.removeChannel(existingChannel);
+    }
     
     let retryCount = 0;
     const maxRetries = 3;
@@ -153,6 +157,8 @@ const OrderDetailScreen = ({ route }) => {
       hazirlaniyor: { label: 'Hazırlanıyor', color: '#3B82F6' },
       hazir: { label: 'Hazır', color: '#10B981' },
       teslim_edildi: { label: 'Teslim Edildi', color: '#8B5CF6' },
+      odeme_yapildi: { label: 'Ödeme Yapıldı', color: '#10B981' },
+      odeme_yapilmadi: { label: 'Ödeme Yapılmadı', color: '#F59E0B' },
       iptal: { label: 'İptal', color: '#EF4444' },
     };
     return statusMap[status] || { label: 'Bilinmiyor', color: '#6B7280' };
@@ -167,13 +173,31 @@ const OrderDetailScreen = ({ route }) => {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('tr-TR', {
+    if (!dateString) return '';
+    // Supabase'den gelen timestamp'i parse et
+    // PostgreSQL TIMESTAMP WITHOUT TIME ZONE Supabase'de UTC olarak saklanır
+    const dateStr = String(dateString).trim();
+    let date;
+    
+    // Eğer timezone bilgisi yoksa (Z, +, - yoksa), UTC olarak kabul et
+    if (dateStr.includes('T') && !dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      // UTC olarak parse et
+      date = new Date(dateStr + 'Z');
+    } else if (!dateStr.includes('T') && !dateStr.includes('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      // Eğer sadece tarih-saat formatındaysa (örn: "2024-02-02 10:45:00"), UTC olarak parse et
+      date = new Date(dateStr.replace(' ', 'T') + 'Z');
+    } else {
+      date = new Date(dateStr);
+    }
+    
+    // Türkiye saati için timezone belirt (UTC+3)
+    return date.toLocaleString('tr-TR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Europe/Istanbul'
     });
   };
 
@@ -588,7 +612,7 @@ const OrderDetailScreen = ({ route }) => {
   };
 
   return (
-    <View style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
       
@@ -635,27 +659,65 @@ const OrderDetailScreen = ({ route }) => {
           <Text style={styles.sectionTitle}>Sipariş Detayları</Text>
           {currentOrderDetails.map(renderOrderItem)}
           
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Toplam Tutar:</Text>
-            <Text style={styles.totalAmount}>
-              {formatPrice(
-                currentOrderDetails
-                  .filter(detail => !deletedItems.includes(detail.id)) // Silinen ürünleri çıkar
-                  .reduce((sum, detail) => {
-                    // Fiyat hesaplama - önce birim_fiyat, sonra urunler.fiyat kullan
-                    let birimFiyat = parseFloat(detail.birim_fiyat) || 0;
-                    if (birimFiyat === 0 && detail.urunler?.fiyat) {
-                      birimFiyat = parseFloat(detail.urunler.fiyat) || 0;
-                    }
-                    
-                    const adet = editedQuantities[detail.id] || detail.adet;
-                    const toplamFiyat = birimFiyat * adet;
-                    
-                    return sum + toplamFiyat;
-                  }, 0)
-              )}
-            </Text>
-          </View>
+          {/* İndirim bilgisini hesapla - sipariş detaylarından */}
+          {(() => {
+            // Ara toplamı hesapla - sipariş detaylarındaki toplam fiyatları topla (indirim öncesi)
+            const araToplamHesaplanan = currentOrderDetails
+              .filter(detail => !deletedItems.includes(detail.id))
+              .reduce((sum, detail) => {
+                // Önce toplam_fiyat kullan, yoksa birim_fiyat * adet hesapla
+                if (detail.toplam_fiyat) {
+                  return sum + (parseFloat(detail.toplam_fiyat) || 0);
+                }
+                let birimFiyat = parseFloat(detail.birim_fiyat) || 0;
+                if (birimFiyat === 0 && detail.urunler?.fiyat) {
+                  birimFiyat = parseFloat(detail.urunler.fiyat) || 0;
+                }
+                const adet = editedQuantities[detail.id] || detail.adet;
+                return sum + (birimFiyat * adet);
+              }, 0);
+            
+            // İndirim miktarı = ara toplam - indirimli toplam
+            const indirimMiktari = araToplamHesaplanan > 0 && araToplamHesaplanan > parseFloat(currentOrder.toplam_tutar || 0)
+              ? araToplamHesaplanan - parseFloat(currentOrder.toplam_tutar || 0)
+              : 0;
+            
+            // Ara toplam (indirim öncesi)
+            const araToplam = indirimMiktari > 0 
+              ? araToplamHesaplanan
+              : parseFloat(currentOrder.toplam_tutar || 0) || araToplamHesaplanan;
+            
+            // Toplam tutar = toplam_tutar (zaten indirimli)
+            const toplamTutar = parseFloat(currentOrder.toplam_tutar || 0) || araToplamHesaplanan;
+            
+            return (
+              <>
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>Ara Toplam:</Text>
+                  <Text style={styles.totalValue}>
+                    {formatPrice(araToplam)}
+                  </Text>
+                </View>
+                {indirimMiktari > 0 && (
+                  <View style={styles.discountRow}>
+                    <View style={styles.discountInfo}>
+                      <Ionicons name="pricetag" size={16} color="#10B981" />
+                      <Text style={styles.discountLabel}>İndirim</Text>
+                    </View>
+                    <Text style={styles.discountAmount}>
+                      -{formatPrice(indirimMiktari)}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>Toplam Tutar:</Text>
+                  <Text style={styles.totalAmount}>
+                    {formatPrice(toplamTutar)}
+                  </Text>
+                </View>
+              </>
+            );
+          })()}
         </View>
 
         {/* Notlar */}
@@ -809,7 +871,7 @@ const OrderDetailScreen = ({ route }) => {
         </View>
       )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -998,10 +1060,46 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontFamily: 'System',
   },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    fontFamily: 'System',
+  },
   totalAmount: {
     fontSize: 20,
     fontWeight: '700',
     color: '#8B4513',
+    fontFamily: 'System',
+  },
+  discountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#D1FAE5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  discountInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  discountLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#059669',
+    fontFamily: 'System',
+  },
+  discountAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#10B981',
     fontFamily: 'System',
   },
   notesCard: {

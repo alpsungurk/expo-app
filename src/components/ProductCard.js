@@ -8,7 +8,7 @@ const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 
-export default function ProductCard({ product, onPress, onAddToCart, onProductDetail }) {
+export default function ProductCard({ product, discount, onPress, onAddToCart, onProductDetail }) {
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -136,29 +136,44 @@ export default function ProductCard({ product, onPress, onAddToCart, onProductDe
             {product.ad}
           </Text>
 
-          {product.aciklama ? (
-            <Text style={[
-              styles.description,
-              {
-                fontSize: isLargeScreen ? 15 : isMediumScreen ? 14 : 12,
-                lineHeight: isLargeScreen ? 22 : isMediumScreen ? 20 : 16,
-                marginBottom: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
-              }
-            ]} numberOfLines={2} ellipsizeMode="tail">
-              {product.aciklama}
-            </Text>
-          ) : (
-            <View style={{ height: isLargeScreen ? 12 : isMediumScreen ? 10 : 8 }} />
-          )}
-
           <View style={styles.footer}>
             <View style={styles.priceContainer}>
-              <Text style={[
-                styles.price,
-                { fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16 }
-              ]} numberOfLines={1} ellipsizeMode="tail">
-                {formatPrice(product.fiyat)}
-              </Text>
+              {discount ? (
+                <View style={styles.priceInfoRow}>
+                  <Text style={[
+                    styles.originalPrice,
+                    { fontSize: isLargeScreen ? 14 : isMediumScreen ? 12 : 11 }
+                  ]} numberOfLines={1} ellipsizeMode="tail">
+                    {formatPrice(discount.originalPrice)}
+                  </Text>
+                  <Text style={[
+                    styles.price,
+                    { fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16 }
+                  ]} numberOfLines={1} ellipsizeMode="tail">
+                    {formatPrice(discount.discountedPrice)}
+                  </Text>
+                  <View style={styles.discountBadge}>
+                    <Ionicons name="pricetag" size={isLargeScreen ? 10 : isMediumScreen ? 9 : 8} color="#10B981" />
+                    <Text style={[
+                      styles.discountBadgeText,
+                      { fontSize: isLargeScreen ? 10 : isMediumScreen ? 9 : 8 }
+                    ]}>
+                      {discount.discountType === 'yuzde' 
+                        ? `%${discount.discountValue}` 
+                        : `${formatPrice(discount.discountAmount)}`
+                      }
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={[
+                  styles.price,
+                  { fontSize: isLargeScreen ? 20 : isMediumScreen ? 18 : 16 },
+                  styles.priceText
+                ]} numberOfLines={1} ellipsizeMode="tail">
+                  {formatPrice(product.fiyat)}
+                </Text>
+              )}
               <View style={styles.preparationTimeContainer}>
                 <Ionicons 
                   name="time-outline" 
@@ -186,6 +201,8 @@ export default function ProductCard({ product, onPress, onAddToCart, onProductDe
                   width: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
                   height: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
                   borderRadius: isLargeScreen ? 24 : isMediumScreen ? 22 : 20,
+                  minWidth: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
+                  minHeight: isLargeScreen ? 48 : isMediumScreen ? 44 : 40,
                 }
               ]}
               onPress={(e) => {
@@ -283,24 +300,58 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+    alignItems: 'center',
+    marginTop: isLargeScreen ? 4 : isMediumScreen ? 3 : 2,
+    gap: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
   },
   priceContainer: {
     flex: 1,
-    minWidth: 0, // Text overflow için önemli
-    marginRight: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  priceInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: isLargeScreen ? 6 : isMediumScreen ? 5 : 4,
+    marginBottom: isLargeScreen ? 4 : isMediumScreen ? 3 : 2,
   },
   price: {
     fontWeight: 'bold',
     fontFamily: 'System',
     color: '#8B4513',
-    marginBottom: 4,
+  },
+  priceText: {
+    marginBottom: isLargeScreen ? 4 : isMediumScreen ? 3 : 2,
+  },
+  originalPrice: {
+    fontWeight: 'normal',
+    fontFamily: 'System',
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+  },
+  discountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: isLargeScreen ? 6 : isMediumScreen ? 5 : 4,
+    paddingVertical: isLargeScreen ? 2 : isMediumScreen ? 1 : 1,
+    backgroundColor: '#D1FAE5',
+    borderRadius: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
+    borderWidth: 1,
+    borderColor: '#10B981',
+    flexShrink: 0,
+  },
+  discountBadgeText: {
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: '#059669',
   },
   preparationTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 1,
+    marginTop: 0,
   },
   timeIcon: {
     marginRight: 4,
@@ -319,5 +370,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: isLargeScreen ? 5 : isMediumScreen ? 4 : 3,
     elevation: isLargeScreen ? 5 : isMediumScreen ? 4 : 4,
+    flexShrink: 0,
   },
 });

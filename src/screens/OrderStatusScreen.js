@@ -49,6 +49,18 @@ const ORDER_STATUSES = {
     icon: 'checkmark-done-outline',
     description: 'Siparişiniz teslim edildi. Afiyet olsun!'
   },
+  odeme_yapildi: { 
+    label: 'Ödeme Yapıldı', 
+    color: '#10B981', 
+    icon: 'card',
+    description: 'Ödemeniz yapıldı. Teşekkür ederiz!'
+  },
+  odeme_yapilmadi: { 
+    label: 'Ödeme Yapılmadı', 
+    color: '#F59E0B', 
+    icon: 'card-outline',
+    description: 'Ödeme henüz yapılmadı'
+  },
   iptal: { 
     label: 'İptal Edildi', 
     color: '#EF4444', 
@@ -82,7 +94,7 @@ export default function OrderStatusScreen() {
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const { currentOrder, setCurrentOrder, activeOrder, setActiveOrder, setAllOrders } = useAppStore();
+  const { currentOrder, setCurrentOrder, activeOrder, setActiveOrder, setAllOrders, user } = useAppStore();
 
   // Phone token'ı al
   useEffect(() => {
@@ -103,7 +115,10 @@ export default function OrderStatusScreen() {
       
       // Önceki subscription'ı temizle
       const channelName = 'orders-updates';
-      supabase.removeChannel(supabase.channel(channelName));
+      const existingChannel = supabase.channel(channelName);
+      if (existingChannel) {
+        supabase.removeChannel(existingChannel);
+      }
       
       let retryCount = 0;
       const maxRetries = 3;
@@ -120,27 +135,49 @@ export default function OrderStatusScreen() {
             (payload) => {
               console.log('OrderStatusScreen realtime güncelleme:', payload);
               
-              // Sadece bu telefon token'ına ait siparişleri güncelle
-              if (payload.new && payload.new.telefon_token === phoneToken) {
-                console.log('Bu telefon token\'ına ait sipariş güncellendi:', payload.new);
-                
-                // İptal durumu özel kontrolü
-                if (payload.new.durum === 'iptal') {
-                  console.log('Sipariş iptal edildi:', payload.new);
+              // Giriş yapmışsa kullanici_id'ye göre, yoksa phoneToken'a göre kontrol et
+              let shouldUpdate = false;
+              
+              if (payload.new) {
+                if (user?.id) {
+                  // Giriş yapmışsa kullanici_id kontrolü
+                  shouldUpdate = payload.new.kullanici_id === user.id;
+                } else {
+                  // Giriş yapmamışsa phoneToken kontrolü
+                  shouldUpdate = payload.new.telefon_token === phoneToken;
                 }
                 
-                // Notlar güncelleme kontrolü
-                if (payload.new.aciklama !== undefined) {
-                  console.log('Sipariş notları güncellendi:', {
-                    orderId: payload.new.id,
-                    newNotes: payload.new.aciklama
-                  });
+                if (shouldUpdate) {
+                  console.log('Bu kullanıcıya ait sipariş güncellendi:', payload.new);
+                  
+                  // İptal durumu özel kontrolü
+                  if (payload.new.durum === 'iptal') {
+                    console.log('Sipariş iptal edildi:', payload.new);
+                  }
+                  
+                  // Notlar güncelleme kontrolü
+                  if (payload.new.aciklama !== undefined) {
+                    console.log('Sipariş notları güncellendi:', {
+                      orderId: payload.new.id,
+                      newNotes: payload.new.aciklama
+                    });
+                  }
+                  
+                  loadOrdersData();
+                }
+              } else if (payload.old) {
+                if (user?.id) {
+                  // Giriş yapmışsa kullanici_id kontrolü
+                  shouldUpdate = payload.old.kullanici_id === user.id;
+                } else {
+                  // Giriş yapmamışsa phoneToken kontrolü
+                  shouldUpdate = payload.old.telefon_token === phoneToken;
                 }
                 
-                loadOrdersData();
-              } else if (payload.old && payload.old.telefon_token === phoneToken) {
-                console.log('Bu telefon token\'ına ait sipariş silindi:', payload.old);
-                loadOrdersData();
+                if (shouldUpdate) {
+                  console.log('Bu kullanıcıya ait sipariş silindi:', payload.old);
+                  loadOrdersData();
+                }
               }
             }
           )
@@ -179,7 +216,7 @@ export default function OrderStatusScreen() {
         subscription.unsubscribe();
       };
     }
-  }, [phoneToken]);
+  }, [phoneToken, user]); // user değiştiğinde de subscription'ı yeniden başlat (realtime kontrolü için)
 
   // Sayfa açılış animasyonu
   useEffect(() => {
@@ -204,7 +241,7 @@ export default function OrderStatusScreen() {
       if (phoneToken) {
         loadOrdersData();
       }
-    }, [phoneToken])
+    }, [phoneToken, user]) // user değiştiğinde de yeniden yükle
   );
 
   const loadOrdersData = async () => {
@@ -215,9 +252,8 @@ export default function OrderStatusScreen() {
         return;
       }
 
-
-      // Telefon token'a göre tüm siparişleri yükle
-      const { data: ordersData, error: ordersError } = await supabase
+      // Sorgu oluştur
+      let query = supabase
         .from(TABLES.SIPARISLER)
         .select(`
           *,
@@ -233,12 +269,21 @@ export default function OrderStatusScreen() {
               fiyat
             )
           )
-        `)
-        .eq('telefon_token', phoneToken)
+        `);
+      
+      // Giriş yapmışsa kullanici_id'ye göre, yoksa phoneToken'a göre filtrele
+      if (user?.id) {
+        console.log('OrderStatusScreen: Giriş yapılmış, kullanici_id ile filtreleme yapılıyor:', user.id);
+        query = query.eq('kullanici_id', user.id);
+      } else {
+        console.log('OrderStatusScreen: Giriş yapılmamış, phoneToken ile filtreleme yapılıyor:', phoneToken);
+        query = query.eq('telefon_token', phoneToken);
+      }
+      
+      const { data: ordersData, error: ordersError } = await query
         .order('olusturma_tarihi', { ascending: false });
 
       if (ordersError) throw ordersError;
-
 
       setOrders(ordersData || []);
       
@@ -284,13 +329,31 @@ export default function OrderStatusScreen() {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    if (!dateString) return '';
+    // Supabase'den gelen timestamp'i parse et
+    // PostgreSQL TIMESTAMP WITHOUT TIME ZONE Supabase'de UTC olarak saklanır
+    const dateStr = String(dateString).trim();
+    let date;
+    
+    // Eğer timezone bilgisi yoksa (Z, +, - yoksa), UTC olarak kabul et
+    if (dateStr.includes('T') && !dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      // UTC olarak parse et
+      date = new Date(dateStr + 'Z');
+    } else if (!dateStr.includes('T') && !dateStr.includes('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      // Eğer sadece tarih-saat formatındaysa (örn: "2024-02-02 10:45:00"), UTC olarak parse et
+      date = new Date(dateStr.replace(' ', 'T') + 'Z');
+    } else {
+      date = new Date(dateStr);
+    }
+    
+    // Türkiye saati için timezone belirt (UTC+3)
     return date.toLocaleString('tr-TR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'Europe/Istanbul'
     });
   };
 
@@ -387,7 +450,38 @@ export default function OrderStatusScreen() {
           )}
           
           <View style={styles.orderCardDetail}>
-            <Text style={styles.orderCardPrice}>{formatPrice(order.toplam_tutar)}</Text>
+            {/* İndirim bilgisini hesapla - sipariş detaylarından */}
+            {(() => {
+              // Sipariş detaylarındaki toplam fiyatları topla (indirim öncesi)
+              const araToplamHesaplanan = order.siparis_detaylari?.reduce((sum, detail) => {
+                return sum + (parseFloat(detail.toplam_fiyat) || 0);
+              }, 0) || 0;
+              
+              // İndirim miktarı = ara toplam - indirimli toplam
+              const indirimMiktari = araToplamHesaplanan > 0 && araToplamHesaplanan > order.toplam_tutar
+                ? araToplamHesaplanan - parseFloat(order.toplam_tutar || 0)
+                : 0;
+              
+              // Ara toplam (indirim öncesi)
+              const araToplam = indirimMiktari > 0 
+                ? araToplamHesaplanan
+                : order.toplam_tutar;
+              
+              return (
+                <View style={styles.orderCardPriceContainer}>
+                  {indirimMiktari > 0 && (
+                    <View style={styles.orderCardDiscountInfo}>
+                      <Text style={styles.orderCardOriginalPrice}>{formatPrice(araToplam)}</Text>
+                      <View style={styles.orderCardDiscountBadge}>
+                        <Ionicons name="pricetag" size={12} color="#10B981" />
+                        <Text style={styles.orderCardDiscountText}>-{formatPrice(indirimMiktari)}</Text>
+                      </View>
+                    </View>
+                  )}
+                  <Text style={styles.orderCardPrice}>{formatPrice(order.toplam_tutar)}</Text>
+                </View>
+              );
+            })()}
           </View>
         </View>
 
@@ -433,7 +527,10 @@ export default function OrderStatusScreen() {
   // Ana sipariş listesi ekranı
   return (
     <View style={styles.container}>
-      <TableHeader onSidebarPress={() => setSidebarVisible(true)} />
+      <TableHeader 
+        onSidebarPress={() => setSidebarVisible(true)}
+        onInfoPress={() => navigation.navigate('InfoScreen')}
+      />
 
       <Animated.ScrollView 
         style={[
@@ -931,10 +1028,42 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontFamily: 'System',
   },
+  orderCardPriceContainer: {
+    alignItems: 'flex-end',
+  },
   orderCardPrice: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#8B4513',
+    fontFamily: 'System',
+  },
+  orderCardDiscountInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  orderCardOriginalPrice: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+    fontFamily: 'System',
+  },
+  orderCardDiscountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#D1FAE5',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  orderCardDiscountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#059669',
     fontFamily: 'System',
   },
   orderCardFooter: {

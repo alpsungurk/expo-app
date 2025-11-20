@@ -8,13 +8,10 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
-  ActivityIndicator,
   BackHandler,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { supabase, TABLES } from '../config/supabase';
 import { getImageUrl } from '../utils/storage';
 
 const { width } = Dimensions.get('window');
@@ -23,8 +20,7 @@ const AnnouncementDetailScreen = ({ route }) => {
   const navigation = useNavigation();
   const { announcement } = route.params;
   
-  // State for loading and data
-  const [loading, setLoading] = useState(false);
+  // State for data
   const [announcementData, setAnnouncementData] = useState(announcement);
   
   // Kampanya mı duyuru mu kontrol et
@@ -49,93 +45,6 @@ const AnnouncementDetailScreen = ({ route }) => {
 
     return () => backHandler.remove();
   }, [navigation]);
-
-  // Database'den detaylı veri çek
-  const fetchAnnouncementDetails = async () => {
-    if (!announcement.id) {
-      setLoading(false);
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      let query;
-      
-      if (isCampaign) {
-        // Kampanya detaylarını çek
-        query = supabase
-          .from(TABLES.KAMPANYALAR)
-          .select('*')
-          .eq('id', announcement.id)
-          .eq('aktif', true)
-          .single();
-      } else {
-        // Duyuru detaylarını çek
-        query = supabase
-          .from(TABLES.DUYURULAR)
-          .select('*')
-          .eq('id', announcement.id)
-          .eq('aktif', true)
-          .single();
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        console.error('Veri çekme hatası:', error);
-        setLoading(false);
-        // Hata durumunda kullanıcıya bilgi ver
-        Alert.alert(
-          'Yükleme Hatası',
-          'Detaylar yüklenemedi. Lütfen tekrar deneyin.',
-          [
-            {
-              text: 'Tekrar Dene',
-              onPress: () => {
-                fetchAnnouncementDetails();
-              }
-            },
-            {
-              text: 'Tamam',
-              style: 'cancel'
-            }
-          ]
-        );
-        return;
-      }
-      
-      if (data) {
-        setAnnouncementData(data);
-      }
-    } catch (error) {
-      console.error('Beklenmeyen hata:', error);
-      setLoading(false);
-      Alert.alert(
-        'Hata',
-        'Detaylar yüklenirken bir hata oluştu. Lütfen tekrar deneyin.',
-        [
-          {
-            text: 'Tekrar Dene',
-            onPress: () => {
-              fetchAnnouncementDetails();
-            }
-          },
-          {
-            text: 'Tamam',
-            style: 'cancel'
-          }
-        ]
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Component mount olduğunda verileri yükle
-  useEffect(() => {
-    fetchAnnouncementDetails();
-  }, []);
 
   // Resim URL'sini oluştur
   const getImageUri = () => {
@@ -232,14 +141,6 @@ const AnnouncementDetailScreen = ({ route }) => {
             <Text style={styles.smallTitle}>
               {announcementData.baslik || announcementData.ad || 'Duyuru'}
             </Text>
-          )}
-          
-          {/* Loading indicator */}
-          {loading && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#8B4513" />
-              <Text style={styles.loadingText}>Detaylar yükleniyor...</Text>
-            </View>
           )}
           
           {/* Açıklama - beyaz kısımda gösterilecek */}

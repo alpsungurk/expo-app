@@ -25,6 +25,11 @@ export const supabase = createClient(
       detectSessionInUrl: false,
       lock: processLock,
     },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
     global: {
       headers: {
         'x-client-info': 'expo-app',
@@ -34,9 +39,30 @@ export const supabase = createClient(
 );
 
 // Global error handler - Refresh token hatalarını yakala
-supabase.auth.onAuthStateChange((event, session) => {
+supabase.auth.onAuthStateChange(async (event, session) => {
   if (event === 'TOKEN_REFRESHED' && !session) {
     console.warn('Token refresh başarısız, session geçersiz olabilir');
+    // Bozuk token'ları temizle
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Sign out error during token refresh:', error);
+    }
+  }
+  
+  // Invalid refresh token hatası
+  if (event === 'SIGNED_OUT' && !session) {
+    // AsyncStorage'daki bozuk token'ları temizle
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const authKeys = keys.filter(key => key.startsWith('sb-') || key.includes('supabase.auth'));
+      if (authKeys.length > 0) {
+        await AsyncStorage.multiRemove(authKeys);
+        console.log('Bozuk auth token\'ları temizlendi');
+      }
+    } catch (error) {
+      console.error('AsyncStorage temizleme hatası:', error);
+    }
   }
 });
 

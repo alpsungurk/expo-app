@@ -17,8 +17,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import Constants from 'expo-constants';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../config/supabase';
+
+// Google Sign-In modülünü conditional import ile yükle (Expo Go'da çalışmaz)
+let GoogleSignin = null;
+try {
+  // Expo Go'da bu modül yüklenemez, development build gerekir
+  if (Constants.executionEnvironment !== 'storeClient') {
+    GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
+  }
+} catch (error) {
+  console.warn('Google Sign-In modülü yüklenemedi (Expo Go kullanılıyor olabilir):', error.message);
+}
 import { 
   GOOGLE_WEB_CLIENT_ID,
   GOOGLE_USERINFO_URL,
@@ -121,29 +132,20 @@ export default function LoginScreen() {
           return;
         }
         
+        // Rol kontrolü - Sadece rol 2 (Müşteri) giriş yapabilir
+        if (profile && profile.rol_id !== 2) {
+          await supabase.auth.signOut();
+          showError('Bu uygulamaya sadece müşteriler giriş yapabilir.');
+          setIsLoading(false);
+          return;
+        }
+        
         // Navigation'ı hemen yap (kullanıcı deneyimi için önemli)
         // Navigation'ı reset ile yap - stack'i temizle ve yeni ekrana git
-        if (profile) {
-          // Rol kontrolü - Kasa rolü (id: 3) ise KasaScreen'e yönlendir
-          if (profile.rol_id === 3) {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'KasaScreen' }],
-            });
-          } else {
-            // Diğer roller için MainTabs'a (HomeScreen) yönlendir
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'MainTabs' }],
-            });
-          }
-        } else {
-          // Profil yoksa MainTabs'a yönlendir
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'MainTabs' }],
-          });
-        }
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
         
         // Toast mesajını göster
         setTimeout(() => {
@@ -167,6 +169,17 @@ export default function LoginScreen() {
 
   const handleGoogleAuth = async () => {
     setIsGoogleLoading(true);
+
+    // Expo Go kontrolü - Google Sign-In native modül gerektirir
+    if (!GoogleSignin) {
+      const isExpoGo = Constants.executionEnvironment === 'storeClient';
+      const errorMsg = isExpoGo
+        ? 'Google ile giriş Expo Go\'da çalışmaz.\n\nDevelopment build kullanmanız gerekiyor:\n\n1. npx expo install expo-dev-client\n2. npx expo run:android (veya run:ios)\n\nVeya EAS Build ile development build oluşturun:\nnpx eas build --profile development --platform android'
+        : 'Google Sign-In modülü yüklenemedi. Lütfen development build kullanın.';
+      showError(errorMsg);
+      setIsGoogleLoading(false);
+      return;
+    }
 
     try {
       // Google OAuth Web Client ID kontrolü (Android Client ID gerekmez)
@@ -675,6 +688,14 @@ export default function LoginScreen() {
                 return;
               }
               
+          // Rol kontrolü - Sadece rol 2 (Müşteri) giriş yapabilir
+          if (profile && profile.rol_id !== 2) {
+            await supabase.auth.signOut();
+            showError('Bu uygulamaya sadece müşteriler giriş yapabilir.');
+            setIsGoogleLoading(false);
+            return;
+          }
+              
           // appStore'da state'leri güncelle
           if (appStore?.setUser && profile) {
             appStore.setUser({
@@ -706,14 +727,12 @@ export default function LoginScreen() {
               // Loading state'i kapat
               setIsGoogleLoading(false);
               
-          // Navigation'ı yap
-              const targetRoute = profile?.rol_id === 3 ? 'KasaScreen' : 'MainTabs';
-              
-              console.log('Google OAuth başarılı, yönlendiriliyor:', targetRoute, 'Profil:', profile?.rol_id);
+          // Navigation'ı yap - Sadece MainTabs'a yönlendir
+              console.log('Google OAuth başarılı, yönlendiriliyor: MainTabs');
               
               navigation.reset({
                 index: 0,
-                routes: [{ name: targetRoute }],
+                routes: [{ name: 'MainTabs' }],
               });
               
               setTimeout(() => {
@@ -984,37 +1003,61 @@ export default function LoginScreen() {
           </View>
 
           {/* Google Auth Butonu */}
-          <TouchableOpacity
-            style={[
-              styles.googleButton,
+          {GoogleSignin ? (
+            <TouchableOpacity
+              style={[
+                styles.googleButton,
+                {
+                  paddingVertical: getResponsiveValue(16, 18, 20, 22),
+                  paddingHorizontal: getResponsiveValue(24, 28, 32, 36),
+                  borderRadius: getResponsiveValue(12, 14, 16, 18),
+                  marginTop: getResponsiveValue(16, 18, 20, 22),
+                }
+              ]}
+              onPress={handleGoogleAuth}
+              disabled={isGoogleLoading || isLoading}
+            >
+              {isGoogleLoading ? (
+                <ActivityIndicator size="small" color="#4285F4" />
+              ) : (
+              <View style={styles.googleButtonContent}>
+                <Ionicons 
+                  name="logo-google" 
+                  size={getResponsiveValue(20, 22, 24, 26)} 
+                  color="#4285F4" 
+                />
+                <Text style={[
+                  styles.googleButtonText,
+                  { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                ]}>
+                  Google ile Giriş Yap
+                </Text>
+              </View>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <View style={[
+              styles.googleButtonDisabled,
               {
                 paddingVertical: getResponsiveValue(16, 18, 20, 22),
                 paddingHorizontal: getResponsiveValue(24, 28, 32, 36),
                 borderRadius: getResponsiveValue(12, 14, 16, 18),
                 marginTop: getResponsiveValue(16, 18, 20, 22),
               }
-            ]}
-            onPress={handleGoogleAuth}
-            disabled={isGoogleLoading || isLoading}
-          >
-            {isGoogleLoading ? (
-              <ActivityIndicator size="small" color="#4285F4" />
-            ) : (
-            <View style={styles.googleButtonContent}>
+            ]}>
               <Ionicons 
-                name="logo-google" 
+                name="information-circle-outline" 
                 size={getResponsiveValue(20, 22, 24, 26)} 
-                color="#4285F4" 
+                color="#9CA3AF" 
               />
               <Text style={[
-                styles.googleButtonText,
-                { fontSize: getResponsiveValue(16, 17, 18, 20) }
+                styles.googleButtonTextDisabled,
+                { fontSize: getResponsiveValue(14, 15, 16, 18) }
               ]}>
-                Google ile Giriş Yap
+                Google ile giriş Expo Go'da çalışmaz
               </Text>
             </View>
-            )}
-          </TouchableOpacity>
+          )}
 
           {/* Kayıt Ol Linki */}
           <View style={styles.signUpLinkContainer}>
@@ -1224,6 +1267,23 @@ const styles = StyleSheet.create({
   googleButtonText: {
     color: '#374151',
     fontWeight: '600',
+    fontFamily: 'System',
+  },
+  googleButtonDisabled: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: getResponsiveValue(8, 10, 12, 14),
+    opacity: 0.6,
+  },
+  googleButtonTextDisabled: {
+    color: '#9CA3AF',
+    fontWeight: '500',
+    textAlign: 'center',
     fontFamily: 'System',
   },
   signUpLinkContainer: {

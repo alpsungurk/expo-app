@@ -144,6 +144,8 @@ export default function QRScanScreen() {
       // Masa bilgilerini store'a kaydet (ID ve numara)
       setTableInfo(tableData.id, tableData.masa_no);
       
+      setIsLoading(false); // Loading state'ini kapat
+      
       Alert.alert(
         'Masa Bulundu! 🎉',
         `${tableData.masa_no} için menüye yönlendiriliyorsunuz.`,
@@ -206,6 +208,7 @@ export default function QRScanScreen() {
     }
     if (permission?.granted) {
       setScanned(false); // QR okuma state'ini reset et
+      setIsLoading(false); // Loading state'ini resetle
       setShowCamera(true);
     }
   };
@@ -257,6 +260,7 @@ export default function QRScanScreen() {
     clearTableInfo();
     setShowDeleteModal(false);
     setScanned(false); // QR okuma state'ini reset et
+    setIsLoading(false); // Loading state'ini resetle
     Alert.alert('Başarılı', 'Masa seçimi kaldırıldı.');
   };
 

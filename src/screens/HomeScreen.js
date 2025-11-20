@@ -60,6 +60,18 @@ const ORDER_STATUSES = {
     icon: 'checkmark-done-outline',
     description: 'Siparişiniz teslim edildi. Afiyet olsun!'
   },
+  odeme_yapildi: { 
+    label: 'Ödeme Yapıldı', 
+    color: '#10B981', 
+    icon: 'card',
+    description: 'Ödemeniz yapıldı. Teşekkür ederiz!'
+  },
+  odeme_yapilmadi: { 
+    label: 'Ödeme Yapılmadı', 
+    color: '#F59E0B', 
+    icon: 'card-outline',
+    description: 'Ödeme henüz yapılmadı'
+  },
   iptal: { 
     label: 'İptal Edildi', 
     color: '#EF4444', 
@@ -205,7 +217,10 @@ export default function HomeScreen() {
 
     // Önceki subscription'ı temizle
     const channelName = 'home-screen-updates';
-    supabase.removeChannel(supabase.channel(channelName));
+    const existingChannel = supabase.channel(channelName);
+    if (existingChannel) {
+      supabase.removeChannel(existingChannel);
+    }
     
     let retryCount = 0;
     const maxRetries = 2; // Retry sayısını azalttık
@@ -234,13 +249,35 @@ export default function HomeScreen() {
           (payload) => {
             console.log('HomeScreen realtime güncelleme:', payload);
             
-            // Sadece bu telefon token'ına ait siparişleri güncelle
-            if (payload.new && payload.new.telefon_token === phoneToken) {
-              console.log('Bu telefon token\'ına ait sipariş güncellendi:', payload.new);
-              loadOrdersData();
-            } else if (payload.old && payload.old.telefon_token === phoneToken) {
-              console.log('Bu telefon token\'ına ait sipariş silindi:', payload.old);
-              loadOrdersData();
+            // Giriş yapmışsa kullanici_id'ye göre, yoksa phoneToken'a göre kontrol et
+            let shouldUpdate = false;
+            
+            if (payload.new) {
+              if (user?.id) {
+                // Giriş yapmışsa kullanici_id kontrolü
+                shouldUpdate = payload.new.kullanici_id === user.id;
+              } else {
+                // Giriş yapmamışsa phoneToken kontrolü
+                shouldUpdate = payload.new.telefon_token === phoneToken;
+              }
+              
+              if (shouldUpdate) {
+                console.log('Bu kullanıcıya ait sipariş güncellendi:', payload.new);
+                loadOrdersData();
+              }
+            } else if (payload.old) {
+              if (user?.id) {
+                // Giriş yapmışsa kullanici_id kontrolü
+                shouldUpdate = payload.old.kullanici_id === user.id;
+              } else {
+                // Giriş yapmamışsa phoneToken kontrolü
+                shouldUpdate = payload.old.telefon_token === phoneToken;
+              }
+              
+              if (shouldUpdate) {
+                console.log('Bu kullanıcıya ait sipariş silindi:', payload.old);
+                loadOrdersData();
+              }
             }
           }
         )
@@ -280,7 +317,7 @@ export default function HomeScreen() {
         clearInterval(pollingInterval);
       }
     };
-  }, [phoneToken]);
+  }, [phoneToken, user]); // user değiştiğinde de subscription'ı yeniden başlat (realtime kontrolü için)
 
   // Modal açılırken animasyon
   useEffect(() => {
@@ -354,14 +391,150 @@ export default function HomeScreen() {
 
       if (productsError) throw productsError;
 
-      // Kampanyaları yükle
+      // Kampanyaları yükle (indirimler ile birlikte)
       const { data: campaignsData, error: campaignsError } = await supabase
         .from(TABLES.KAMPANYALAR)
-        .select('*')
+        .select(`
+          *,
+          indirimler (
+            id,
+            indirim_tipi,
+            indirim_degeri,
+            aktif,
+            hedef_tipi
+          )
+        `)
         .eq('aktif', true)
         .order('id', { ascending: true });
 
       if (campaignsError) throw campaignsError;
+
+      // Kampanya-ürün ilişkilerini yükle
+      const { data: campaignProductsData, error: campaignProductsError } = await supabase
+        .from('kampanya_urunleri')
+        .select('*');
+
+      if (campaignProductsError) {
+        console.error('Kampanya ürünleri yükleme hatası:', campaignProductsError);
+        // Hata olsa bile devam et
+      }
+
+      // Şu anki tarih
+      const now = new Date();
+
+      // Debug için log
+      console.log('Kampanya ürünleri:', campaignProductsData?.length || 0);
+      console.log('Kampanyalar:', campaignsData?.length || 0);
+
+      // Her ürün için aktif kampanya ve indirim bilgisini hesapla
+      const productsWithDiscounts = (productsData || []).map(product => {
+        // Bu ürün için kampanyaları bul (ürün bazlı veya kategori bazlı)
+        const productCampaigns = (campaignProductsData || [])
+          .filter(cp => {
+            // Ürün ID'si eşleşiyorsa veya kategori ID'si eşleşiyorsa
+            return (cp.urun_id === product.id) || 
+                   (cp.kategori_id === product.kategori_id && cp.urun_id === null);
+          })
+          .map(cp => {
+            const campaign = (campaignsData || []).find(c => c.id === cp.kampanya_id);
+            return campaign;
+          })
+          .filter(campaign => {
+            if (!campaign) return false;
+            // Tarih kontrolü
+            const startDate = new Date(campaign.baslangic_tarihi);
+            const endDate = new Date(campaign.bitis_tarihi);
+            if (now < startDate || now > endDate) {
+              return false;
+            }
+            // Aktif ve genel indirim var mı kontrol et (sadece genel indirimler ProductCard'da gösterilir)
+            const activeDiscount = campaign.indirimler?.find(d => d.aktif && d.hedef_tipi === 'genel');
+            return !!activeDiscount;
+          });
+        
+        // Eğer ürün bazlı kampanya yoksa, kategori bazlı kampanyaları da kontrol et
+        if (productCampaigns.length === 0 && product.kategori_id) {
+          const categoryCampaigns = (campaignProductsData || [])
+            .filter(cp => cp.kategori_id === product.kategori_id && !cp.urun_id)
+            .map(cp => {
+              const campaign = (campaignsData || []).find(c => c.id === cp.kampanya_id);
+              return campaign;
+            })
+            .filter(campaign => {
+              if (!campaign) return false;
+              const startDate = new Date(campaign.baslangic_tarihi);
+              const endDate = new Date(campaign.bitis_tarihi);
+              if (now < startDate || now > endDate) return false;
+              // Aktif ve genel indirim var mı kontrol et (sadece genel indirimler ProductCard'da gösterilir)
+              const activeDiscount = campaign.indirimler?.find(d => d.aktif && d.hedef_tipi === 'genel');
+              return !!activeDiscount;
+            });
+          
+          productCampaigns.push(...categoryCampaigns);
+        }
+        
+        // Eğer hala kampanya yoksa, genel kampanyaları kontrol et (kampanya_urunleri'nde hiç kayıt yoksa genel kampanya sayılır)
+        if (productCampaigns.length === 0 && (!campaignProductsData || campaignProductsData.length === 0)) {
+          // Tüm aktif kampanyaları kontrol et (genel kampanyalar)
+          const generalCampaigns = (campaignsData || [])
+            .filter(campaign => {
+              const startDate = new Date(campaign.baslangic_tarihi);
+              const endDate = new Date(campaign.bitis_tarihi);
+              if (now < startDate || now > endDate) return false;
+              // Aktif ve genel indirim var mı kontrol et (sadece genel indirimler ProductCard'da gösterilir)
+              const activeDiscount = campaign.indirimler?.find(d => d.aktif && d.hedef_tipi === 'genel');
+              return !!activeDiscount;
+            });
+          
+          productCampaigns.push(...generalCampaigns);
+        }
+
+        // En iyi indirimi seç (en yüksek indirim değeri)
+        // Sadece genel indirimler ProductCard'da gösterilir
+        let bestDiscount = null;
+        if (productCampaigns.length > 0) {
+          productCampaigns.forEach(campaign => {
+            const discount = campaign.indirimler?.find(d => d.aktif && d.hedef_tipi === 'genel');
+            if (discount) {
+              // İndirim miktarını hesapla
+              let discountAmount = 0;
+              const productPrice = parseFloat(product.fiyat) || 0;
+              
+              if (discount.indirim_tipi === 'yuzde') {
+                discountAmount = (productPrice * parseFloat(discount.indirim_degeri)) / 100;
+              } else if (discount.indirim_tipi === 'miktar') {
+                discountAmount = parseFloat(discount.indirim_degeri);
+                if (discountAmount > productPrice) {
+                  discountAmount = productPrice;
+                }
+              }
+
+              // En iyi indirimi seç
+              if (!bestDiscount || discountAmount > bestDiscount.discountAmount) {
+                bestDiscount = {
+                  campaignId: campaign.id,
+                  campaignName: campaign.ad,
+                  discountType: discount.indirim_tipi,
+                  discountValue: parseFloat(discount.indirim_degeri),
+                  discountAmount: discountAmount,
+                  originalPrice: productPrice,
+                  discountedPrice: Math.max(0, productPrice - discountAmount),
+                };
+                console.log(`Ürün ${product.id} için indirim bulundu:`, bestDiscount);
+              }
+            }
+          });
+        }
+
+        return {
+          ...product,
+          discount: bestDiscount,
+        };
+      });
+      
+      // Debug için log
+      const productsWithDiscount = productsWithDiscounts.filter(p => p.discount);
+      console.log(`${productsWithDiscount.length} ürün için indirim bulundu`);
 
       // Duyuruları yükle
       const { data: announcementsData, error: announcementsError } = await supabase
@@ -399,7 +572,7 @@ export default function HomeScreen() {
       if (sistemAyarlariError) throw sistemAyarlariError;
 
       setCategories(categoriesData || []);
-      setProducts(productsData || []);
+      setProducts(productsWithDiscounts || productsData || []);
       setCampaigns(campaignsData || []);
       setAnnouncements(announcementsData || []);
       setYeniOneriler(suggestionsData || []);
@@ -430,10 +603,8 @@ export default function HomeScreen() {
     if (!phoneToken) return;
 
     try {
-
-      
-      // Telefon token'a göre siparişleri yükle (OrderStatusScreen ile aynı mantık)
-      const { data: ordersData, error: ordersError } = await supabase
+      // Sorgu oluştur
+      let query = supabase
         .from(TABLES.SIPARISLER)
         .select(`
           *,
@@ -446,8 +617,18 @@ export default function HomeScreen() {
               fiyat
             )
           )
-        `)
-        .eq('telefon_token', phoneToken)
+        `);
+      
+      // Giriş yapmışsa kullanici_id'ye göre, yoksa phoneToken'a göre filtrele
+      if (user?.id) {
+        console.log('HomeScreen: Giriş yapılmış, kullanici_id ile filtreleme yapılıyor:', user.id);
+        query = query.eq('kullanici_id', user.id);
+      } else {
+        console.log('HomeScreen: Giriş yapılmamış, phoneToken ile filtreleme yapılıyor:', phoneToken);
+        query = query.eq('telefon_token', phoneToken);
+      }
+      
+      const { data: ordersData, error: ordersError } = await query
         .order('olusturma_tarihi', { ascending: false });
 
       if (ordersError) throw ordersError;
@@ -534,13 +715,31 @@ export default function HomeScreen() {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    if (!dateString) return '';
+    // Supabase'den gelen timestamp'i parse et
+    // PostgreSQL TIMESTAMP WITHOUT TIME ZONE Supabase'de UTC olarak saklanır
+    const dateStr = String(dateString).trim();
+    let date;
+    
+    // Eğer timezone bilgisi yoksa (Z, +, - yoksa), UTC olarak kabul et
+    if (dateStr.includes('T') && !dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      // UTC olarak parse et
+      date = new Date(dateStr + 'Z');
+    } else if (!dateStr.includes('T') && !dateStr.includes('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      // Eğer sadece tarih-saat formatındaysa (örn: "2024-02-02 10:45:00"), UTC olarak parse et
+      date = new Date(dateStr.replace(' ', 'T') + 'Z');
+    } else {
+      date = new Date(dateStr);
+    }
+    
+    // Türkiye saati için timezone belirt (UTC+3)
     return date.toLocaleString('tr-TR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'Europe/Istanbul'
     });
   };
 
@@ -556,6 +755,7 @@ export default function HomeScreen() {
       <View style={{ flex: 1, maxWidth: `${100 / numCols}%` }}>
         <ProductCard
           product={item}
+          discount={item.discount}
           onPress={handleProductPress}
           onAddToCart={handleAddToCart}
           onProductDetail={handleProductPress}
@@ -917,6 +1117,7 @@ export default function HomeScreen() {
                 >
                   <ProductCard
                     product={item}
+                    discount={item.discount}
                     onPress={handleProductPress}
                     onAddToCart={handleAddToCart}
                     onProductDetail={handleProductPress}

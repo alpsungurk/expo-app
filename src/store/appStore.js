@@ -215,9 +215,30 @@ export const AppProvider = ({ children }) => {
       // Refresh token hatası durumunda session'ı temizle
       if (error) {
         console.error('Session error:', error);
-        if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
-          console.log('Refresh token hatası tespit edildi, session temizleniyor...');
+        const errorMessage = error.message || error.toString() || '';
+        const isRefreshTokenError = 
+          errorMessage.includes('Refresh Token') || 
+          errorMessage.includes('refresh_token') ||
+          errorMessage.includes('invalid refresh token') ||
+          errorMessage.includes('refresh token not found') ||
+          errorMessage.toLowerCase().includes('refresh');
+        
+        if (isRefreshTokenError) {
+          console.log('Refresh token hatası tespit edildi, session temizleniyor...', errorMessage);
           try {
+            // AsyncStorage'daki bozuk token'ları temizle
+            const keys = await AsyncStorage.getAllKeys();
+            const authKeys = keys.filter(key => 
+              key.startsWith('sb-') || 
+              key.includes('supabase.auth') ||
+              key.includes('auth-token')
+            );
+            if (authKeys.length > 0) {
+              await AsyncStorage.multiRemove(authKeys);
+              console.log('Bozuk auth token\'ları temizlendi');
+            }
+            
+            // Sign out yap
             await supabase.auth.signOut();
           } catch (signOutError) {
             console.error('Sign out error:', signOutError);
@@ -248,11 +269,36 @@ export const AppProvider = ({ children }) => {
           }
         }
       }
-    }).catch((error) => {
+    }).catch(async (error) => {
       console.error('getSession catch error:', error);
-      if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
-        console.log('Refresh token hatası tespit edildi, session temizleniyor...');
-        supabase.auth.signOut().catch(console.error);
+      const errorMessage = error.message || error.toString() || '';
+      const isRefreshTokenError = 
+        errorMessage.includes('Refresh Token') || 
+        errorMessage.includes('refresh_token') ||
+        errorMessage.includes('invalid refresh token') ||
+        errorMessage.includes('refresh token not found') ||
+        errorMessage.toLowerCase().includes('refresh');
+      
+      if (isRefreshTokenError) {
+        console.log('Refresh token hatası tespit edildi, session temizleniyor...', errorMessage);
+        try {
+          // AsyncStorage'daki bozuk token'ları temizle
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const keys = await AsyncStorage.getAllKeys();
+          const authKeys = keys.filter(key => 
+            key.startsWith('sb-') || 
+            key.includes('supabase.auth') ||
+            key.includes('auth-token')
+          );
+          if (authKeys.length > 0) {
+            await AsyncStorage.multiRemove(authKeys);
+            console.log('Bozuk auth token\'ları temizlendi');
+          }
+          
+          await supabase.auth.signOut();
+        } catch (signOutError) {
+          console.error('Sign out error:', signOutError);
+        }
         if (isMounted) {
           setUser(null);
           setUserProfile(null);
@@ -297,9 +343,30 @@ export const AppProvider = ({ children }) => {
         } catch (error) {
           console.error('Auth state change error:', error);
           // Refresh token hatası durumunda session'ı temizle
-          if (error.message?.includes('Refresh Token') || error.message?.includes('refresh_token')) {
-            console.log('Refresh token hatası tespit edildi, session temizleniyor...');
+          const errorMessage = error.message || error.toString() || '';
+          const isRefreshTokenError = 
+            errorMessage.includes('Refresh Token') || 
+            errorMessage.includes('refresh_token') ||
+            errorMessage.includes('invalid refresh token') ||
+            errorMessage.includes('refresh token not found') ||
+            errorMessage.toLowerCase().includes('refresh');
+          
+          if (isRefreshTokenError) {
+            console.log('Refresh token hatası tespit edildi, session temizleniyor...', errorMessage);
             try {
+              // AsyncStorage'daki bozuk token'ları temizle
+              const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+              const keys = await AsyncStorage.getAllKeys();
+              const authKeys = keys.filter(key => 
+                key.startsWith('sb-') || 
+                key.includes('supabase.auth') ||
+                key.includes('auth-token')
+              );
+              if (authKeys.length > 0) {
+                await AsyncStorage.multiRemove(authKeys);
+                console.log('Bozuk auth token\'ları temizlendi');
+              }
+              
               await supabase.auth.signOut();
             } catch (signOutError) {
               console.error('Sign out error:', signOutError);

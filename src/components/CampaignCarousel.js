@@ -172,7 +172,8 @@ export default function CampaignCarousel() {
         ...(suggestionsData || []).filter(item => item.aktif === true).map(item => ({ ...item, type: 'suggestion' }))
       ].sort((a, b) => (b.oncelik || 0) - (a.oncelik || 0));
 
-      setItems(allItems);
+      // Maksimum 7 item göster
+      setItems(allItems.slice(0, 7));
       setCurrentIndex(0);
     } catch (error) {
       console.error('Carousel veri yükleme hatası:', error);
