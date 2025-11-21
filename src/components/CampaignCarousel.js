@@ -176,7 +176,6 @@ export default function CampaignCarousel() {
       setItems(allItems.slice(0, 7));
       setCurrentIndex(0);
     } catch (error) {
-      console.error('Carousel veri yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -241,7 +240,6 @@ export default function CampaignCarousel() {
             .single();
 
           if (error) {
-            console.error('Ürün çekme hatası:', error);
             return;
           }
 
@@ -249,7 +247,6 @@ export default function CampaignCarousel() {
             navigation.navigate('ProductDetail', { product: productData });
           }
         } catch (error) {
-          console.error('Ürün yükleme hatası:', error);
         }
       }
     }

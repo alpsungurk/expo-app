@@ -14,6 +14,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Toast from 'react-native-toast-message';
 import { useCartStore } from '../store/cartStore';
 import { useNavigation } from '@react-navigation/native';
 import { supabase, TABLES } from '../config/supabase';
@@ -230,7 +231,13 @@ export default function QRScanScreen() {
           .single();
 
         if (error || !tableData) {
-          Alert.alert('Hata', 'Masa bulunamadı. Lütfen geçerli bir masa numarası girin.');
+          Toast.show({
+            type: 'error',
+            text1: 'Hata',
+            text2: 'Masa bulunamadı. Lütfen geçerli bir masa numarası girin.',
+            position: 'top',
+            visibilityTime: 4000,
+          });
           return;
         }
 
@@ -247,7 +254,13 @@ export default function QRScanScreen() {
           ]
         );
       } catch (error) {
-        Alert.alert('Hata', 'Masa bilgisi alınamadı.');
+        Toast.show({
+          type: 'error',
+          text1: 'Hata',
+          text2: 'Masa bilgisi alınamadı.',
+          position: 'top',
+          visibilityTime: 4000,
+        });
       }
     }
   };
@@ -261,7 +274,13 @@ export default function QRScanScreen() {
     setShowDeleteModal(false);
     setScanned(false); // QR okuma state'ini reset et
     setIsLoading(false); // Loading state'ini resetle
-    Alert.alert('Başarılı', 'Masa seçimi kaldırıldı.');
+    Toast.show({
+      type: 'success',
+      text1: 'Başarılı',
+      text2: 'Masa seçimi kaldırıldı.',
+      position: 'top',
+      visibilityTime: 3000,
+    });
   };
 
   const handleCancelDelete = () => {
@@ -319,9 +338,9 @@ export default function QRScanScreen() {
               <View style={styles.welcomeCard}>
                 <View style={styles.welcomeIconContainer}>
                   <Ionicons 
-                    name="restaurant-outline" 
+                    name="restaurant" 
                     size={isSmallScreen ? 32 : isMediumScreen ? 36 : 40} 
-                    color="#6B7280" 
+                    color="#8B4513" 
                   />
                 </View>
                 <Text style={styles.welcomeTitle}>Sipariş Vermeye Başla</Text>
@@ -372,7 +391,7 @@ export default function QRScanScreen() {
             <View style={styles.infoSection}>
               <View style={styles.infoCard}>
                 <View style={styles.infoCardHeader}>
-                  <Ionicons name="information-circle-outline" size={20} color="#6B7280" />
+                  <Ionicons name="information-circle" size={20} color="#3B82F6" />
                   <Text style={styles.infoCardTitle}>Nasıl Çalışır?</Text>
                 </View>
                 <Text style={styles.infoCardDescription}>
@@ -382,7 +401,7 @@ export default function QRScanScreen() {
               
               <View style={styles.infoCard}>
                 <View style={styles.infoCardHeader}>
-                  <Ionicons name="flash-outline" size={20} color="#6B7280" />
+                  <Ionicons name="flash" size={20} color="#F59E0B" />
                   <Text style={styles.infoCardTitle}>Hızlı ve Kolay</Text>
                 </View>
                 <Text style={styles.infoCardDescription}>
@@ -552,16 +571,23 @@ const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
     padding: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    gap: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
   },
   // Welcome Card
   welcomeCard: {
     backgroundColor: '#F9FAFB',
     borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
-    padding: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
-    marginBottom: 24,
+    padding: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
+    marginBottom: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     alignItems: 'center',
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   welcomeIconContainer: {
     width: isSmallScreen ? 56 : isMediumScreen ? 64 : 72,
@@ -595,6 +621,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     marginTop: 16,
+    marginBottom: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -620,7 +647,7 @@ const styles = StyleSheet.create({
   },
   // QR Card
   qrCard: {
-    marginBottom: 24,
+    marginBottom: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
     borderRadius: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -674,20 +701,26 @@ const styles = StyleSheet.create({
   },
   // Info Section
   infoSection: {
-    gap: 12,
+    gap: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    marginTop: isLargeScreen ? 8 : isMediumScreen ? 6 : 4,
   },
   infoCard: {
     backgroundColor: '#F9FAFB',
     borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
-    padding: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    padding: isLargeScreen ? 18 : isMediumScreen ? 16 : 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   infoCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
+    marginBottom: 10,
+    gap: 10,
   },
   infoCardTitle: {
     fontSize: isSmallScreen ? 14 : isMediumScreen ? 15 : 16,

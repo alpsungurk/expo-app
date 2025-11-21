@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 import { supabase, TABLES } from '../config/supabase';
 
 const { width } = Dimensions.get('window');
@@ -425,7 +426,13 @@ const OrderDetailScreen = ({ route }) => {
 
     } catch (error) {
       console.error('Değişiklik kaydetme hatası:', error);
-      Alert.alert('Hata', `Değişiklikler kaydedilirken bir hata oluştu: ${error.message}`);
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: `Değişiklikler kaydedilirken bir hata oluştu: ${error.message}`,
+        position: 'top',
+        visibilityTime: 4000,
+      });
     }
   };
 
@@ -471,7 +478,13 @@ const OrderDetailScreen = ({ route }) => {
 
     } catch (error) {
       console.error('Not kaydetme hatası:', error);
-      Alert.alert('Hata', `Notlar kaydedilirken bir hata oluştu: ${error.message}`);
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: `Notlar kaydedilirken bir hata oluştu: ${error.message}`,
+        position: 'top',
+        visibilityTime: 4000,
+      });
     }
   };
 
@@ -519,7 +532,13 @@ const OrderDetailScreen = ({ route }) => {
 
     } catch (error) {
       console.error('Sipariş iptal etme hatası:', error);
-      Alert.alert('Hata', `Sipariş iptal edilirken bir hata oluştu: ${error.message}`);
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: `Sipariş iptal edilirken bir hata oluştu: ${error.message}`,
+        position: 'top',
+        visibilityTime: 4000,
+      });
     }
   };
 

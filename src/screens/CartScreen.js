@@ -287,7 +287,13 @@ export default function CartScreen() {
       );
 
     } catch (error) {
-      Alert.alert('Hata', error.message || 'Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: error.message || 'Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.',
+        position: 'top',
+        visibilityTime: 4000,
+      });
     } finally {
       setIsSubmitting(false);
     }

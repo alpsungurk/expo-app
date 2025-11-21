@@ -124,7 +124,6 @@ export default function SignUpScreen() {
 
         // checkError varsa ve PGRST116 değilse (kayıt bulunamadı hatası normal)
         if (checkError && checkError.code !== 'PGRST116') {
-          console.error('Profil kontrolü hatası:', checkError);
         }
 
         if (existingProfile) {
@@ -160,8 +159,6 @@ export default function SignUpScreen() {
         }
 
         if (profileError) {
-          console.error('Profil oluşturma hatası:', profileError);
-          console.error('Hata detayları:', JSON.stringify(profileError, null, 2));
           showError(`Profil kaydedilemedi: ${profileError.message || 'Bilinmeyen hata'}`);
           // Hata durumunda da çıkış yap
           await supabase.auth.signOut();
@@ -181,7 +178,6 @@ export default function SignUpScreen() {
         }, 2000);
       }
     } catch (error) {
-      console.error('Kayıt hatası:', error);
       showError('Kayıt olurken bir hata oluştu.');
     } finally {
       setIsLoading(false);

@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { CommonActions } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 import { supabase } from '../config/supabase';
 import { navigationRef } from '../navigation/AppNavigator';
 import NotificationsScreen from '../screens/NotificationsScreen';
@@ -44,6 +45,9 @@ export const NotificationProvider = ({ children }) => {
   const lastErrorTimeRef = useRef(0);
   const lastErrorMessageRef = useRef('');
   const ERROR_COOLDOWN = 10000; // 10 saniye içinde aynı hatayı tekrar gösterme
+  
+  // İzin reddedildi flag'i için AsyncStorage key
+  const PERMISSION_DENIED_KEY = 'notification_permission_denied';
 
     // Push notification izinlerini kontrol et ve token al
   async function registerForPushNotificationsAsync() {
@@ -75,26 +79,46 @@ export const NotificationProvider = ({ children }) => {
         console.log('Device.isDevice false - standalone app olabilir, token almaya devam ediliyor');
       }
 
+      // İzin daha önce reddedildiyse, bir daha deneme
+      const permissionDenied = await AsyncStorage.getItem(PERMISSION_DENIED_KEY);
+      if (permissionDenied === 'true') {
+        console.log('⚠️ Bildirim izni daha önce reddedilmiş, token alınmayacak');
+        return null;
+      }
+
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       console.log('Mevcut izin durumu:', existingStatus);
       let finalStatus = existingStatus;
       
+      // İzin verilmemişse ve daha önce reddedilmemişse, bir kez iste
       if (existingStatus !== 'granted') {
         console.log('İzin isteniyor...');
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
         console.log('İzin sonucu:', status);
+        
+        // İzin reddedildiyse kaydet ve bir daha deneme
+        if (status === 'denied') {
+          console.log('⚠️ Bildirim izni reddedildi, bir daha istenmeyecek');
+          await AsyncStorage.setItem(PERMISSION_DENIED_KEY, 'true');
+          Toast.show({
+            type: 'error',
+            text1: 'Bildirim İzni',
+            text2: 'Push bildirimlerini almak için bildirim izni gereklidir. Lütfen ayarlardan izin verin.',
+            position: 'top',
+            visibilityTime: 4000,
+          });
+          return null;
+        }
       }
       
       if (finalStatus !== 'granted') {
-        console.error('Bildirim izni reddedildi');
-        Alert.alert(
-          'Bildirim İzni',
-          'Push bildirimlerini almak için bildirim izni gereklidir. Lütfen ayarlardan izin verin.',
-          [{ text: 'Tamam' }]
-        );
+        console.error('Bildirim izni alınamadı');
         return null;
       }
+      
+      // İzin verildi, denied flag'ini temizle (kullanıcı ayarlardan izin vermiş olabilir)
+      await AsyncStorage.removeItem(PERMISSION_DENIED_KEY);
       
       // Project ID'yi environment variable veya app config'den al
       // Standalone build'lerde farklı Constants yapıları kullanılabilir
@@ -142,11 +166,25 @@ export const NotificationProvider = ({ children }) => {
         
         return token;
       } catch (tokenError) {
+        // Network hatası (503, connection error vb.) - izin hatası değil, sessizce atla
+        const isNetworkError = 
+          tokenError.code === 'ERR_NOTIFICATIONS_SERVER_ERROR' ||
+          tokenError.message?.includes('503') ||
+          tokenError.message?.includes('network') ||
+          tokenError.message?.includes('fetch') ||
+          tokenError.message?.includes('connection') ||
+          tokenError.message?.includes('upstream connect error');
+        
+        if (isNetworkError) {
+          console.warn('⚠️ Network hatası (Expo servislerine erişilemiyor), token alınamadı. İzin sorunu değil.');
+          // Network hatası izin hatası değil, flag kaydetme ve sessizce dön
+          return null;
+        }
+        
         console.error('❌ getExpoPushTokenAsync hatası:', tokenError);
         console.error('Hata tipi:', tokenError.constructor.name);
         console.error('Hata mesajı:', tokenError.message);
         console.error('Hata kodu:', tokenError.code);
-        console.error('Hata stack:', tokenError.stack);
         
         // Özel hata mesajları
         if (tokenError.message?.includes('credentials')) {
@@ -159,19 +197,48 @@ export const NotificationProvider = ({ children }) => {
           console.error('Mevcut Project ID:', projectId);
         }
         
-        if (tokenError.message?.includes('network') || tokenError.message?.includes('fetch')) {
-          console.error('⚠️ NETWORK HATASI: İnternet bağlantısı veya Expo servislerine erişim sorunu!');
-        }
-        
         throw tokenError; // Hata yukarı catch bloğuna gitsin
       }
     } catch (error) {
+      // Network hatası kontrolü - izin hatası değil
+      const isNetworkError = 
+        error.code === 'ERR_NOTIFICATIONS_SERVER_ERROR' ||
+        error.message?.includes('503') ||
+        error.message?.includes('network') ||
+        error.message?.includes('fetch') ||
+        error.message?.includes('connection') ||
+        error.message?.includes('upstream connect error');
+      
+      if (isNetworkError) {
+        console.warn('⚠️ Network hatası (Expo servislerine erişilemiyor), token alınamadı. İzin sorunu değil.');
+        // Network hatası izin hatası değil, flag kaydetme ve sessizce dön
+        return null;
+      }
+      
+      // İzin hatası kontrolü - sadece gerçek izin hatalarında flag kaydet
+      const isPermissionError = 
+        error.message?.includes('permission') ||
+        error.message?.includes('denied') ||
+        error.code === 'ERR_NOTIFICATIONS_PERMISSION_DENIED';
+      
+      if (isPermissionError) {
+        console.warn('⚠️ Bildirim izni hatası');
+        await AsyncStorage.setItem(PERMISSION_DENIED_KEY, 'true');
+        Toast.show({
+          type: 'error',
+          text1: 'Bildirim İzni',
+          text2: 'Push bildirimlerini almak için bildirim izni gereklidir. Lütfen ayarlardan izin verin.',
+          position: 'top',
+          visibilityTime: 4000,
+        });
+        return null;
+      }
+      
+      // Diğer hatalar için
       console.error('❌ Push notification token alma hatası (genel):', error);
       console.error('Hata tipi:', error.constructor.name);
       console.error('Hata mesajı:', error.message);
       console.error('Hata kodu:', error.code);
-      console.error('Hata detayları:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-      console.error('Hata stack:', error.stack);
       
       // Aynı hatayı 10 saniye içinde tekrar gösterme
       const errorMessage = error.message || 'Bilinmeyen hata';
@@ -186,11 +253,13 @@ export const NotificationProvider = ({ children }) => {
       lastErrorMessageRef.current = errorMessage;
       
       // Kullanıcıya bilgilendirme (sadece bir kez)
-      Alert.alert(
-        'Push Token Hatası',
-        `Push token alınamadı: ${errorMessage}\n\nLütfen logları kontrol edin.`,
-        [{ text: 'Tamam' }]
-      );
+      Toast.show({
+        type: 'error',
+        text1: 'Push Token Hatası',
+        text2: `Push token alınamadı: ${errorMessage}`,
+        position: 'top',
+        visibilityTime: 4000,
+      });
       
       // Hata durumunda da null dön, UI'da "yükleniyor" mesajı gösterilir
       return null;
@@ -311,14 +380,20 @@ export const NotificationProvider = ({ children }) => {
   }
 
   // Push token'ı al ve kaydet (hem mount'ta hem de uygulama açıldığında kullanılacak)
-  const registerAndSavePushToken = async (retryCount = 0) => {
-    console.log(`🟢 registerAndSavePushToken başlatıldı (deneme: ${retryCount + 1})`);
+  const registerAndSavePushToken = async () => {
+    console.log('🟢 registerAndSavePushToken başlatıldı');
+    
+    // İzin daha önce reddedildiyse, bir daha deneme
+    const permissionDenied = await AsyncStorage.getItem(PERMISSION_DENIED_KEY);
+    if (permissionDenied === 'true') {
+      console.log('⚠️ Bildirim izni daha önce reddedilmiş, token alınmayacak');
+      return false;
+    }
+    
     try {
       // İlk denemede biraz bekle (APK'da app tam başlamadan token alma sorunu olabilir)
-      if (retryCount === 0) {
-        console.log('⏳ 1 saniye bekleniyor...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+      console.log('⏳ 1 saniye bekleniyor...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       console.log('📱 Push token alınıyor...');
       const token = await registerForPushNotificationsAsync();
@@ -332,32 +407,12 @@ export const NotificationProvider = ({ children }) => {
         console.log('✅ registerAndSavePushToken başarıyla tamamlandı');
         return true;
       } else {
-        console.log('⚠️ Token alınamadı - token null');
-        
-        // Retry mekanizması: 3 kez deneme yap
-        if (retryCount < 3) {
-          const waitTime = 2000 * (retryCount + 1);
-          console.log(`🔄 Token alma başarısız, ${waitTime}ms sonra ${retryCount + 2}. deneme yapılacak...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          return await registerAndSavePushToken(retryCount + 1);
-        }
-        
-        console.error('❌ Token alma başarısız - maksimum deneme sayısına ulaşıldı');
+        console.log('⚠️ Token alınamadı - token null (izin reddedilmiş olabilir)');
         return false;
       }
     } catch (error) {
       console.error('❌ Token alma hatası:', error);
       console.error('Hata stack:', error.stack);
-      
-      // Hata durumunda da retry yap
-      if (retryCount < 3) {
-        const waitTime = 2000 * (retryCount + 1);
-        console.log(`🔄 Token alma hatası, ${waitTime}ms sonra ${retryCount + 2}. deneme yapılacak...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        return await registerAndSavePushToken(retryCount + 1);
-      }
-      
-      console.error('❌ Token alma hatası - maksimum deneme sayısına ulaşıldı');
       return false;
     }
   };
@@ -366,11 +421,26 @@ export const NotificationProvider = ({ children }) => {
     // İlk mount'ta push token'ı al ve kaydet
     registerAndSavePushToken();
 
-    // Uygulama foreground'a geçtiğinde push token'ı tekrar kaydet
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    // Uygulama foreground'a geçtiğinde izin durumunu kontrol et
+    // Eğer izin verildiyse token'ı al, reddedildiyse tekrar deneme
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState === 'active') {
-        console.log('Uygulama foreground\'a geçti, push token kaydediliyor...');
-        registerAndSavePushToken();
+        console.log('Uygulama foreground\'a geçti, izin durumu kontrol ediliyor...');
+        // İzin durumunu kontrol et, eğer verildiyse token'ı al
+        const permissionDenied = await AsyncStorage.getItem(PERMISSION_DENIED_KEY);
+        if (permissionDenied !== 'true') {
+          const { status } = await Notifications.getPermissionsAsync();
+          if (status === 'granted') {
+            console.log('İzin verilmiş, token alınıyor...');
+            // İzin verildiyse denied flag'ini temizle
+            await AsyncStorage.removeItem(PERMISSION_DENIED_KEY);
+            registerAndSavePushToken();
+          } else {
+            console.log('İzin verilmemiş, token alınmayacak');
+          }
+        } else {
+          console.log('İzin daha önce reddedilmiş, token alınmayacak');
+        }
       }
     });
 
@@ -456,7 +526,13 @@ export const NotificationProvider = ({ children }) => {
   // Push notification test gönder (Expo Push API'ye)
   const sendTestPushNotification = async () => {
     if (!expoPushToken) {
-      Alert.alert('Hata', 'Push token bulunamadı. Lütfen uygulamayı yeniden başlatın.');
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: 'Push token bulunamadı. Lütfen uygulamayı yeniden başlatın.',
+        position: 'top',
+        visibilityTime: 4000,
+      });
       return;
     }
 
@@ -485,7 +561,13 @@ export const NotificationProvider = ({ children }) => {
           if (now - lastErrorTimeRef.current >= ERROR_COOLDOWN || lastErrorMessageRef.current !== errorMessage) {
             lastErrorTimeRef.current = now;
             lastErrorMessageRef.current = errorMessage;
-            Alert.alert('Hata', errorMessage);
+            Toast.show({
+              type: 'error',
+              text1: 'Hata',
+              text2: errorMessage,
+              position: 'top',
+              visibilityTime: 4000,
+            });
           }
         }
       }
@@ -498,7 +580,13 @@ export const NotificationProvider = ({ children }) => {
       if (now - lastErrorTimeRef.current >= ERROR_COOLDOWN || lastErrorMessageRef.current !== errorMessage) {
         lastErrorTimeRef.current = now;
         lastErrorMessageRef.current = errorMessage;
-        Alert.alert('Hata', errorMessage);
+        Toast.show({
+          type: 'error',
+          text1: 'Hata',
+          text2: errorMessage,
+          position: 'top',
+          visibilityTime: 4000,
+        });
       }
     }
   };

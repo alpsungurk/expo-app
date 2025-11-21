@@ -18,6 +18,7 @@ import { supabase, TABLES } from '../config/supabase';
 import { useAppStore } from '../store/appStore';
 import TableHeader from '../components/TableHeader';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
+import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -303,7 +304,13 @@ export default function OrderStatusScreen() {
 
     } catch (error) {
       console.error('Siparişler yükleme hatası:', error);
-      Alert.alert('Hata', 'Siparişler yüklenirken bir hata oluştu.');
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: 'Siparişler yüklenirken bir hata oluştu.',
+        position: 'top',
+        visibilityTime: 4000,
+      });
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);

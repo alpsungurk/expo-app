@@ -149,7 +149,6 @@ export const AppProvider = ({ children }) => {
   const loadUserProfile = useCallback(async (userId) => {
     try {
       if (!userId) {
-        console.error('loadUserProfile: userId gerekli');
         return null;
       }
 
@@ -161,7 +160,6 @@ export const AppProvider = ({ children }) => {
 
       // PGRST116 hatası normal (profil bulunamadı), diğer hataları logla
       if (error && error.code !== 'PGRST116') {
-        console.error('Kullanıcı profili yükleme hatası:', error);
         return null;
       }
 
@@ -174,7 +172,6 @@ export const AppProvider = ({ children }) => {
       // Profil bulunamadı
       return null;
     } catch (error) {
-      console.error('Kullanıcı profili yükleme hatası:', error);
       return null;
     }
   }, [setUserProfile]);
@@ -198,7 +195,6 @@ export const AppProvider = ({ children }) => {
         }
         setPhoneToken(token);
       } catch (error) {
-        console.error('Phone token yükleme hatası:', error);
       }
     };
     loadPhoneToken();
@@ -214,7 +210,6 @@ export const AppProvider = ({ children }) => {
       
       // Refresh token hatası durumunda session'ı temizle
       if (error) {
-        console.error('Session error:', error);
         const errorMessage = error.message || error.toString() || '';
         const isRefreshTokenError = 
           errorMessage.includes('Refresh Token') || 
@@ -224,7 +219,6 @@ export const AppProvider = ({ children }) => {
           errorMessage.toLowerCase().includes('refresh');
         
         if (isRefreshTokenError) {
-          console.log('Refresh token hatası tespit edildi, session temizleniyor...', errorMessage);
           try {
             // AsyncStorage'daki bozuk token'ları temizle
             const keys = await AsyncStorage.getAllKeys();
@@ -235,13 +229,11 @@ export const AppProvider = ({ children }) => {
             );
             if (authKeys.length > 0) {
               await AsyncStorage.multiRemove(authKeys);
-              console.log('Bozuk auth token\'ları temizlendi');
             }
             
             // Sign out yap
             await supabase.auth.signOut();
           } catch (signOutError) {
-            console.error('Sign out error:', signOutError);
           }
           if (isMounted) {
             setUser(null);
@@ -270,7 +262,6 @@ export const AppProvider = ({ children }) => {
         }
       }
     }).catch(async (error) => {
-      console.error('getSession catch error:', error);
       const errorMessage = error.message || error.toString() || '';
       const isRefreshTokenError = 
         errorMessage.includes('Refresh Token') || 
@@ -280,7 +271,6 @@ export const AppProvider = ({ children }) => {
         errorMessage.toLowerCase().includes('refresh');
       
       if (isRefreshTokenError) {
-        console.log('Refresh token hatası tespit edildi, session temizleniyor...', errorMessage);
         try {
           // AsyncStorage'daki bozuk token'ları temizle
           const AsyncStorage = require('@react-native-async-storage/async-storage').default;
@@ -292,12 +282,10 @@ export const AppProvider = ({ children }) => {
           );
           if (authKeys.length > 0) {
             await AsyncStorage.multiRemove(authKeys);
-            console.log('Bozuk auth token\'ları temizlendi');
           }
           
           await supabase.auth.signOut();
         } catch (signOutError) {
-          console.error('Sign out error:', signOutError);
         }
         if (isMounted) {
           setUser(null);
@@ -310,11 +298,9 @@ export const AppProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       
-      console.log('Auth state change event:', event, session?.user?.email);
       
       // TOKEN_REFRESHED veya SIGNED_OUT event'lerini özel olarak işle
       if (event === 'TOKEN_REFRESHED' && !session) {
-        console.log('Token refresh başarısız, session temizleniyor...');
         if (isMounted) {
           setUser(null);
           setUserProfile(null);
@@ -341,7 +327,6 @@ export const AppProvider = ({ children }) => {
             }
           }
         } catch (error) {
-          console.error('Auth state change error:', error);
           // Refresh token hatası durumunda session'ı temizle
           const errorMessage = error.message || error.toString() || '';
           const isRefreshTokenError = 
@@ -352,7 +337,6 @@ export const AppProvider = ({ children }) => {
             errorMessage.toLowerCase().includes('refresh');
           
           if (isRefreshTokenError) {
-            console.log('Refresh token hatası tespit edildi, session temizleniyor...', errorMessage);
             try {
               // AsyncStorage'daki bozuk token'ları temizle
               const AsyncStorage = require('@react-native-async-storage/async-storage').default;
@@ -364,12 +348,10 @@ export const AppProvider = ({ children }) => {
               );
               if (authKeys.length > 0) {
                 await AsyncStorage.multiRemove(authKeys);
-                console.log('Bozuk auth token\'ları temizlendi');
               }
               
               await supabase.auth.signOut();
             } catch (signOutError) {
-              console.error('Sign out error:', signOutError);
             }
             if (isMounted) {
               setUser(null);

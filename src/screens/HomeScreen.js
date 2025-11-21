@@ -422,9 +422,7 @@ export default function HomeScreen() {
       // Şu anki tarih
       const now = new Date();
 
-      // Debug için log
-      console.log('Kampanya ürünleri:', campaignProductsData?.length || 0);
-      console.log('Kampanyalar:', campaignsData?.length || 0);
+      // Debug için log - kaldırıldı (sürekli tekrarlanıyordu)
 
       // Her ürün için aktif kampanya ve indirim bilgisini hesapla
       const productsWithDiscounts = (productsData || []).map(product => {
@@ -520,7 +518,7 @@ export default function HomeScreen() {
                   originalPrice: productPrice,
                   discountedPrice: Math.max(0, productPrice - discountAmount),
                 };
-                console.log(`Ürün ${product.id} için indirim bulundu:`, bestDiscount);
+                // Debug log kaldırıldı (sürekli tekrarlanıyordu)
               }
             }
           });
@@ -532,9 +530,7 @@ export default function HomeScreen() {
         };
       });
       
-      // Debug için log
-      const productsWithDiscount = productsWithDiscounts.filter(p => p.discount);
-      console.log(`${productsWithDiscount.length} ürün için indirim bulundu`);
+      // Debug için log - kaldırıldı (sürekli tekrarlanıyordu)
 
       // Duyuruları yükle
       const { data: announcementsData, error: announcementsError } = await supabase
@@ -583,7 +579,13 @@ export default function HomeScreen() {
       setProductsLoading(false);
     } catch (error) {
       console.error('Veri yükleme hatası:', error);
-      Alert.alert('Hata', 'Veriler yüklenirken bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.');
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: 'Veriler yüklenirken bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.',
+        position: 'top',
+        visibilityTime: 4000,
+      });
       setCategories([]);
       setProducts([]);
       setCampaigns([]);
@@ -621,10 +623,10 @@ export default function HomeScreen() {
       
       // Giriş yapmışsa kullanici_id'ye göre, yoksa phoneToken'a göre filtrele
       if (user?.id) {
-        console.log('HomeScreen: Giriş yapılmış, kullanici_id ile filtreleme yapılıyor:', user.id);
+        // Debug log kaldırıldı (sürekli tekrarlanıyordu)
         query = query.eq('kullanici_id', user.id);
       } else {
-        console.log('HomeScreen: Giriş yapılmamış, phoneToken ile filtreleme yapılıyor:', phoneToken);
+        // Debug log kaldırıldı (sürekli tekrarlanıyordu)
         query = query.eq('telefon_token', phoneToken);
       }
       

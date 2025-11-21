@@ -19,6 +19,7 @@ import { getImageUrl } from '../utils/storage';
 import TableHeader from '../components/TableHeader';
 import SistemAyarlariSidebar from '../components/SistemAyarlariSidebar';
 import { useNavigation } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 380;
@@ -116,7 +117,13 @@ export default function AnnouncementsScreen() {
         code: error.code,
         details: error.details
       });
-      Alert.alert('Hata', 'Veriler yüklenirken bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.');
+      Toast.show({
+        type: 'error',
+        text1: 'Hata',
+        text2: 'Veriler yüklenirken bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.',
+        position: 'top',
+        visibilityTime: 4000,
+      });
 
       // Boş verilerle devam et
       setCampaigns([]);

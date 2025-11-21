@@ -62,7 +62,6 @@ export const ThemeProvider = ({ children }) => {
         setThemeMode('system');
       }
     } catch (error) {
-      console.error('Theme yüklenirken hata:', error);
       setThemeMode('light');
     }
   };
@@ -72,7 +71,6 @@ export const ThemeProvider = ({ children }) => {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
       setThemeMode(mode);
     } catch (error) {
-      console.error('Theme kaydedilirken hata:', error);
     }
   };
 

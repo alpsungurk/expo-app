@@ -144,7 +144,6 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.error('Çıkış hatası:', error);
         showError('Çıkış yapılırken bir hata oluştu: ' + error.message);
         setIsLoggingOut(false);
         setShowLogoutModal(false);
@@ -178,7 +177,6 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
         setIsLoggingOut(false);
       }, 550);
     } catch (error) {
-      console.error('Çıkış hatası:', error);
       showError('Çıkış yapılırken bir hata oluştu.');
       setIsLoggingOut(false);
       setShowLogoutModal(false);

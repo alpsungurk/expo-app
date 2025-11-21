@@ -64,7 +64,6 @@ export default function QRScanner({ visible, onClose, onTableFound }) {
       );
 
     } catch (error) {
-      console.error('QR kod okuma hatası:', error);
       Alert.alert('Hata', 'QR kod okunamadı. Lütfen tekrar deneyin.');
       setScanned(false);
     } finally {

@@ -117,7 +117,6 @@ export default function SettingsScreen() {
         .eq('id', user.id);
 
       if (updateError) {
-        console.error('Profil güncelleme hatası:', updateError);
         showError(updateError.message || 'Profil güncellenirken bir hata oluştu.');
         setIsUpdatingProfile(false);
         return;
@@ -128,7 +127,6 @@ export default function SettingsScreen() {
         await loadUserProfile(user.id);
       } else {
         // Fallback: Direkt Supabase'den profil yükle
-        console.warn('loadUserProfile fonksiyonu bulunamadı, direkt Supabase\'den yükleniyor');
         const { data: profileData, error: profileError } = await supabase
           .from('kullanici_profilleri')
           .select('*, roller(*)')
@@ -137,7 +135,6 @@ export default function SettingsScreen() {
         
         // PGRST116 hatası normal (profil bulunamadı), diğer hataları logla
         if (profileError && profileError.code !== 'PGRST116') {
-          console.error('Profil yükleme hatası:', profileError);
         }
         
         if (profileData && appStore?.setUserProfile) {
@@ -147,7 +144,6 @@ export default function SettingsScreen() {
 
       showSuccess('Profil bilgileri başarıyla güncellendi.');
     } catch (error) {
-      console.error('Profil güncelleme hatası:', error);
       showError('Profil güncellenirken bir hata oluştu.');
     } finally {
       setIsUpdatingProfile(false);
@@ -196,7 +192,6 @@ export default function SettingsScreen() {
       });
 
       if (updateError) {
-        console.error('Şifre güncelleme hatası:', updateError);
         showError(updateError.message || 'Şifre güncellenirken bir hata oluştu.');
         setIsChangingPassword(false);
         return;
@@ -209,7 +204,6 @@ export default function SettingsScreen() {
 
       showSuccess('Şifre başarıyla güncellendi.');
     } catch (error) {
-      console.error('Şifre güncelleme hatası:', error);
       showError('Şifre güncellenirken bir hata oluştu.');
     } finally {
       setIsChangingPassword(false);

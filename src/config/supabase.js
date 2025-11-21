@@ -41,12 +41,10 @@ export const supabase = createClient(
 // Global error handler - Refresh token hatalarını yakala
 supabase.auth.onAuthStateChange(async (event, session) => {
   if (event === 'TOKEN_REFRESHED' && !session) {
-    console.warn('Token refresh başarısız, session geçersiz olabilir');
     // Bozuk token'ları temizle
     try {
       await supabase.auth.signOut();
     } catch (error) {
-      console.error('Sign out error during token refresh:', error);
     }
   }
   
@@ -58,10 +56,8 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       const authKeys = keys.filter(key => key.startsWith('sb-') || key.includes('supabase.auth'));
       if (authKeys.length > 0) {
         await AsyncStorage.multiRemove(authKeys);
-        console.log('Bozuk auth token\'ları temizlendi');
       }
     } catch (error) {
-      console.error('AsyncStorage temizleme hatası:', error);
     }
   }
 });

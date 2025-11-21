@@ -36,7 +36,6 @@ const base64UrlDecode = (str) => {
       return manualBase64Decode(base64);
     }
   } catch (error) {
-    console.error('Base64 decode hatası:', error);
     return null;
   }
 };
@@ -70,7 +69,6 @@ const manualBase64Decode = (base64) => {
     
     return str;
   } catch (error) {
-    console.error('Manuel Base64 decode hatası:', error);
     return null;
   }
 };
@@ -83,7 +81,6 @@ const manualBase64Decode = (base64) => {
 export const decodeMasaFromUrl = (url) => {
   try {
     if (!url || typeof url !== 'string') {
-      console.error('Geçersiz URL');
       return null;
     }
 
@@ -92,7 +89,6 @@ export const decodeMasaFromUrl = (url) => {
     const masaMatch = url.match(/[&?]masa=([^&]+)/i);
     
     if (!masaMatch || !masaMatch[1]) {
-      console.error('Masa parametresi bulunamadı');
       return null;
     }
 
@@ -108,11 +104,9 @@ export const decodeMasaFromUrl = (url) => {
 
     // Eğer decode başarısızsa, encrypted string'i direkt döndür
     // (belki database'de qr_token olarak saklanıyor)
-    console.warn('Masa decode başarısız, encrypted string döndürülüyor:', encryptedMasa);
     return encryptedMasa;
 
   } catch (error) {
-    console.error('Masa decode hatası:', error);
     return null;
   }
 };
@@ -152,7 +146,6 @@ export const parseQRData = (data) => {
       };
     }
   } catch (error) {
-    console.error('QR data parse hatası:', error);
     return {
       masaNo: null,
       qrToken: data,
