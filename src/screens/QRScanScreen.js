@@ -299,46 +299,37 @@ export default function QRScanScreen() {
             }
           ]}>
             {/* Hero Section */}
-            <LinearGradient
-              colors={['#FFFFFF', '#FAFAFA', '#F5F5F5']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroSection}
-            >
-              <View style={styles.heroContent}>
-                <View style={styles.iconCircle}>
+            {tableNumber ? (
+              <View style={styles.tableInfoCard}>
+                <View style={styles.tableInfoHeader}>
+                  <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                  <Text style={styles.tableInfoTitle}>Masa Seçildi</Text>
+                </View>
+                <Text style={styles.tableInfoNumber}>{tableNumber}</Text>
+                <TouchableOpacity 
+                  style={styles.deleteTableButtonMain}
+                  onPress={handleDeleteTable}
+                  activeOpacity={0.6}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  <Text style={styles.deleteTableButtonText}>Masa Seçimini Kaldır</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.welcomeCard}>
+                <View style={styles.welcomeIconContainer}>
                   <Ionicons 
-                    name="restaurant" 
-                    size={isSmallScreen ? 50 : isMediumScreen ? 60 : 70} 
-                    color="#8B4513" 
+                    name="restaurant-outline" 
+                    size={isSmallScreen ? 32 : isMediumScreen ? 36 : 40} 
+                    color="#6B7280" 
                   />
                 </View>
-                {tableNumber ? (
-                  <View style={styles.tableInfoCard}>
-                    <View style={styles.tableInfoHeader}>
-                      <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                      <Text style={styles.tableInfoTitle}>Masa Seçildi</Text>
-                    </View>
-                    <Text style={styles.tableInfoNumber}>{tableNumber}</Text>
-                    <TouchableOpacity 
-                      style={styles.deleteTableButtonMain}
-                      onPress={handleDeleteTable}
-                      activeOpacity={0.6}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                      <Text style={styles.deleteTableButtonText}>Masa Seçimini Kaldır</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.welcomeTextContainer}>
-                    <Text style={styles.heroTitle}>Sipariş Vermeye Başla</Text>
-                    <Text style={styles.heroSubtitle}>
-                      Masa üzerindeki QR kodu tarayarak hızlıca sipariş verebilirsiniz
-                    </Text>
-                  </View>
-                )}
+                <Text style={styles.welcomeTitle}>Sipariş Vermeye Başla</Text>
+                <Text style={styles.welcomeSubtitle}>
+                  Masa üzerindeki QR kodu tarayarak hızlıca sipariş verebilirsiniz
+                </Text>
               </View>
-            </LinearGradient>
+            )}
 
             {/* QR Code Card */}
             <View style={styles.qrCard}>
@@ -379,28 +370,24 @@ export default function QRScanScreen() {
 
             {/* Info Section */}
             <View style={styles.infoSection}>
-              <View style={styles.infoItem}>
-                <View style={styles.infoIconContainer}>
-                  <Ionicons name="information-circle" size={24} color="#8B4513" />
+              <View style={styles.infoCard}>
+                <View style={styles.infoCardHeader}>
+                  <Ionicons name="information-circle-outline" size={20} color="#6B7280" />
+                  <Text style={styles.infoCardTitle}>Nasıl Çalışır?</Text>
                 </View>
-                <View style={styles.infoTextContainer}>
-                  <Text style={styles.infoTitle}>Nasıl Çalışır?</Text>
-                  <Text style={styles.infoDescription}>
-                    Masanızın üzerindeki QR kodu kameraya doğrultun, masa bilgisi otomatik olarak kaydedilir.
-                  </Text>
-                </View>
+                <Text style={styles.infoCardDescription}>
+                  Masanızın üzerindeki QR kodu kameraya doğrultun, masa bilgisi otomatik olarak kaydedilir.
+                </Text>
               </View>
               
-              <View style={styles.infoItem}>
-                <View style={styles.infoIconContainer}>
-                  <Ionicons name="flash" size={24} color="#8B4513" />
+              <View style={styles.infoCard}>
+                <View style={styles.infoCardHeader}>
+                  <Ionicons name="flash-outline" size={20} color="#6B7280" />
+                  <Text style={styles.infoCardTitle}>Hızlı ve Kolay</Text>
                 </View>
-                <View style={styles.infoTextContainer}>
-                  <Text style={styles.infoTitle}>Hızlı ve Kolay</Text>
-                  <Text style={styles.infoDescription}>
-                    Sadece birkaç saniyede masa seçiminizi tamamlayıp sipariş vermeye başlayabilirsiniz.
-                  </Text>
-                </View>
+                <Text style={styles.infoCardDescription}>
+                  Sadece birkaç saniyede masa seçiminizi tamamlayıp sipariş vermeye başlayabilirsiniz.
+                </Text>
               </View>
             </View>
           </Animated.View>
@@ -566,50 +553,39 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
   },
-  // Hero Section
-  heroSection: {
-    borderRadius: isLargeScreen ? 24 : isMediumScreen ? 20 : 16,
+  // Welcome Card
+  welcomeCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    padding: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
     marginBottom: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-  },
-  heroContent: {
-    padding: isLargeScreen ? 32 : isMediumScreen ? 28 : 24,
     alignItems: 'center',
   },
-  iconCircle: {
-    width: isSmallScreen ? 100 : isMediumScreen ? 120 : 140,
-    height: isSmallScreen ? 100 : isMediumScreen ? 120 : 140,
-    borderRadius: isSmallScreen ? 50 : isMediumScreen ? 60 : 70,
-    backgroundColor: '#F5F5F5',
+  welcomeIconContainer: {
+    width: isSmallScreen ? 56 : isMediumScreen ? 64 : 72,
+    height: isSmallScreen ? 56 : isMediumScreen ? 64 : 72,
+    borderRadius: isSmallScreen ? 28 : isMediumScreen ? 32 : 36,
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
+    marginBottom: 12,
   },
-  welcomeTextContainer: {
-    alignItems: 'center',
-  },
-  heroTitle: {
-    fontSize: isSmallScreen ? 24 : isMediumScreen ? 28 : 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
+  welcomeTitle: {
+    fontSize: isSmallScreen ? 18 : isMediumScreen ? 20 : 22,
+    fontWeight: '600',
+    color: '#374151',
     marginBottom: 8,
     textAlign: 'center',
+    fontFamily: 'System',
   },
-  heroSubtitle: {
-    fontSize: isSmallScreen ? 14 : isMediumScreen ? 15 : 16,
+  welcomeSubtitle: {
+    fontSize: isSmallScreen ? 13 : isMediumScreen ? 14 : 15,
     color: '#6B7280',
     textAlign: 'center',
-    lineHeight: isSmallScreen ? 20 : isMediumScreen ? 22 : 24,
-    paddingHorizontal: 10,
+    lineHeight: isSmallScreen ? 18 : isMediumScreen ? 20 : 22,
+    fontFamily: 'System',
   },
   // Table Info Card
   tableInfoCard: {
@@ -675,7 +651,7 @@ const styles = StyleSheet.create({
     width: isSmallScreen ? 60 : isMediumScreen ? 70 : 80,
     height: isSmallScreen ? 60 : isMediumScreen ? 70 : 80,
     borderRadius: isSmallScreen ? 30 : isMediumScreen ? 35 : 40,
-    backgroundColor: 'rgba(139, 69, 19, 0.1)',
+    backgroundColor: 'transparent',
     top: -12,
     left: -12,
   },
@@ -698,41 +674,32 @@ const styles = StyleSheet.create({
   },
   // Info Section
   infoSection: {
-    gap: 16,
+    gap: 12,
   },
-  infoItem: {
+  infoCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: isLargeScreen ? 12 : isMediumScreen ? 10 : 8,
+    padding: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  infoCardHeader: {
     flexDirection: 'row',
-    backgroundColor: 'white',
-    borderRadius: isLargeScreen ? 16 : isMediumScreen ? 14 : 12,
-    padding: isLargeScreen ? 20 : isMediumScreen ? 18 : 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  infoIconContainer: {
-    width: isSmallScreen ? 44 : isMediumScreen ? 48 : 52,
-    height: isSmallScreen ? 44 : isMediumScreen ? 48 : 52,
-    borderRadius: isSmallScreen ? 22 : isMediumScreen ? 24 : 26,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginBottom: 8,
+    gap: 8,
   },
-  infoTextContainer: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: isSmallScreen ? 16 : isMediumScreen ? 17 : 18,
+  infoCardTitle: {
+    fontSize: isSmallScreen ? 14 : isMediumScreen ? 15 : 16,
     fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 6,
+    color: '#374151',
+    fontFamily: 'System',
   },
-  infoDescription: {
+  infoCardDescription: {
     fontSize: isSmallScreen ? 13 : isMediumScreen ? 14 : 15,
     color: '#6B7280',
     lineHeight: isSmallScreen ? 18 : isMediumScreen ? 20 : 22,
+    fontFamily: 'System',
   },
   optionsContainer: {
     gap: isLargeScreen ? 20 : isMediumScreen ? 16 : 12,

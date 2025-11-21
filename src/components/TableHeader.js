@@ -95,7 +95,7 @@ const AnimatedButton = ({ onPress, children, style }) => {
   );
 };
 
-export default function TableHeader({ onQRScan, onSidebarPress, showBackButton = false, onBackPress, onInfoPress }) {
+export default function TableHeader({ onQRScan, onSidebarPress, showBackButton = false, onBackPress, onInfoPress, hideNotifications = false }) {
   const { showNotifications } = useNotification();
   const insets = useSafeAreaInsets();
 
@@ -134,14 +134,16 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
           />
         </TouchableOpacity>
 
-        <AnimatedButton
-          style={styles.notificationButton}
-          onPress={showNotifications}
-        >
-          <View style={styles.buttonInner}>
-            <Ionicons name="notifications" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
-          </View>
-        </AnimatedButton>
+        {!hideNotifications && (
+          <AnimatedButton
+            style={styles.notificationButton}
+            onPress={showNotifications}
+          >
+            <View style={styles.buttonInner}>
+              <Ionicons name="notifications" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
+            </View>
+          </AnimatedButton>
+        )}
       </View>
     </View>
   );

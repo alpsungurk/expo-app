@@ -681,13 +681,19 @@ export default function HomeScreen() {
 
   const handleAddToCart = (product) => {
     if (!tableId) {
-      Toast.show({
-        type: 'error',
-        text1: 'Masa Seçilmedi',
-        text2: 'Ürün eklemek için önce masa QR kodunu tarayın.',
-        position: 'top',
-        visibilityTime: 3000,
-      });
+      // Önce QRScanScreen'e navigate et
+      navigation.navigate('Sipariş Ver');
+      
+      // Sonra toast mesajını göster
+      setTimeout(() => {
+        Toast.show({
+          type: 'error',
+          text1: 'Masa Seçilmedi',
+          text2: 'Ürün eklemek için önce masa QR kodunu tarayın.',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      }, 500);
       return;
     }
 
@@ -1102,29 +1108,46 @@ export default function HomeScreen() {
               <ActivityIndicator size="large" color="#8B4513" />
             </Animated.View>
           ) : (
-            <View style={styles.productsGrid}>
-              {filteredProducts.map((item, index) => (
-                <View 
-                  key={item.id} 
-                  style={[
-                    styles.productWrapper,
-                    { 
-                      width: `${100 / numCols}%`,
-                      paddingHorizontal: getResponsiveValue(4, 6, 8, 10),
-                      paddingBottom: getResponsiveValue(12, 16, 20, 24),
-                    }
-                  ]}
+            <>
+              <View style={styles.productsGrid}>
+                {filteredProducts.slice(0, 10).map((item, index) => (
+                  <View 
+                    key={item.id} 
+                    style={[
+                      styles.productWrapper,
+                      { 
+                        width: `${100 / numCols}%`,
+                        paddingHorizontal: getResponsiveValue(4, 6, 8, 10),
+                        paddingBottom: getResponsiveValue(12, 16, 20, 24),
+                      }
+                    ]}
+                  >
+                    <ProductCard
+                      product={item}
+                      discount={item.discount}
+                      onPress={handleProductPress}
+                      onAddToCart={handleAddToCart}
+                      onProductDetail={handleProductPress}
+                    />
+                  </View>
+                ))}
+              </View>
+              {filteredProducts.length > 10 && (
+                <TouchableOpacity
+                  style={styles.viewAllButton}
+                  onPress={() => {
+                    navigation.navigate('CategoryProducts', {
+                      category: selectedCategory,
+                      products: filteredProducts,
+                      categoryName: selectedCategory ? selectedCategory.ad : 'Tüm Ürünler'
+                    });
+                  }}
                 >
-                  <ProductCard
-                    product={item}
-                    discount={item.discount}
-                    onPress={handleProductPress}
-                    onAddToCart={handleAddToCart}
-                    onProductDetail={handleProductPress}
-                  />
-                </View>
-              ))}
-            </View>
+                  <Text style={styles.viewAllButtonText}>Tümünü Gör ({filteredProducts.length} ürün)</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#8B4513" />
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </Animated.View>
       </Animated.ScrollView>
@@ -1489,5 +1512,30 @@ const styles = StyleSheet.create({
   clearButton: {
     padding: getResponsiveValue(4, 5, 6, 8),
     marginLeft: getResponsiveValue(8, 10, 12, 14),
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+    borderRadius: getResponsiveValue(12, 14, 16, 18),
+    paddingVertical: getResponsiveValue(14, 16, 18, 20),
+    paddingHorizontal: getResponsiveValue(20, 24, 28, 32),
+    marginTop: getResponsiveValue(16, 20, 24, 28),
+    marginHorizontal: getResponsiveValue(8, 12, 16, 20),
+    borderWidth: 2,
+    borderColor: '#8B4513',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  viewAllButtonText: {
+    fontSize: getResponsiveValue(14, 16, 18, 20),
+    fontWeight: '600',
+    color: '#8B4513',
+    marginRight: getResponsiveValue(8, 10, 12, 14),
+    fontFamily: 'System',
   },
 });

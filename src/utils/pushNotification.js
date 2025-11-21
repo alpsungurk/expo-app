@@ -4,6 +4,11 @@
 import { supabase } from '../config/supabase';
 import Constants from 'expo-constants';
 
+// Hata gösterimini kontrol etmek için (ard arda hata göstermemek için)
+let lastErrorTime = 0;
+let lastErrorMessage = '';
+const ERROR_COOLDOWN = 10000; // 10 saniye içinde aynı hatayı tekrar gösterme
+
 // Environment variable'dan Push Notification API URL'ini al
 // Cloudflare Workers proxy API kullanılıyor (CORS sorununu çözmek için)
 const PUSH_NOTIFICATION_API_URL = process.env.VITE_PUSH_NOTIFICATION_API_URL ||
@@ -115,22 +120,66 @@ export async function sendPushNotificationToTokens(pushTokens, title, body, data
     }));
 
     // Cloudflare Workers proxy API üzerinden Expo Push API'ye gönder
-    const response = await fetch(PUSH_NOTIFICATION_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(messages),
-    });
+    let response;
+    let result;
+    
+    try {
+      response = await fetch(PUSH_NOTIFICATION_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(messages),
+      });
 
-    const result = await response.json();
+      result = await response.json();
+    } catch (fetchError) {
+      // İnternet bağlantı hatası veya fetch hatası
+      const errorMessage = fetchError.message || 'İnternet bağlantısı hatası';
+      const now = Date.now();
+      
+      // Aynı hatayı 10 saniye içinde tekrar gösterme
+      if (now - lastErrorTime < ERROR_COOLDOWN && lastErrorMessage === errorMessage) {
+        console.warn('Push notification hatası (sessizce atlandı):', errorMessage);
+        return { 
+          success: false, 
+          error: errorMessage,
+          skipLog: true // Sessizce atla
+        };
+      }
+      
+      lastErrorTime = now;
+      lastErrorMessage = errorMessage;
+      console.error('Push notification gönderme hatası (fetch):', fetchError);
+      return { 
+        success: false, 
+        error: errorMessage,
+        skipLog: false
+      };
+    }
 
     if (!response.ok) {
+      const errorMessage = result.error?.message || 'Bildirim gönderilemedi';
+      const now = Date.now();
+      
+      // Aynı hatayı 10 saniye içinde tekrar gösterme
+      if (now - lastErrorTime < ERROR_COOLDOWN && lastErrorMessage === errorMessage) {
+        console.warn('Push notification hatası (sessizce atlandı):', errorMessage);
+        return { 
+          success: false, 
+          error: errorMessage,
+          details: result,
+          skipLog: true // Sessizce atla
+        };
+      }
+      
+      lastErrorTime = now;
+      lastErrorMessage = errorMessage;
       console.error('Push notification gönderme hatası:', result);
       return { 
         success: false, 
-        error: result.error?.message || 'Bildirim gönderilemedi',
+        error: errorMessage,
         details: result,
         skipLog: false
       };
@@ -147,10 +196,25 @@ export async function sendPushNotificationToTokens(pushTokens, title, body, data
       sent: result.data?.length || 0
     };
   } catch (error) {
+    const errorMessage = error.message || String(error);
+    const now = Date.now();
+    
+    // Aynı hatayı 10 saniye içinde tekrar gösterme
+    if (now - lastErrorTime < ERROR_COOLDOWN && lastErrorMessage === errorMessage) {
+      console.warn('Push notification hatası (sessizce atlandı):', errorMessage);
+      return { 
+        success: false, 
+        error: errorMessage,
+        skipLog: true // Sessizce atla
+      };
+    }
+    
+    lastErrorTime = now;
+    lastErrorMessage = errorMessage;
     console.error('Push notification gönderme hatası:', error);
     return { 
       success: false, 
-      error: error.message || error,
+      error: errorMessage,
       skipLog: false
     };
   }
@@ -260,22 +324,63 @@ export async function sendTestPushNotification(pushToken, title, body, data = {}
     console.log('Push notification gönderiliyor:', message);
 
     // Cloudflare Workers proxy API üzerinden gönder
-    const response = await fetch(PUSH_NOTIFICATION_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify([message]), // Array olarak gönder (Cloudflare Workers bekliyor)
-    });
+    let response;
+    let result;
+    
+    try {
+      response = await fetch(PUSH_NOTIFICATION_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify([message]), // Array olarak gönder (Cloudflare Workers bekliyor)
+      });
 
-    const result = await response.json();
+      result = await response.json();
+    } catch (fetchError) {
+      // İnternet bağlantı hatası veya fetch hatası
+      const errorMessage = fetchError.message || 'İnternet bağlantısı hatası';
+      const now = Date.now();
+      
+      // Aynı hatayı 10 saniye içinde tekrar gösterme
+      if (now - lastErrorTime < ERROR_COOLDOWN && lastErrorMessage === errorMessage) {
+        console.warn('Push notification hatası (sessizce atlandı):', errorMessage);
+        return { 
+          success: false, 
+          error: errorMessage
+        };
+      }
+      
+      lastErrorTime = now;
+      lastErrorMessage = errorMessage;
+      console.error('Push notification gönderme hatası (fetch):', fetchError);
+      return { 
+        success: false, 
+        error: errorMessage
+      };
+    }
 
     if (!response.ok) {
+      const errorMessage = result.error?.message || 'Bildirim gönderilemedi';
+      const now = Date.now();
+      
+      // Aynı hatayı 10 saniye içinde tekrar gösterme
+      if (now - lastErrorTime < ERROR_COOLDOWN && lastErrorMessage === errorMessage) {
+        console.warn('Push notification hatası (sessizce atlandı):', errorMessage);
+        return { 
+          success: false, 
+          error: errorMessage,
+          details: result
+        };
+      }
+      
+      lastErrorTime = now;
+      lastErrorMessage = errorMessage;
       console.error('Push notification gönderme hatası:', result);
       return { 
         success: false, 
-        error: result.error?.message || 'Bildirim gönderilemedi',
+        error: errorMessage,
         details: result 
       };
     }
@@ -287,10 +392,24 @@ export async function sendTestPushNotification(pushToken, title, body, data = {}
       receiptId: result.data?.[0]?.id 
     };
   } catch (error) {
+    const errorMessage = error.message || String(error);
+    const now = Date.now();
+    
+    // Aynı hatayı 10 saniye içinde tekrar gösterme
+    if (now - lastErrorTime < ERROR_COOLDOWN && lastErrorMessage === errorMessage) {
+      console.warn('Push notification hatası (sessizce atlandı):', errorMessage);
+      return { 
+        success: false, 
+        error: errorMessage
+      };
+    }
+    
+    lastErrorTime = now;
+    lastErrorMessage = errorMessage;
     console.error('Push notification gönderme hatası:', error);
     return { 
       success: false, 
-      error: error.message 
+      error: errorMessage
     };
   }
 }

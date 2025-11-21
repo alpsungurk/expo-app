@@ -628,7 +628,11 @@ const OrderDetailScreen = ({ route }) => {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Sipariş Özeti */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
@@ -917,6 +921,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   summaryCard: {
     backgroundColor: 'white',

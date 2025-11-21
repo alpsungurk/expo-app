@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 import { supabase, TABLES } from '../config/supabase';
 import { getImageUrl } from '../utils/storage';
 import { useCartStore } from '../store/cartStore';
@@ -47,6 +48,7 @@ export default function CartScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   // Animasyon değişkenleri
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -188,6 +190,11 @@ export default function CartScreen() {
   const handleSelectDiscount = (discount, productId = null) => {
     // Eğer genel indirim ise genel'e, ürün bazlı ise ürün'e ekle
     if (discount.hedef_tipi === 'genel') {
+      // Eğer aynı indirim zaten seçiliyse mesaj gösterme
+      if (selectedGeneralDiscount?.indirim_id === discount.indirim_id) {
+        setShowDiscountList(false);
+        return;
+      }
       // Genel indirimi seç
       setSelectedGeneralDiscount(discount);
       setShowDiscountList(false);
@@ -199,6 +206,14 @@ export default function CartScreen() {
       const targetProductId = productId || (discount.urun_id ? discount.urun_id.toString() : null);
       
       if (targetProductId) {
+        // Eğer aynı indirim zaten seçiliyse mesaj gösterme
+        const currentDiscount = selectedProductDiscounts[targetProductId];
+        if (currentDiscount?.indirim_id === discount.indirim_id) {
+          setShowProductDiscountModal(false);
+          setSelectedProductForDiscount(null);
+          return;
+        }
+        
         setSelectedProductDiscount(targetProductId, discount);
         setShowProductDiscountModal(false);
         setSelectedProductForDiscount(null);
@@ -222,6 +237,24 @@ export default function CartScreen() {
 
 
   const handleCheckout = async () => {
+    // Masa kontrolü
+    if (!tableId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Masa Seçilmedi',
+        text2: 'Sipariş vermek için önce masa QR kodunu tarayın.',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+      
+      // Toast mesajı çıktıktan 1 saniye sonra QRScanScreen'e navigate et
+      setTimeout(() => {
+        navigation.navigate('Sipariş Ver');
+      }, 1000);
+      
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -330,22 +363,6 @@ export default function CartScreen() {
                 <Text style={styles.notes}>
                   Not: {item.notes}
                 </Text>
-              )}
-
-              {/* Seçili ürün indirimi göster */}
-              {selectedProductDiscount && (
-                <View style={styles.productDiscountBadge}>
-                  <Ionicons name="pricetag" size={14} color="#10B981" />
-                  <Text style={styles.productDiscountText}>
-                    {selectedProductDiscount.kampanya_adi} - {formatPrice(calculateDiscount(item.price * item.quantity, selectedProductDiscount))} indirim
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => handleRemoveProductDiscount(item.id)}
-                    style={styles.removeProductDiscountButton}
-                  >
-                    <Ionicons name="close-circle" size={16} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
               )}
             </View>
             
@@ -623,28 +640,46 @@ export default function CartScreen() {
       </Animated.ScrollView>
 
       <View style={styles.bottomBar}>
-        <View style={styles.summary}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Toplam Ürün:</Text>
-            <Text style={styles.summaryValue}>{getTotalItems()} adet</Text>
+        <TouchableOpacity
+          style={styles.summaryHeader}
+          onPress={() => setSummaryExpanded(!summaryExpanded)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.summaryHeaderLeft}>
+            <Text style={styles.summaryHeaderTitle}>Fiyat Özeti</Text>
+            <Text style={styles.summaryHeaderTotal}>{formatPrice(getDiscountedPrice())}</Text>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Ara Toplam:</Text>
-            <Text style={styles.summaryValue}>{formatPrice(getTotalPrice())}</Text>
+          <Ionicons 
+            name={summaryExpanded ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color="#8B4513" 
+          />
+        </TouchableOpacity>
+
+        {summaryExpanded && (
+          <View style={styles.summary}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Toplam Ürün:</Text>
+              <Text style={styles.summaryValue}>{getTotalItems()} adet</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Ara Toplam:</Text>
+              <Text style={styles.summaryValue}>{formatPrice(getTotalPrice())}</Text>
+            </View>
+            {(selectedGeneralDiscount || Object.keys(selectedProductDiscounts || {}).length > 0) && (
+              <>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>İndirim:</Text>
+                  <Text style={styles.discountAmount}>-{formatPrice(getDiscountAmount())}</Text>
+                </View>
+              </>
+            )}
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Toplam Tutar:</Text>
+              <Text style={styles.totalAmount}>{formatPrice(getDiscountedPrice())}</Text>
+            </View>
           </View>
-          {(selectedGeneralDiscount || Object.keys(selectedProductDiscounts || {}).length > 0) && (
-            <>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>İndirim:</Text>
-                <Text style={styles.discountAmount}>-{formatPrice(getDiscountAmount())}</Text>
-              </View>
-            </>
-          )}
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Toplam Tutar:</Text>
-            <Text style={styles.totalAmount}>{formatPrice(getDiscountedPrice())}</Text>
-          </View>
-        </View>
+        )}
 
         <TouchableOpacity 
           style={[styles.checkoutButton, isSubmitting && styles.disabledButton]}
@@ -1012,8 +1047,37 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  summaryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  summaryHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+    fontFamily: 'System',
+  },
+  summaryHeaderTotal: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#8B4513',
+    fontFamily: 'System',
+  },
   summary: {
     marginBottom: 16,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   summaryRow: {
     flexDirection: 'row',

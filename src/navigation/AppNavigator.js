@@ -1,11 +1,14 @@
-import React from 'react';
-import { NavigationContainer, getFocusedRouteNameFromRoute, useNavigation } from '@react-navigation/native';
+import React, { useRef } from 'react';
+import { NavigationContainer, getFocusedRouteNameFromRoute, useNavigation, CommonActions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartStore } from '../store/cartStore';
 import { useAppStore } from '../store/appStore';
+
+// Navigation ref - NotificationContext'ten erişilebilir olması için
+export const navigationRef = React.createRef();
 
 import HomeScreen from '../screens/HomeScreen';
 import CartScreen from '../screens/CartScreen';
@@ -16,6 +19,7 @@ import QRScanScreen from '../screens/QRScanScreen';
 import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import AnnouncementDetailScreen from '../screens/AnnouncementDetailScreen';
 import ProductDetailScreen from '../screens/ProductDetailScreen';
+import CategoryProductsScreen from '../screens/CategoryProductsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -102,13 +106,14 @@ export default function AppNavigator() {
   const { isProductModalOpen, getActiveOrdersCount, userProfile } = useAppStore();
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
         <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
         <Stack.Screen name="InfoScreen" component={InfoScreen} />
+        <Stack.Screen name="CategoryProducts" component={CategoryProductsScreen} />
         <Stack.Screen 
           name="AnnouncementDetail" 
           component={AnnouncementDetailScreen}

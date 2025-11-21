@@ -4,7 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { CommonActions } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
+import { navigationRef } from '../navigation/AppNavigator';
 import NotificationsScreen from '../screens/NotificationsScreen';
 
 // Notification handler yapılandırması
@@ -37,6 +39,11 @@ export const NotificationProvider = ({ children }) => {
   
   // Bildirimlerin cache süresi (24 saat = 24 * 60 * 60 * 1000 ms)
   const CACHE_DURATION = 24 * 60 * 60 * 1000;
+  
+  // Hata gösterimini kontrol etmek için (ard arda hata göstermemek için)
+  const lastErrorTimeRef = useRef(0);
+  const lastErrorMessageRef = useRef('');
+  const ERROR_COOLDOWN = 10000; // 10 saniye içinde aynı hatayı tekrar gösterme
 
     // Push notification izinlerini kontrol et ve token al
   async function registerForPushNotificationsAsync() {
@@ -166,10 +173,22 @@ export const NotificationProvider = ({ children }) => {
       console.error('Hata detayları:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       console.error('Hata stack:', error.stack);
       
-      // Kullanıcıya bilgilendirme
+      // Aynı hatayı 10 saniye içinde tekrar gösterme
+      const errorMessage = error.message || 'Bilinmeyen hata';
+      const now = Date.now();
+      
+      if (now - lastErrorTimeRef.current < ERROR_COOLDOWN && lastErrorMessageRef.current === errorMessage) {
+        // Sessizce atla, kullanıcıya gösterme
+        return null;
+      }
+      
+      lastErrorTimeRef.current = now;
+      lastErrorMessageRef.current = errorMessage;
+      
+      // Kullanıcıya bilgilendirme (sadece bir kez)
       Alert.alert(
         'Push Token Hatası',
-        `Push token alınamadı: ${error.message || 'Bilinmeyen hata'}\n\nLütfen logları kontrol edin.`,
+        `Push token alınamadı: ${errorMessage}\n\nLütfen logları kontrol edin.`,
         [{ text: 'Tamam' }]
       );
       
@@ -457,11 +476,30 @@ export const NotificationProvider = ({ children }) => {
       if (result.success) {
         Alert.alert('Başarılı', 'Push notification gönderildi!');
       } else {
-        Alert.alert('Hata', result.error || 'Bildirim gönderilemedi');
+         // skipLog true ise hata gösterme (ard arda hata göstermemek için)
+        if (!result.skipLog) {
+          const errorMessage = result.error || 'Bildirim gönderilemedi';
+          const now = Date.now();
+          
+          // Aynı hatayı 10 saniye içinde tekrar gösterme
+          if (now - lastErrorTimeRef.current >= ERROR_COOLDOWN || lastErrorMessageRef.current !== errorMessage) {
+            lastErrorTimeRef.current = now;
+            lastErrorMessageRef.current = errorMessage;
+            Alert.alert('Hata', errorMessage);
+          }
+        }
       }
     } catch (error) {
       console.error('Test push notification hatası:', error);
-      Alert.alert('Hata', error.message || 'Bildirim gönderilemedi');
+      const errorMessage = error.message || 'Bildirim gönderilemedi';
+      const now = Date.now();
+      
+      // Aynı hatayı 10 saniye içinde tekrar gösterme
+      if (now - lastErrorTimeRef.current >= ERROR_COOLDOWN || lastErrorMessageRef.current !== errorMessage) {
+        lastErrorTimeRef.current = now;
+        lastErrorMessageRef.current = errorMessage;
+        Alert.alert('Hata', errorMessage);
+      }
     }
   };
 
@@ -525,7 +563,22 @@ export const NotificationProvider = ({ children }) => {
             },
           ]}
         >
-          <NotificationsScreen onClose={hideNotifications} />
+          <NotificationsScreen 
+            onClose={hideNotifications}
+            onNavigateToLogin={() => {
+              hideNotifications();
+              // Navigation ref kullanarak LoginScreen'e git
+              setTimeout(() => {
+                if (navigationRef.current) {
+                  navigationRef.current.dispatch(
+                    CommonActions.navigate({
+                      name: 'LoginScreen',
+                    })
+                  );
+                }
+              }, 300);
+            }}
+          />
         </Animated.View>
       )}
     </NotificationContext.Provider>

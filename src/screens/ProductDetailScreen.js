@@ -15,11 +15,12 @@ import {
   StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { supabase, TABLES } from '../config/supabase';
 import { useCartStore } from '../store/cartStore';
+import { navigationRef } from '../navigation/AppNavigator';
 import { useAppStore } from '../store/appStore';
 import { getImageUrl } from '../utils/storage';
 import TableHeader from '../components/TableHeader';
@@ -30,8 +31,12 @@ const isSmallScreen = width < 380;
 const isMediumScreen = width >= 380 && width < 768;
 const isLargeScreen = width >= 768;
 
-export default function ProductDetailScreen({ route, navigation }) {
+export default function ProductDetailScreen({ route, navigation: navigationProp }) {
   // Modal olarak kullanıldığında route ve navigation props olarak gelir
+  // Ama navigation hook'unu da kullanabiliriz
+  const navigationHook = useNavigation();
+  const navigation = navigationProp || navigationHook;
+  
   const routeParams = route?.params || {};
   const { product: initialProduct } = routeParams;
   const insets = useSafeAreaInsets();
@@ -123,13 +128,25 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   const handleAddToCart = () => {
     if (!tableNumber) {
-      Toast.show({
-        type: 'error',
-        text1: 'Masa Seçilmedi',
-        text2: 'Ürün eklemek için önce masa QR kodunu tarayın.',
-        position: 'top',
-        visibilityTime: 3000,
-      });
+      // Önce QRScanScreen'e navigate et - navigationRef kullan
+      if (navigationRef.current) {
+        navigationRef.current.dispatch(
+          CommonActions.navigate({
+            name: 'Sipariş Ver',
+          })
+        );
+      }
+      
+      // Sonra toast mesajını göster
+      setTimeout(() => {
+        Toast.show({
+          type: 'error',
+          text1: 'Masa Seçilmedi',
+          text2: 'Ürün eklemek için önce masa QR kodunu tarayın.',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      }, 500);
       return;
     }
 

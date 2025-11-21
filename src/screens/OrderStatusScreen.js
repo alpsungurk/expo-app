@@ -378,20 +378,26 @@ export default function OrderStatusScreen() {
     );
   }
 
-  // Ürün listesini render et (alt alta)
+  // Ürün listesini render et (yan yana, flexWrap ile)
   const renderProductList = (orderDetails) => {
     if (!orderDetails || orderDetails.length === 0) {
       return <Text style={styles.productItemText}>Ürün yok</Text>;
     }
     
-    return orderDetails.map((detail, index) => {
-      const productName = detail.urunler?.ad || 'Bilinmeyen Ürün';
-      return (
-        <Text key={index} style={styles.productItemText}>
-          {detail.adet}x {productName}
-        </Text>
-      );
-    });
+    return (
+      <View style={styles.productListWrapper}>
+        {orderDetails.map((detail, index) => {
+          const productName = detail.urunler?.ad || 'Bilinmeyen Ürün';
+          return (
+            <View key={index} style={styles.productItemChip}>
+              <Text style={styles.productItemText}>
+                {detail.adet}x {productName}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    );
   };
 
   // Sipariş kartı render fonksiyonu
@@ -437,51 +443,53 @@ export default function OrderStatusScreen() {
         <View style={styles.orderCardBody}>
           <View style={styles.productListContainer}>
             <Ionicons name="fast-food-outline" size={16} color="#6B7280" />
-            <View style={styles.productList}>
-              {renderProductList(order.siparis_detaylari)}
-            </View>
+            {renderProductList(order.siparis_detaylari)}
           </View>
           
-          {['beklemede', 'hazirlaniyor'].includes(order.durum) && (
-            <View style={styles.orderCardDetail}>
-              <Ionicons name="time-outline" size={16} color="#6B7280" />
-              <Text style={styles.orderCardDetailText}>~{estimatedTime} dk</Text>
-            </View>
-          )}
-          
-          <View style={styles.orderCardDetail}>
-            {/* İndirim bilgisini hesapla - sipariş detaylarından */}
-            {(() => {
-              // Sipariş detaylarındaki toplam fiyatları topla (indirim öncesi)
-              const araToplamHesaplanan = order.siparis_detaylari?.reduce((sum, detail) => {
-                return sum + (parseFloat(detail.toplam_fiyat) || 0);
-              }, 0) || 0;
-              
-              // İndirim miktarı = ara toplam - indirimli toplam
-              const indirimMiktari = araToplamHesaplanan > 0 && araToplamHesaplanan > order.toplam_tutar
-                ? araToplamHesaplanan - parseFloat(order.toplam_tutar || 0)
-                : 0;
-              
-              // Ara toplam (indirim öncesi)
-              const araToplam = indirimMiktari > 0 
-                ? araToplamHesaplanan
-                : order.toplam_tutar;
-              
-              return (
-                <View style={styles.orderCardPriceContainer}>
-                  {indirimMiktari > 0 && (
-                    <View style={styles.orderCardDiscountInfo}>
-                      <Text style={styles.orderCardOriginalPrice}>{formatPrice(araToplam)}</Text>
-                      <View style={styles.orderCardDiscountBadge}>
-                        <Ionicons name="pricetag" size={12} color="#10B981" />
-                        <Text style={styles.orderCardDiscountText}>-{formatPrice(indirimMiktari)}</Text>
+          {/* Hazırlanma Süresi ve Fiyatlar - Aynı Hizada */}
+          <View style={styles.orderCardBottomRow}>
+            {['beklemede', 'hazirlaniyor'].includes(order.durum) && (
+              <View style={styles.orderCardDetail}>
+                <Ionicons name="time-outline" size={16} color="#6B7280" />
+                <Text style={styles.orderCardDetailText}>~{estimatedTime} dk</Text>
+              </View>
+            )}
+            
+            {/* Fiyatlar - Sağda */}
+            <View style={styles.orderCardPriceSection}>
+              {/* İndirim bilgisini hesapla - sipariş detaylarından */}
+              {(() => {
+                // Sipariş detaylarındaki toplam fiyatları topla (indirim öncesi)
+                const araToplamHesaplanan = order.siparis_detaylari?.reduce((sum, detail) => {
+                  return sum + (parseFloat(detail.toplam_fiyat) || 0);
+                }, 0) || 0;
+                
+                // İndirim miktarı = ara toplam - indirimli toplam
+                const indirimMiktari = araToplamHesaplanan > 0 && araToplamHesaplanan > order.toplam_tutar
+                  ? araToplamHesaplanan - parseFloat(order.toplam_tutar || 0)
+                  : 0;
+                
+                // Ara toplam (indirim öncesi)
+                const araToplam = indirimMiktari > 0 
+                  ? araToplamHesaplanan
+                  : order.toplam_tutar;
+                
+                return (
+                  <View style={styles.orderCardPriceContainer}>
+                    {indirimMiktari > 0 && (
+                      <View style={styles.orderCardDiscountInfo}>
+                        <Text style={styles.orderCardOriginalPrice}>{formatPrice(araToplam)}</Text>
+                        <View style={styles.orderCardDiscountBadge}>
+                          <Ionicons name="pricetag" size={12} color="#10B981" />
+                          <Text style={styles.orderCardDiscountText}>-{formatPrice(indirimMiktari)}</Text>
+                        </View>
                       </View>
-                    </View>
-                  )}
-                  <Text style={styles.orderCardPrice}>{formatPrice(order.toplam_tutar)}</Text>
-                </View>
-              );
-            })()}
+                    )}
+                    <Text style={styles.orderCardPrice}>{formatPrice(order.toplam_tutar)}</Text>
+                  </View>
+                );
+              })()}
+            </View>
           </View>
         </View>
 
@@ -994,29 +1002,47 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
   orderCardBody: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    gap: 8,
   },
   productListContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    flex: 1,
   },
-  productList: {
+  productListWrapper: {
     flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  productItemChip: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 4,
+    marginBottom: 4,
   },
   productItemText: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 13,
+    color: '#374151',
     fontFamily: 'System',
-    marginBottom: 2,
+    fontWeight: '500',
+  },
+  orderCardPriceSection: {
+    alignItems: 'flex-end',
+    marginTop: 4,
+  },
+  orderCardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
   },
   orderCardDetail: {
     flexDirection: 'row',
@@ -1027,6 +1053,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     fontFamily: 'System',
+  },
+  orderCardPriceSection: {
+    alignItems: 'flex-end',
   },
   orderCardPriceContainer: {
     alignItems: 'flex-end',

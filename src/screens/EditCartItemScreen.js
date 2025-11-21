@@ -12,7 +12,7 @@ import {
   Alert,
   Dimensions,
   Modal,
-  Animated
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -36,47 +36,18 @@ export default function EditCartItemScreen() {
   const [editNotes, setEditNotes] = useState(item.notes || '');
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  
-  // Animasyon değerleri
-  const slideAnim = useRef(new Animated.Value(height)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [isLoading, setIsLoading] = useState(true);
   
   const { updateQuantity, updateItemNotes, removeItem } = useCartStore();
 
-  // Animasyon fonksiyonları
-  const animateIn = () => {
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const animateOut = (callback) => {
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: height,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start(callback);
-  };
-
-  // Ekran açılış animasyonu
+  // Sayfa açılışında loading göster
   useEffect(() => {
-    animateIn();
+    // Kısa bir loading simülasyonu
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 300);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const formatPrice = (price) => {
@@ -105,10 +76,8 @@ export default function EditCartItemScreen() {
     // Notes'u güncelle
     updateItemNotes(item.id, item.customizations, editNotes);
     
-    // Animasyon ile çık
-    animateOut(() => {
-      navigation.goBack();
-    });
+    // Normal geri git
+    navigation.goBack();
   };
 
   const handleDelete = () => {
@@ -118,10 +87,8 @@ export default function EditCartItemScreen() {
   const handleConfirmDelete = () => {
     removeItem(item.id, item.customizations || {});
     setShowDeleteModal(false);
-    // Animasyon ile çık
-    animateOut(() => {
-      navigation.goBack();
-    });
+    // Normal geri git
+    navigation.goBack();
   };
 
   const handleCancelDelete = () => {
@@ -140,27 +107,16 @@ export default function EditCartItemScreen() {
       <TableHeader 
         showBackButton={true}
         onBackPress={() => {
-          animateOut(() => {
-            navigation.goBack();
-          });
+          navigation.goBack();
         }}
         onSidebarPress={() => setSidebarVisible(true)} 
       />
 
-      <Animated.View 
-        style={[
-          styles.animatedContainer,
-          {
-            transform: [{ translateY: slideAnim }],
-            opacity: fadeAnim,
-          },
-        ]}
+      <KeyboardAvoidingView 
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <KeyboardAvoidingView 
-          style={styles.content}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
         <ScrollView 
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
@@ -236,8 +192,7 @@ export default function EditCartItemScreen() {
             <Text style={styles.saveButtonText}>Kaydet</Text>
           </TouchableOpacity>
         </View>
-        </KeyboardAvoidingView>
-      </Animated.View>
+      </KeyboardAvoidingView>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
       
@@ -286,15 +241,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
-  animatedContainer: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
   content: {
     flex: 1,
   },
   scrollView: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   productInfo: {
     flexDirection: 'row',

@@ -9,12 +9,22 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAppStore } from '../store/appStore';
 
 const { width } = Dimensions.get('window');
 
-const NotificationsScreen = ({ onClose }) => {
+const NotificationsScreen = ({ onClose, onNavigateToLogin }) => {
+  // Navigation'ı optional yap - eğer NavigationContainer dışındaysa null olabilir
+  let navigation = null;
+  try {
+    navigation = useNavigation();
+  } catch (error) {
+    // NavigationContainer dışındaysa navigation null kalır
+    navigation = null;
+  }
+  
   const { cachedNotifications } = useNotification();
   const { user } = useAppStore(); // Giriş kontrolü için
   const [notifications, setNotifications] = useState([]);
@@ -153,6 +163,24 @@ const NotificationsScreen = ({ onClose }) => {
             <Text style={styles.emptyText}>
               Bildirimleri görmek için lütfen giriş yapın
             </Text>
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={() => {
+                if (navigation) {
+                  onClose();
+                  // Kısa bir gecikme ile navigate et (modal kapanması için)
+                  setTimeout(() => {
+                    navigation.navigate('LoginScreen');
+                  }, 300);
+                } else if (onNavigateToLogin) {
+                  onNavigateToLogin();
+                } else {
+                  onClose();
+                }
+              }}
+            >
+              <Text style={styles.loginButtonText}>Giriş Yap</Text>
+            </TouchableOpacity>
           </View>
         ) : notifications.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -297,6 +325,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4B5563',
     lineHeight: 20,
+    fontFamily: 'System',
+  },
+  loginButton: {
+    backgroundColor: '#8B4513',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginTop: 24,
+    shadowColor: '#8B4513',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  loginButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
     fontFamily: 'System',
   },
 });
