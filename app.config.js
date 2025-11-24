@@ -30,6 +30,7 @@ export default {
         monochromeImage: './assets/icon.png',
       },
       package: 'com.kahvedukkani.app',
+      versionCode: 1,
       // Firebase için google-services.json dosyasının yolu
       // EAS Build sırasında bu dosya otomatik olarak yüklenir
       // Proje root'unda olmalı (EAS Build için)
