@@ -96,8 +96,11 @@ const AnimatedButton = ({ onPress, children, style }) => {
 };
 
 export default function TableHeader({ onQRScan, onSidebarPress, showBackButton = false, onBackPress, onInfoPress, hideNotifications = false }) {
-  const { showNotifications } = useNotification();
+  const { showNotifications, cachedNotifications } = useNotification();
   const insets = useSafeAreaInsets();
+  
+  // Okunmamış bildirim sayısı (tüm bildirimler)
+  const unreadCount = cachedNotifications?.length || 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
@@ -141,6 +144,13 @@ export default function TableHeader({ onQRScan, onSidebarPress, showBackButton =
           >
             <View style={styles.buttonInner}>
               <Ionicons name="notifications" size={isLargeScreen ? 24 : isMediumScreen ? 22 : 20} color="white" />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              )}
             </View>
           </AnimatedButton>
         )}
@@ -176,6 +186,7 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   shopInfo: {
     flex: 1,
@@ -192,5 +203,25 @@ const styles = StyleSheet.create({
     height: isLargeScreen ? 44 : isMediumScreen ? 42 : 40,
     borderRadius: 4,
     backgroundColor: 'transparent',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#8B4513',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'System',
   },
 });

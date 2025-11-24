@@ -10,7 +10,8 @@ import {
   Modal,
   Dimensions,
   Animated,
-  RefreshControl
+  RefreshControl,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -28,7 +29,9 @@ const calculateDiscount = (totalPrice, discount) => {
   
   let discountAmount = 0;
   if (discount.indirim_tipi === 'yuzde') {
-    discountAmount = (totalPrice * discount.indirim_degeri) / 100;
+    // indirim_degeri'yi parseFloat ile parse et
+    const indirimDegeri = parseFloat(discount.indirim_degeri) || 0;
+    discountAmount = (totalPrice * indirimDegeri) / 100;
   } else if (discount.indirim_tipi === 'miktar') {
     discountAmount = parseFloat(discount.indirim_degeri) || 0;
     if (discountAmount > totalPrice) {
@@ -49,6 +52,7 @@ export default function CartScreen() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const [loadingDiscounts, setLoadingDiscounts] = useState(true); // İndirimler yükleniyor mu?
 
   // Animasyon değişkenleri
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -84,7 +88,7 @@ export default function CartScreen() {
     dispatch
   } = useCartStore();
   
-  const { setCurrentOrder, phoneToken, user } = useAppStore();
+  const { setCurrentOrder, phoneToken, user, activeOrder } = useAppStore();
 
   // Sayfa açılış animasyonu
   useEffect(() => {
@@ -103,28 +107,68 @@ export default function CartScreen() {
     ]).start();
   }, []);
 
+  // Loading state yönetimi - sadece gerçekten yükleme gerektiğinde aktif
+  const isLoadingRef = useRef(false);
+  const prevItemsLengthRef = useRef(items.length);
+  
+  // availableDiscounts yüklendiğinde loading'i kapat
+  useEffect(() => {
+    if (availableDiscounts.length > 0) {
+      isLoadingRef.current = false;
+      setLoadingDiscounts(false);
+    } else if (items.length === 0) {
+      isLoadingRef.current = false;
+      setLoadingDiscounts(false);
+    }
+  }, [availableDiscounts.length, items.length]);
+
   // Sayfa her açıldığında yenile ve indirimleri yükle
   useFocusEffect(
     useCallback(() => {
       // İndirimleri yükle (kullanıcı manuel kaldırmadıysa)
       if (items.length > 0 && !userManuallyRemovedGeneralDiscount) {
+        // Sadece indirimler henüz yüklenmemişse ve yükleme başlamamışsa loading göster
+        if (availableDiscounts.length === 0 && !isLoadingRef.current) {
+          isLoadingRef.current = true;
+          setLoadingDiscounts(true);
+        }
         const totalPrice = getTotalPrice();
-        loadAvailableDiscounts(user?.id || null, totalPrice);
+        loadAvailableDiscounts(user?.id || null, totalPrice).finally(() => {
+          isLoadingRef.current = false;
+        });
+      } else if (items.length === 0) {
+        isLoadingRef.current = false;
+        setLoadingDiscounts(false);
+        prevItemsLengthRef.current = 0;
       }
-    }, [items.length, user?.id, getTotalPrice, loadAvailableDiscounts, userManuallyRemovedGeneralDiscount])
+    }, [items.length, user?.id, getTotalPrice, loadAvailableDiscounts, userManuallyRemovedGeneralDiscount, availableDiscounts.length])
   );
   
   // Sepet toplamı değiştiğinde indirimleri yeniden yükle
   // Ama kullanıcı manuel kaldırdıysa, otomatik yükleme yapma
+  // Sadece items.length değiştiğinde yükle (quantity değişikliklerinde tekrar yükleme yapma)
   useEffect(() => {
     if (items.length > 0 && !userManuallyRemovedGeneralDiscount) {
-      const totalPrice = getTotalPrice();
-      loadAvailableDiscounts(user?.id || null, totalPrice);
+      // Sadece items.length değiştiğinde yükle (quantity değişikliklerinde değil)
+      if (prevItemsLengthRef.current !== items.length && !isLoadingRef.current) {
+        isLoadingRef.current = true;
+        setLoadingDiscounts(true);
+        prevItemsLengthRef.current = items.length;
+        const totalPrice = getTotalPrice();
+        loadAvailableDiscounts(user?.id || null, totalPrice).finally(() => {
+          isLoadingRef.current = false;
+        });
+      }
+    } else if (items.length === 0) {
+      isLoadingRef.current = false;
+      setLoadingDiscounts(false);
+      prevItemsLengthRef.current = 0;
     }
-  }, [items, user?.id, getTotalPrice, loadAvailableDiscounts, userManuallyRemovedGeneralDiscount]);
+  }, [items.length, user?.id, getTotalPrice, loadAvailableDiscounts, userManuallyRemovedGeneralDiscount]);
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setLoadingDiscounts(true);
     try {
       // İndirimleri yeniden yükle
       if (items.length > 0 && !userManuallyRemovedGeneralDiscount) {
@@ -135,6 +179,7 @@ export default function CartScreen() {
       console.error('Refresh hatası:', error);
     } finally {
       setRefreshing(false);
+      setLoadingDiscounts(false);
     }
   };
   
@@ -373,34 +418,49 @@ export default function CartScreen() {
             </View>
             
             <View style={styles.actionButtons}>
-              {hasProductDiscounts && (
+              {loadingDiscounts ? (
+                <View style={styles.discountButtonLoading}>
+                  <ActivityIndicator size="small" color="#8B4513" />
+                </View>
+              ) : hasProductDiscounts ? (
                 <TouchableOpacity
                   style={styles.discountButton}
                   onPress={() => handleOpenProductDiscountModal(item)}
+                  disabled={isSubmitting}
                 >
-                  <Ionicons name="pricetag-outline" size={16} color="#8B4513" />
+                  <Ionicons name="pricetag-outline" size={16} color={isSubmitting ? "#9CA3AF" : "#8B4513"} />
                 </TouchableOpacity>
-              )}
+              ) : productDiscounts.length === 1 ? (
+                <View style={styles.discountBadge}>
+                  <Ionicons name="pricetag" size={14} color="#10B981" />
+                </View>
+              ) : null}
               
               <TouchableOpacity
                 style={styles.editButton}
                 onPress={() => handleEditItem(item)}
+                disabled={isSubmitting}
               >
-                <Ionicons name="create-outline" size={16} color="#8B4513" />
+                <Ionicons name="create-outline" size={16} color={isSubmitting ? "#9CA3AF" : "#8B4513"} />
               </TouchableOpacity>
               
               <TouchableOpacity
                 style={styles.removeButton}
                 onPress={() => handleRemoveItem(item, item.customizations || {})}
+                disabled={isSubmitting}
               >
-                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                <Ionicons name="trash-outline" size={16} color={isSubmitting ? "#9CA3AF" : "#EF4444"} />
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.itemFooter}>
             <View>
-              {selectedProductDiscount ? (
+              {loadingDiscounts ? (
+                <View style={styles.itemPriceLoading}>
+                  <ActivityIndicator size="small" color="#8B4513" />
+                </View>
+              ) : selectedProductDiscount ? (
                 <>
                   <Text style={styles.itemPriceOriginal}>
                     {formatPrice((item.price || 0) * (item.quantity || 1))}
@@ -420,8 +480,9 @@ export default function CartScreen() {
               <TouchableOpacity
                 style={styles.quantityButton}
                 onPress={() => handleQuantityChange(item, item.customizations, (item.quantity || 1) - 1)}
+                disabled={isSubmitting}
               >
-                <Ionicons name="remove" size={16} color="#8B4513" />
+                <Ionicons name="remove" size={16} color={isSubmitting ? "#9CA3AF" : "#8B4513"} />
               </TouchableOpacity>
               
               <Text style={styles.quantityText}>{item.quantity || 1}</Text>
@@ -429,8 +490,9 @@ export default function CartScreen() {
               <TouchableOpacity
                 style={styles.quantityButton}
                 onPress={() => handleQuantityChange(item, item.customizations, (item.quantity || 1) + 1)}
+                disabled={isSubmitting}
               >
-                <Ionicons name="add" size={16} color="#8B4513" />
+                <Ionicons name="add" size={16} color={isSubmitting ? "#9CA3AF" : "#8B4513"} />
               </TouchableOpacity>
             </View>
           </View>
@@ -497,6 +559,18 @@ export default function CartScreen() {
             <Text style={styles.tableText}>{tableNumber}</Text>
           </View>
 
+          {/* Aktif Sipariş Uyarısı */}
+          {activeOrder && ['beklemede', 'hazirlaniyor', 'hazir'].includes(activeOrder.durum) && (
+            <View style={styles.warningCard}>
+              <View style={styles.warningContent}>
+                <Ionicons name="information-circle" size={20} color="#F59E0B" />
+                <Text style={styles.warningText}>
+                  Siparişiniz onaylandıktan sonra düzeltme yapılamaz.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {items.map((item, index) => renderCartItem(item, index))}
           
           {/* İndirim Bölümü */}
@@ -541,6 +615,7 @@ export default function CartScreen() {
                 <TouchableOpacity
                   style={styles.showDiscountsButton}
                   onPress={() => setShowDiscountList(!showDiscountList)}
+                  disabled={isSubmitting}
                 >
                   <Text style={styles.showDiscountsButtonText}>
                     {showDiscountList ? 'İndirimleri Gizle' : `Kullanılabilir İndirimler (${availableDiscounts.length})`}
@@ -584,6 +659,7 @@ export default function CartScreen() {
                               isSelected && styles.discountCardSelected
                             ]}
                             onPress={() => handleSelectDiscount(discount)}
+                            disabled={isSubmitting}
                           >
                             <View style={styles.discountCardContent}>
                               <View style={styles.discountCardHeader}>
@@ -650,6 +726,7 @@ export default function CartScreen() {
           style={styles.summaryHeader}
           onPress={() => setSummaryExpanded(!summaryExpanded)}
           activeOpacity={0.7}
+          disabled={isSubmitting}
         >
           <View style={styles.summaryHeaderLeft}>
             <Text style={styles.summaryHeaderTitle}>Fiyat Özeti</Text>
@@ -704,6 +781,23 @@ export default function CartScreen() {
       </View>
 
       <SistemAyarlariSidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      
+      {/* Loading Overlay - Sipariş yüklenirken tüm butonları devre dışı bırak */}
+      {isSubmitting && (
+        <Modal
+          visible={isSubmitting}
+          transparent={true}
+          animationType="fade"
+        >
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#8B4513" />
+              <Text style={styles.loadingText}>Sipariş Veriliyor...</Text>
+              <Text style={styles.loadingSubtext}>Lütfen bekleyin, sayfadan ayrılmayın</Text>
+            </View>
+          </View>
+        </Modal>
+      )}
       
       {/* Delete Confirmation Modal */}
       <Modal
@@ -1357,6 +1451,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  discountButtonLoading: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  discountBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#D1FAE5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   productDiscountBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1380,6 +1490,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     textDecorationLine: 'line-through',
+  },
+  itemPriceLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    minHeight: 24,
+  },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#8B4513',
+    fontFamily: 'System',
+  },
+  loadingSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'System',
+    textAlign: 'center',
   },
   // İndirim Seçim Modal Stilleri
   discountModalContent: {
@@ -1415,5 +1563,26 @@ const styles = StyleSheet.create({
   },
   discountModalScrollView: {
     maxHeight: 400,
+  },
+  // Aktif Sipariş Uyarı Kartı
+  warningCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  warningContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400E',
+    lineHeight: 20,
   },
 });

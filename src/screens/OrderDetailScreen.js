@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,33 @@ import {
   TextInput,
   Alert,
   BackHandler,
-  SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import { supabase, TABLES } from '../config/supabase';
 
 const { width } = Dimensions.get('window');
+
+// İndirim hesaplama helper fonksiyonu (CartScreen'den alındı)
+const calculateDiscount = (totalPrice, discount) => {
+  if (!discount || !totalPrice || totalPrice <= 0) return 0;
+  
+  let discountAmount = 0;
+  if (discount.indirim_tipi === 'yuzde') {
+    // indirim_degeri'yi parseFloat ile parse et
+    const indirimDegeri = parseFloat(discount.indirim_degeri) || 0;
+    discountAmount = (totalPrice * indirimDegeri) / 100;
+  } else if (discount.indirim_tipi === 'miktar') {
+    discountAmount = parseFloat(discount.indirim_degeri) || 0;
+    if (discountAmount > totalPrice) {
+      discountAmount = totalPrice;
+    }
+  }
+  return Math.max(0, Math.min(discountAmount, totalPrice));
+};
 
 const OrderDetailScreen = ({ route }) => {
   const navigation = useNavigation();
@@ -33,6 +52,9 @@ const OrderDetailScreen = ({ route }) => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [deletedItems, setDeletedItems] = useState([]);
+  const [orderDiscounts, setOrderDiscounts] = useState([]); // Sipariş için kullanılan indirimler
+  const [kampanyaUrunleriMap, setKampanyaUrunleriMap] = useState({}); // kampanya_urunleri map
+  const [loadingDiscounts, setLoadingDiscounts] = useState(true); // İndirimler yükleniyor mu?
 
   // Geri buton handler - OrderStatus'a git
   const handleGoBack = () => {
@@ -53,6 +75,142 @@ const OrderDetailScreen = ({ route }) => {
     return () => backHandler.remove();
   }, [navigation]);
 
+  // Sipariş detaylarını urun_id ile birlikte yeniden yükle
+  useEffect(() => {
+    const loadOrderDetails = async () => {
+      try {
+        const { data: details, error } = await supabase
+          .from(TABLES.SIPARIS_DETAYLARI)
+          .select(`
+            *,
+            urunler (
+              id,
+              ad,
+              fiyat,
+              kategori_id,
+              yeni_urun,
+              populer
+            )
+          `)
+          .eq('siparis_id', currentOrder.id);
+        
+        if (error) {
+          console.error('Sipariş detayları yükleme hatası:', error);
+          return;
+        }
+        
+        if (details && details.length > 0) {
+          console.log('Sipariş detayları yüklendi (urun_id ile):', details.length);
+          setCurrentOrderDetails(details);
+        }
+      } catch (error) {
+        console.error('Sipariş detayları yükleme hatası:', error);
+      }
+    };
+    
+    if (currentOrder.id) {
+      loadOrderDetails();
+    }
+  }, [currentOrder.id]);
+
+  // Sipariş için kullanılan indirimleri yükle
+  useEffect(() => {
+    const loadOrderDiscounts = async () => {
+      setLoadingDiscounts(true);
+      try {
+        // Sipariş için kullanılan indirimleri getir
+        const { data: discountUsages, error: usageError } = await supabase
+          .from('kullanici_indirim_kullanimlari')
+          .select(`
+            *,
+            indirimler (
+              *,
+              kampanyalar (
+                id,
+                ad,
+                baslangic_tarihi,
+                bitis_tarihi,
+                aktif
+              )
+            )
+          `)
+          .eq('siparis_id', currentOrder.id);
+
+        if (usageError) {
+          console.error('İndirim kullanımları yükleme hatası:', usageError);
+          return;
+        }
+
+        if (discountUsages && discountUsages.length > 0) {
+          console.log('İndirim kullanımları yüklendi:', discountUsages.length);
+          
+          // kampanya_urunleri tablosunu sorgula
+          const indirimIds = discountUsages.map(du => du.indirim_id).filter(id => id != null);
+          
+          if (indirimIds.length > 0) {
+            const { data: kampanyaUrunleriData } = await supabase
+              .from('kampanya_urunleri')
+              .select('indirim_id, urun_id, kategori_id')
+              .in('indirim_id', indirimIds);
+            
+            console.log('kampanya_urunleri yüklendi:', kampanyaUrunleriData?.length || 0);
+            
+            // İndirim ID'lerine göre kampanya_urunleri'ni grupla
+            const indirimUrunleriMap = {};
+            if (kampanyaUrunleriData) {
+              kampanyaUrunleriData.forEach(ku => {
+                if (ku.indirim_id) {
+                  if (!indirimUrunleriMap[ku.indirim_id]) {
+                    indirimUrunleriMap[ku.indirim_id] = {
+                      urun_ids: [],
+                      kategori_ids: []
+                    };
+                  }
+                  if (ku.urun_id) {
+                    indirimUrunleriMap[ku.indirim_id].urun_ids.push(ku.urun_id);
+                  }
+                  if (ku.kategori_id) {
+                    indirimUrunleriMap[ku.indirim_id].kategori_ids.push(ku.kategori_id);
+                  }
+                }
+              });
+            }
+            
+            console.log('kampanya_urunleri map:', indirimUrunleriMap);
+            setKampanyaUrunleriMap(indirimUrunleriMap);
+          }
+          
+          // İndirim bilgilerini formatla
+          const formattedDiscounts = discountUsages.map(du => ({
+            indirim_id: du.indirim_id,
+            kampanya_adi: du.indirimler?.kampanyalar?.ad || 'İndirim',
+            indirim_tipi: du.indirimler?.indirim_tipi,
+            indirim_degeri: parseFloat(du.indirimler?.indirim_degeri || 0),
+            hedef_tipi: du.indirimler?.hedef_tipi || 'genel',
+            urun_filtre_tipi: du.indirimler?.urun_filtre_tipi,
+            urun_id: du.indirimler?.urun_id,
+            kategori_id: du.indirimler?.kategori_id,
+            kullanilan_tutar: parseFloat(du.kullanilan_tutar || 0),
+            indirim_miktari: parseFloat(du.indirim_miktari || 0),
+            aktif: du.indirimler?.aktif !== false
+          }));
+          
+          console.log('Formatlanmış indirimler:', formattedDiscounts);
+          setOrderDiscounts(formattedDiscounts);
+        } else {
+          console.log('İndirim kullanımı bulunamadı');
+        }
+      } catch (error) {
+        console.error('İndirim yükleme hatası:', error);
+      } finally {
+        setLoadingDiscounts(false);
+      }
+    };
+
+    if (currentOrder.id) {
+      loadOrderDiscounts();
+    }
+  }, [currentOrder.id]);
 
   // Realtime subscription for order updates
   useEffect(() => {
@@ -211,9 +369,6 @@ const OrderDetailScreen = ({ route }) => {
         [itemId]: currentQuantity - 1
       }));
       setHasChanges(true);
-      
-      // Toplam tutarı güncelle
-      updateTotalAmount();
     }
   };
 
@@ -225,47 +380,209 @@ const OrderDetailScreen = ({ route }) => {
       [itemId]: currentQuantity + 1
     }));
     setHasChanges(true);
-    
-    // Toplam tutarı güncelle
-    updateTotalAmount();
   };
+    
+  // editedQuantities veya deletedItems değiştiğinde toplam tutarı güncelle
+  useEffect(() => {
+    if (currentOrderDetails.length > 0) {
+    updateTotalAmount();
+    }
+  }, [editedQuantities, deletedItems, currentOrderDetails, orderDiscounts, updateTotalAmount]);
 
-  // Toplam tutarı güncelleme fonksiyonu
-  const updateTotalAmount = () => {
-    const newTotal = currentOrderDetails
+  // Ürün için uygun indirimi bul
+  const getDiscountForItem = useCallback((item) => {
+    // Debug: İndirimleri kontrol et
+    if (orderDiscounts.length === 0) {
+      console.log('getDiscountForItem: orderDiscounts boş', { 
+        itemKeys: Object.keys(item),
+        itemUrunId: item.urun_id,
+        itemUrunlerId: item.urunler?.id,
+        itemName: item.urunler?.ad 
+      });
+      return null;
+    }
+    
+    // Sipariş detaylarında urun_id direkt olarak var olabilir veya urunler join'inde id olabilir
+    // Önce urun_id'yi kontrol et (direkt alan), sonra urunler.id'yi kontrol et (join edilmiş)
+    const urunId = item.urun_id ?? item.urunler?.id;
+    const kategoriId = item.urunler?.kategori_id;
+    
+    // Eğer hala urunId yoksa, item yapısını logla
+    if (!urunId) {
+      console.warn('getDiscountForItem: urunId bulunamadı!', {
+        itemKeys: Object.keys(item),
+        itemUrunId: item.urun_id,
+        itemUrunler: item.urunler,
+        itemUrunlerId: item.urunler?.id
+      });
+    }
+    
+    console.log('getDiscountForItem: Ürün kontrolü', {
+      urunId,
+      kategoriId,
+      itemKeys: Object.keys(item),
+      itemUrunId: item.urun_id,
+      itemUrunler: item.urunler,
+      orderDiscountsCount: orderDiscounts.length,
+      orderDiscounts: orderDiscounts.map(d => ({ id: d.indirim_id, hedef: d.hedef_tipi, urun_filtre: d.urun_filtre_tipi, urun_id: d.urun_id }))
+    });
+    
+    // Önce ürün bazlı indirimleri kontrol et
+    for (const discount of orderDiscounts) {
+      if (!discount.aktif) continue;
+      
+      // Genel indirimleri atla (onları en son kontrol edeceğiz)
+      if (discount.hedef_tipi === 'genel' && !discount.urun_filtre_tipi) {
+        continue;
+      }
+      
+      // kampanya_urunleri kontrolü
+      const kampanyaUrunleri = kampanyaUrunleriMap[discount.indirim_id];
+      if (kampanyaUrunleri) {
+        const urunVar = kampanyaUrunleri.urun_ids.length === 0 || kampanyaUrunleri.urun_ids.includes(urunId);
+        const kategoriVar = kampanyaUrunleri.kategori_ids.length === 0 || (kategoriId && kampanyaUrunleri.kategori_ids.includes(kategoriId));
+        
+        console.log('getDiscountForItem: kampanya_urunleri kontrolü', {
+          indirim_id: discount.indirim_id,
+          urunId,
+          kategoriId,
+          kampanyaUrunleri,
+          urunVar,
+          kategoriVar
+        });
+        
+        if (kampanyaUrunleri.urun_ids.length > 0 && kampanyaUrunleri.kategori_ids.length > 0) {
+          if (urunVar || kategoriVar) {
+            console.log('getDiscountForItem: kampanya_urunleri ile indirim bulundu (hem ürün hem kategori)', { discount });
+            return discount;
+          }
+        } else if (kampanyaUrunleri.urun_ids.length > 0) {
+          if (urunVar) {
+            console.log('getDiscountForItem: kampanya_urunleri ile indirim bulundu (sadece ürün)', { discount });
+            return discount;
+          }
+        } else if (kampanyaUrunleri.kategori_ids.length > 0) {
+          if (kategoriVar) {
+            console.log('getDiscountForItem: kampanya_urunleri ile indirim bulundu (sadece kategori)', { discount });
+            return discount;
+          }
+        } else {
+          console.log('getDiscountForItem: kampanya_urunleri ile indirim bulundu (filtre yok)', { discount });
+          return discount;
+        }
+      } else {
+        // kampanya_urunleri yoksa, indirimler tablosundaki filtreye göre kontrol et
+        if (discount.urun_filtre_tipi === 'urun' && discount.urun_id === urunId) {
+          console.log('getDiscountForItem: Ürün bazlı indirim bulundu (kampanya_urunleri yok)', { discount, urunId, discount_urun_id: discount.urun_id });
+          return discount;
+        }
+        if (discount.urun_filtre_tipi === 'kategori' && discount.kategori_id === kategoriId) {
+          console.log('getDiscountForItem: Kategori bazlı indirim bulundu', { discount, kategoriId });
+          return discount;
+        }
+        if (discount.urun_filtre_tipi === 'yeni_urun' && item.urunler?.yeni_urun === true) {
+          console.log('getDiscountForItem: Yeni ürün indirimi bulundu', { discount });
+          return discount;
+        }
+        if (discount.urun_filtre_tipi === 'populer_urun' && item.urunler?.populer === true) {
+          console.log('getDiscountForItem: Popüler ürün indirimi bulundu', { discount });
+          return discount;
+        }
+      }
+    }
+    
+    // Ürün bazlı indirim yoksa, genel indirimi kontrol et
+    const genelDiscount = orderDiscounts.find(d => d.hedef_tipi === 'genel' && d.aktif);
+    if (genelDiscount) {
+      // Genel indirimin bu ürüne uygulanıp uygulanmayacağını kontrol et
+      const kampanyaUrunleri = kampanyaUrunleriMap[genelDiscount.indirim_id];
+      if (kampanyaUrunleri) {
+        const urunVar = kampanyaUrunleri.urun_ids.length === 0 || kampanyaUrunleri.urun_ids.includes(urunId);
+        const kategoriVar = kampanyaUrunleri.kategori_ids.length === 0 || (kategoriId && kampanyaUrunleri.kategori_ids.includes(kategoriId));
+        
+        if (kampanyaUrunleri.urun_ids.length > 0 && kampanyaUrunleri.kategori_ids.length > 0) {
+          if (urunVar || kategoriVar) {
+            return genelDiscount;
+          }
+        } else if (kampanyaUrunleri.urun_ids.length > 0) {
+          if (urunVar) {
+            return genelDiscount;
+          }
+        } else if (kampanyaUrunleri.kategori_ids.length > 0) {
+          if (kategoriVar) {
+            return genelDiscount;
+          }
+        } else {
+          return genelDiscount;
+        }
+      } else {
+        // kampanya_urunleri yoksa ve urun_filtre_tipi yoksa, genel indirim tüm ürünlere uygulanabilir
+        if (!genelDiscount.urun_filtre_tipi) {
+          console.log('getDiscountForItem: Genel indirim bulundu (tüm ürünlere, filtre yok)', { discount: genelDiscount });
+          return genelDiscount;
+        }
+        // Eğer genel indirimde ürün filtresi varsa kontrol et
+        if (genelDiscount.urun_filtre_tipi === 'urun' && genelDiscount.urun_id === urunId) {
+          console.log('getDiscountForItem: Genel indirim (ürün filtresi) bulundu', { discount: genelDiscount, urunId });
+          return genelDiscount;
+        }
+        if (genelDiscount.urun_filtre_tipi === 'kategori' && genelDiscount.kategori_id === kategoriId) {
+          console.log('getDiscountForItem: Genel indirim (kategori filtresi) bulundu', { discount: genelDiscount, kategoriId });
+          return genelDiscount;
+        }
+        if (genelDiscount.urun_filtre_tipi === 'yeni_urun' && item.urunler?.yeni_urun === true) {
+          console.log('getDiscountForItem: Genel indirim (yeni ürün) bulundu', { discount: genelDiscount });
+          return genelDiscount;
+        }
+        if (genelDiscount.urun_filtre_tipi === 'populer_urun' && item.urunler?.populer === true) {
+          console.log('getDiscountForItem: Genel indirim (popüler ürün) bulundu', { discount: genelDiscount });
+          return genelDiscount;
+        }
+      }
+    }
+    
+    console.log('getDiscountForItem: İndirim bulunamadı', { urunId, kategoriId });
+    return null;
+  }, [orderDiscounts, kampanyaUrunleriMap]);
+
+  // Toplam tutarı güncelleme fonksiyonu (indirimleri koruyarak)
+  const updateTotalAmount = useCallback(() => {
+    // Her ürün için indirimli fiyatı hesapla ve topla
+    const newDiscountedTotal = currentOrderDetails
       .filter(detail => !deletedItems.includes(detail.id)) // Silinen ürünleri çıkar
       .reduce((sum, detail) => {
-        // Fiyat hesaplama - önce birim_fiyat, sonra urunler.fiyat kullan
-        let birimFiyat = parseFloat(detail.birim_fiyat) || 0;
-        if (birimFiyat === 0 && detail.urunler?.fiyat) {
-          birimFiyat = parseFloat(detail.urunler.fiyat) || 0;
-        }
-        
         const adet = editedQuantities[detail.id] || detail.adet;
-        const toplamFiyat = birimFiyat * adet;
+        const priceInfo = getItemDiscountedPrice(detail, adet);
         
-        return sum + toplamFiyat;
+        console.log('updateTotalAmount: Ürün hesaplama', {
+          id: detail.id,
+          urunId: detail.urun_id || detail.urunler?.id,
+          ad: detail.urunler?.ad,
+          adet: adet,
+          originalPrice: priceInfo.originalPrice,
+          discountAmount: priceInfo.discountAmount,
+          discountedPrice: priceInfo.discountedPrice,
+          hasDiscount: priceInfo.hasDiscount,
+          sum: sum
+        });
+        
+        return sum + priceInfo.discountedPrice;
       }, 0);
     
-    setCurrentOrder(prev => ({ ...prev, toplam_tutar: newTotal }));
-  };
+    console.log('updateTotalAmount: Yeni toplam tutar', newDiscountedTotal);
+    setCurrentOrder(prev => ({ ...prev, toplam_tutar: newDiscountedTotal }));
+  }, [currentOrderDetails, editedQuantities, deletedItems, orderDiscounts, kampanyaUrunleriMap, getItemDiscountedPrice]);
 
   // Ürün silme fonksiyonu
   const handleDeleteItem = (itemId) => {
     setDeletedItems(prev => [...prev, itemId]);
     setHasChanges(true);
-    
-    // Toplam tutarı güncelle
-    updateTotalAmount();
   };
 
   // Silinen ürünü geri alma fonksiyonu
   const handleRestoreItem = (itemId) => {
     setDeletedItems(prev => prev.filter(id => id !== itemId));
     setHasChanges(true);
-    
-    // Toplam tutarı güncelle
-    updateTotalAmount();
   };
 
   // Kaydet modalını açma
@@ -372,38 +689,31 @@ const OrderDetailScreen = ({ route }) => {
         return;
       }
 
-      // Yeni toplam tutarı hesapla
-      newTotal = updatedDetails.reduce((sum, detail) => {
-        // Fiyat hesaplama - önce birim_fiyat, sonra urunler.fiyat kullan
-        let birimFiyat = parseFloat(detail.birim_fiyat) || 0;
-        if (birimFiyat === 0 && detail.urunler?.fiyat) {
-          birimFiyat = parseFloat(detail.urunler.fiyat) || 0;
-        }
-        
+      // Her ürün için indirimli fiyatı hesapla ve topla
+      const newDiscountedTotal = updatedDetails.reduce((sum, detail) => {
         const adet = editedQuantities[detail.id] || detail.adet;
-        const toplamFiyat = birimFiyat * adet;
+        const priceInfo = getItemDiscountedPrice(detail, adet);
         
-        console.log('Toplam hesaplama:', {
+        console.log('Ürün indirim hesaplama:', {
           id: detail.id,
           ad: detail.urunler?.ad,
-          birim_fiyat: detail.birim_fiyat,
-          calculated_birim_fiyat: birimFiyat,
-          adet: detail.adet,
-          calculated_adet: adet,
-          toplam_fiyat: toplamFiyat,
-          sum: sum
+          adet: adet,
+          originalPrice: priceInfo.originalPrice,
+          discountAmount: priceInfo.discountAmount,
+          discountedPrice: priceInfo.discountedPrice,
+          hasDiscount: priceInfo.hasDiscount,
+          discount: priceInfo.discount
         });
         
-        return sum + toplamFiyat;
+        return sum + priceInfo.discountedPrice;
       }, 0);
       
-      console.log('Final newTotal:', newTotal);
+      console.log('Final newTotal (indirimli):', newDiscountedTotal);
       
-
-      // Sipariş toplam tutarını güncelle
+      // Sipariş toplam tutarını güncelle (indirimli toplam)
       const { error: orderUpdateError } = await supabase
         .from(TABLES.SIPARISLER)
-        .update({ toplam_tutar: newTotal || 0 })
+        .update({ toplam_tutar: newDiscountedTotal || 0 })
         .eq('id', currentOrder.id);
 
       if (orderUpdateError) {
@@ -412,7 +722,7 @@ const OrderDetailScreen = ({ route }) => {
 
       // State'leri güncelle
       setCurrentOrderDetails(updatedDetails);
-      setCurrentOrder(prev => ({ ...prev, toplam_tutar: newTotal }));
+      setCurrentOrder(prev => ({ ...prev, toplam_tutar: newDiscountedTotal }));
       setEditedQuantities({});
       setDeletedItems([]);
       setHasChanges(false);
@@ -420,7 +730,7 @@ const OrderDetailScreen = ({ route }) => {
 
       // OrderStatus sayfasına yönlendir
       navigation.navigate('OrderStatusMain', { 
-        order: { ...currentOrder, toplam_tutar: newTotal },
+        order: { ...currentOrder, toplam_tutar: newDiscountedTotal },
         orderDetails: updatedDetails 
       });
 
@@ -549,18 +859,72 @@ const OrderDetailScreen = ({ route }) => {
 
 
 
-  const renderOrderItem = (item) => {
-    const currentQuantity = editedQuantities[item.id] || item.adet;
-    
+  // Ürün için indirimli fiyatı hesapla
+  const getItemDiscountedPrice = useCallback((item, quantity) => {
     // Fiyat hesaplama - önce birim_fiyat, sonra urunler.fiyat kullan
     let birimFiyat = parseFloat(item.birim_fiyat) || 0;
     if (birimFiyat === 0 && item.urunler?.fiyat) {
       birimFiyat = parseFloat(item.urunler.fiyat) || 0;
     }
     
-    const currentTotalPrice = birimFiyat * currentQuantity;
+    // Orijinal toplam fiyat (indirim öncesi)
+    const originalTotalPrice = birimFiyat * quantity;
+    
+    // Bu ürün için uygun indirimi bul
+    const discount = getDiscountForItem(item);
+    
+    if (discount) {
+      // İndirimi hesapla
+      const itemDiscount = calculateDiscount(originalTotalPrice, discount);
+      const discountedPrice = Math.max(0, originalTotalPrice - itemDiscount);
+      
+      // İndirim varsa ve indirim miktarı 0'dan büyükse hasDiscount: true
+      const hasDiscount = itemDiscount > 0;
+      
+      console.log('getItemDiscountedPrice: İndirim hesaplandı', {
+        urunId: item.urun_id || item.urunler?.id,
+        ad: item.urunler?.ad,
+        quantity,
+        originalTotalPrice,
+        itemDiscount,
+        discountedPrice,
+        hasDiscount,
+        discount: discount ? { id: discount.indirim_id, tip: discount.indirim_tipi, deger: discount.indirim_degeri } : null
+      });
+      
+      return {
+        originalPrice: originalTotalPrice,
+        discountedPrice: discountedPrice,
+        discountAmount: itemDiscount,
+        hasDiscount: hasDiscount,
+        discount: discount
+      };
+    }
+    
+    console.log('getItemDiscountedPrice: İndirim bulunamadı', {
+      urunId: item.urun_id || item.urunler?.id,
+      ad: item.urunler?.ad,
+      quantity,
+      originalTotalPrice,
+      orderDiscountsCount: orderDiscounts.length,
+      orderDiscounts: orderDiscounts.map(d => ({ id: d.indirim_id, urun_id: d.urun_id, urun_filtre: d.urun_filtre_tipi }))
+    });
+    
+    return {
+      originalPrice: originalTotalPrice,
+      discountedPrice: originalTotalPrice,
+      discountAmount: 0,
+      hasDiscount: false,
+      discount: null
+    };
+  }, [getDiscountForItem, orderDiscounts]);
+
+  const renderOrderItem = (item) => {
+    const currentQuantity = editedQuantities[item.id] || item.adet;
     const isDeleted = deletedItems.includes(item.id);
     
+    // İndirimli fiyatı hesapla
+    const priceInfo = getItemDiscountedPrice(item, currentQuantity);
     
     if (isDeleted) {
       return (
@@ -570,7 +934,20 @@ const OrderDetailScreen = ({ route }) => {
             <Text style={styles.deletedItemQuantity}>x{currentQuantity} - Silinecek</Text>
           </View>
           <View style={styles.itemActions}>
-            <Text style={styles.deletedItemPrice}>{formatPrice(currentTotalPrice)}</Text>
+            {priceInfo.hasDiscount ? (
+              <>
+                <Text style={styles.deletedItemPriceOriginal}>
+                  {formatPrice(priceInfo.originalPrice)}
+                </Text>
+                <Text style={styles.deletedItemPrice}>
+                  {formatPrice(priceInfo.discountedPrice)}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.deletedItemPrice}>
+                {formatPrice(priceInfo.discountedPrice)}
+              </Text>
+            )}
             
             {/* Sadece beklemede durumunda geri alma butonunu göster */}
             {currentOrder.durum === 'beklemede' && (
@@ -593,7 +970,20 @@ const OrderDetailScreen = ({ route }) => {
           <Text style={styles.itemQuantity}>x{currentQuantity}</Text>
         </View>
         <View style={styles.itemActions}>
-          <Text style={styles.itemPrice}>{formatPrice(currentTotalPrice)}</Text>
+          {priceInfo.hasDiscount ? (
+            <View style={styles.itemPriceContainer}>
+              <Text style={styles.itemPriceOriginal}>
+                {formatPrice(priceInfo.originalPrice)}
+              </Text>
+              <Text style={styles.itemPrice}>
+                {formatPrice(priceInfo.discountedPrice)}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.itemPrice}>
+              {formatPrice(priceInfo.discountedPrice)}
+            </Text>
+          )}
           
           {/* Sadece beklemede durumunda düzenleme butonlarını göster */}
           {currentOrder.durum === 'beklemede' && (
@@ -631,7 +1021,7 @@ const OrderDetailScreen = ({ route }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#8B4513" />
       
@@ -683,15 +1073,17 @@ const OrderDetailScreen = ({ route }) => {
           {currentOrderDetails.map(renderOrderItem)}
           
           {/* İndirim bilgisini hesapla - sipariş detaylarından */}
-          {(() => {
+          {loadingDiscounts ? (
+            <View style={styles.discountLoadingContainer}>
+              <ActivityIndicator size="small" color="#8B4513" />
+              <Text style={styles.discountLoadingText}>İndirimler hesaplanıyor...</Text>
+            </View>
+          ) : (() => {
             // Ara toplamı hesapla - sipariş detaylarındaki toplam fiyatları topla (indirim öncesi)
             const araToplamHesaplanan = currentOrderDetails
               .filter(detail => !deletedItems.includes(detail.id))
               .reduce((sum, detail) => {
-                // Önce toplam_fiyat kullan, yoksa birim_fiyat * adet hesapla
-                if (detail.toplam_fiyat) {
-                  return sum + (parseFloat(detail.toplam_fiyat) || 0);
-                }
+                // Fiyat hesaplama - önce birim_fiyat, sonra urunler.fiyat kullan
                 let birimFiyat = parseFloat(detail.birim_fiyat) || 0;
                 if (birimFiyat === 0 && detail.urunler?.fiyat) {
                   birimFiyat = parseFloat(detail.urunler.fiyat) || 0;
@@ -700,18 +1092,25 @@ const OrderDetailScreen = ({ route }) => {
                 return sum + (birimFiyat * adet);
               }, 0);
             
+            // İndirimli toplamı hesapla - her ürün için indirimli fiyatı hesapla ve topla
+            const indirimliToplam = currentOrderDetails
+              .filter(detail => !deletedItems.includes(detail.id))
+              .reduce((sum, detail) => {
+                const adet = editedQuantities[detail.id] || detail.adet;
+                const priceInfo = getItemDiscountedPrice(detail, adet);
+                return sum + priceInfo.discountedPrice;
+              }, 0);
+            
             // İndirim miktarı = ara toplam - indirimli toplam
-            const indirimMiktari = araToplamHesaplanan > 0 && araToplamHesaplanan > parseFloat(currentOrder.toplam_tutar || 0)
-              ? araToplamHesaplanan - parseFloat(currentOrder.toplam_tutar || 0)
+            const indirimMiktari = araToplamHesaplanan > indirimliToplam
+              ? araToplamHesaplanan - indirimliToplam
               : 0;
             
             // Ara toplam (indirim öncesi)
-            const araToplam = indirimMiktari > 0 
-              ? araToplamHesaplanan
-              : parseFloat(currentOrder.toplam_tutar || 0) || araToplamHesaplanan;
+            const araToplam = araToplamHesaplanan;
             
-            // Toplam tutar = toplam_tutar (zaten indirimli)
-            const toplamTutar = parseFloat(currentOrder.toplam_tutar || 0) || araToplamHesaplanan;
+            // Toplam tutar = indirimli toplam
+            const toplamTutar = indirimliToplam;
             
             return (
               <>
@@ -901,7 +1300,7 @@ const OrderDetailScreen = ({ route }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#8B4513',
+    backgroundColor: '#FFFFFF',
   },
   container: {
     flex: 1,
@@ -909,7 +1308,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#8B4513',
-    paddingTop: 50,
+    paddingTop: 12,
     paddingBottom: 16,
     paddingHorizontal: 20,
     flexDirection: 'row',
@@ -1065,11 +1464,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: 'System',
   },
+  itemPriceContainer: {
+    alignItems: 'flex-end',
+  },
   itemPrice: {
     fontSize: 16,
     fontWeight: '600',
     color: '#8B4513',
     fontFamily: 'System',
+  },
+  itemPriceOriginal: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+    fontFamily: 'System',
+    marginBottom: 2,
   },
   totalRow: {
     flexDirection: 'row',
@@ -1126,6 +1535,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#10B981',
+    fontFamily: 'System',
+  },
+  discountLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 12,
+    marginTop: 16,
+  },
+  discountLoadingText: {
+    fontSize: 14,
+    color: '#6B7280',
     fontFamily: 'System',
   },
   notesCard: {
@@ -1517,6 +1939,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#9CA3AF',
     fontFamily: 'System',
+  },
+  deletedItemPriceOriginal: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+    fontFamily: 'System',
+    marginBottom: 2,
   },
   restoreItemButton: {
     width: 36,

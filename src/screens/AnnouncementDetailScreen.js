@@ -27,19 +27,15 @@ const AnnouncementDetailScreen = ({ route }) => {
   const isCampaign = announcement.tur === 'kampanya' || announcement.baslik?.toLowerCase().includes('kampanya');
   const pageTitle = isCampaign ? 'Kampanya Detayı' : 'Duyuru Detayı';
 
-  // Geri buton handler - Announcements sayfasına git
+  // Geri buton handler - Stack'te geri git
   const handleGoBack = () => {
-    navigation.navigate('Duyurular', {
-      screen: 'AnnouncementsMain'
-    });
+    navigation.goBack();
   };
 
-  // Hardware back button handler - Announcements sayfasına git
+  // Hardware back button handler - Stack'te geri git
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      navigation.navigate('Duyurular', {
-        screen: 'AnnouncementsMain'
-      });
+      navigation.goBack();
       return true; // Event'i handle ettik
     });
 

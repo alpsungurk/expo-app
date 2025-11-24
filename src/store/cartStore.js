@@ -300,7 +300,9 @@ export const CartProvider = ({ children }) => {
 
     if (discount.indirim_tipi === 'yuzde') {
       // Yüzde indirim - toplam tutar üzerinden hesapla
-      discountAmount = (totalPrice * discount.indirim_degeri) / 100;
+      // indirim_degeri'yi parseFloat ile parse et
+      const indirimDegeri = parseFloat(discount.indirim_degeri) || 0;
+      discountAmount = (totalPrice * indirimDegeri) / 100;
     } else if (discount.indirim_tipi === 'miktar') {
       // Sabit miktar indirim
       discountAmount = parseFloat(discount.indirim_degeri) || 0;
@@ -325,12 +327,82 @@ export const CartProvider = ({ children }) => {
     const totalPrice = getTotalPrice();
     let totalDiscount = 0;
     
-      // Genel indirim (hedef_tipi 'genel' olmalı ve aktif olmalı)
-      if (state.selectedGeneralDiscount && 
-          state.selectedGeneralDiscount.hedef_tipi === 'genel' &&
-          state.selectedGeneralDiscount.aktif !== false && 
-          state.selectedGeneralDiscount.aktif !== null && 
-          state.selectedGeneralDiscount.aktif !== undefined) {
+    // Önce ürün bazlı indirimleri hesapla
+    const productDiscounts = {};
+    Object.keys(state.selectedProductDiscounts).forEach(productId => {
+      const discount = state.selectedProductDiscounts[productId];
+      const item = state.items.find(item => item.id === parseInt(productId));
+      
+      if (item && discount && 
+          discount.aktif !== false && 
+          discount.aktif !== null && 
+          discount.aktif !== undefined) {
+        
+        // İndirimin bu ürüne uygulanıp uygulanmayacağını kontrol et
+        let appliesToItem = false;
+        
+        // kampanya_urunleri kontrolü - eğer bu indirim için kampanya_urunleri'nde kayıt varsa
+        // sadece o kayıtlardaki ürünlere/kategorilere uygulanabilir
+        const kampanyaUrunleri = state.kampanyaUrunleriMap[discount.indirim_id];
+        if (kampanyaUrunleri) {
+          const urunVar = kampanyaUrunleri.urun_ids.length === 0 || kampanyaUrunleri.urun_ids.includes(item.id);
+          const kategoriVar = kampanyaUrunleri.kategori_ids.length === 0 || (item.kategori_id && kampanyaUrunleri.kategori_ids.includes(item.kategori_id));
+          
+          // Eğer ne ürün ne kategori eşleşmiyorsa, bu indirim bu ürüne uygulanamaz
+          if (kampanyaUrunleri.urun_ids.length > 0 && kampanyaUrunleri.kategori_ids.length > 0) {
+            // Hem ürün hem kategori belirtilmişse, ikisinden biri eşleşmeli
+            appliesToItem = urunVar || kategoriVar;
+          } else if (kampanyaUrunleri.urun_ids.length > 0) {
+            // Sadece ürün belirtilmişse, ürün eşleşmeli
+            appliesToItem = urunVar;
+          } else if (kampanyaUrunleri.kategori_ids.length > 0) {
+            // Sadece kategori belirtilmişse, kategori eşleşmeli
+            appliesToItem = kategoriVar;
+          } else {
+            // Hiçbir şey belirtilmemişse, tüm ürünlere uygulanabilir
+            appliesToItem = true;
+          }
+        } else {
+          // kampanya_urunleri'nde kayıt yoksa, indirimler tablosundaki filtreye göre kontrol et
+          
+          // Ürün bazlı indirim
+          if (discount.urun_filtre_tipi === 'urun' && discount.urun_id === item.id) {
+            appliesToItem = true;
+          }
+          // Kategori bazlı indirim
+          else if (discount.urun_filtre_tipi === 'kategori' && discount.kategori_id === item.kategori_id) {
+            appliesToItem = true;
+          }
+          // Yeni ürün indirimi
+          else if (discount.urun_filtre_tipi === 'yeni_urun' && item.yeni_urun === true) {
+            appliesToItem = true;
+          }
+          // Popüler ürün indirimi
+          else if (discount.urun_filtre_tipi === 'populer_urun' && item.populer === true) {
+            appliesToItem = true;
+          }
+          // Eğer urun_filtre_tipi yoksa veya belirtilmemişse, sadece productId eşleşmesi yeterli
+          else if (!discount.urun_filtre_tipi) {
+            appliesToItem = true;
+          }
+        }
+        
+        if (appliesToItem) {
+          const itemTotal = item.price * item.quantity;
+          const itemDiscount = calculateDiscount(itemTotal, discount);
+          productDiscounts[item.id] = itemDiscount;
+          totalDiscount += itemDiscount;
+        }
+      }
+    });
+    
+    // Genel indirim (hedef_tipi 'genel' olmalı ve aktif olmalı)
+    // Genel indirim, ürün bazlı indirim uygulanan ürünlere uygulanmamalı
+    if (state.selectedGeneralDiscount && 
+        state.selectedGeneralDiscount.hedef_tipi === 'genel' &&
+        state.selectedGeneralDiscount.aktif !== false && 
+        state.selectedGeneralDiscount.aktif !== null && 
+        state.selectedGeneralDiscount.aktif !== undefined) {
       
       const genelDiscount = state.selectedGeneralDiscount;
       
@@ -338,9 +410,15 @@ export const CartProvider = ({ children }) => {
       const kampanyaUrunleri = state.kampanyaUrunleriMap[genelDiscount.indirim_id];
       
       // Filtreye uyan ürünlerin toplamını hesapla
+      // Ama ürün bazlı indirim uygulanan ürünleri çıkar
       let filteredItemsTotal = 0;
       
       state.items.forEach(item => {
+        // Eğer bu ürüne ürün bazlı indirim uygulanmışsa, genel indirimden çıkar
+        if (productDiscounts[item.id]) {
+          return; // Bu ürünü genel indirim hesaplamasına dahil etme
+        }
+        
         let appliesToItem = false;
         
         // kampanya_urunleri kontrolü - eğer bu indirim için kampanya_urunleri'nde kayıt varsa
@@ -403,73 +481,6 @@ export const CartProvider = ({ children }) => {
         totalDiscount += genelDiscountAmount;
       }
     }
-    
-    // Ürün bazlı indirimler
-    Object.keys(state.selectedProductDiscounts).forEach(productId => {
-      const discount = state.selectedProductDiscounts[productId];
-      const item = state.items.find(item => item.id === parseInt(productId));
-      
-      if (item && discount && 
-          discount.aktif !== false && 
-          discount.aktif !== null && 
-          discount.aktif !== undefined) {
-        
-        // İndirimin bu ürüne uygulanıp uygulanmayacağını kontrol et
-        let appliesToItem = false;
-        
-        // kampanya_urunleri kontrolü - eğer bu indirim için kampanya_urunleri'nde kayıt varsa
-        // sadece o kayıtlardaki ürünlere/kategorilere uygulanabilir
-        const kampanyaUrunleri = state.kampanyaUrunleriMap[discount.indirim_id];
-        if (kampanyaUrunleri) {
-          const urunVar = kampanyaUrunleri.urun_ids.length === 0 || kampanyaUrunleri.urun_ids.includes(item.id);
-          const kategoriVar = kampanyaUrunleri.kategori_ids.length === 0 || (item.kategori_id && kampanyaUrunleri.kategori_ids.includes(item.kategori_id));
-          
-          // Eğer ne ürün ne kategori eşleşmiyorsa, bu indirim bu ürüne uygulanamaz
-          if (kampanyaUrunleri.urun_ids.length > 0 && kampanyaUrunleri.kategori_ids.length > 0) {
-            // Hem ürün hem kategori belirtilmişse, ikisinden biri eşleşmeli
-            appliesToItem = urunVar || kategoriVar;
-          } else if (kampanyaUrunleri.urun_ids.length > 0) {
-            // Sadece ürün belirtilmişse, ürün eşleşmeli
-            appliesToItem = urunVar;
-          } else if (kampanyaUrunleri.kategori_ids.length > 0) {
-            // Sadece kategori belirtilmişse, kategori eşleşmeli
-            appliesToItem = kategoriVar;
-          } else {
-            // Hiçbir şey belirtilmemişse, tüm ürünlere uygulanabilir
-            appliesToItem = true;
-          }
-        } else {
-          // kampanya_urunleri'nde kayıt yoksa, indirimler tablosundaki filtreye göre kontrol et
-          
-          // Ürün bazlı indirim
-          if (discount.urun_filtre_tipi === 'urun' && discount.urun_id === item.id) {
-            appliesToItem = true;
-          }
-          // Kategori bazlı indirim
-          else if (discount.urun_filtre_tipi === 'kategori' && discount.kategori_id === item.kategori_id) {
-            appliesToItem = true;
-          }
-          // Yeni ürün indirimi
-          else if (discount.urun_filtre_tipi === 'yeni_urun' && item.yeni_urun === true) {
-            appliesToItem = true;
-          }
-          // Popüler ürün indirimi
-          else if (discount.urun_filtre_tipi === 'populer_urun' && item.populer === true) {
-            appliesToItem = true;
-          }
-          // Eğer urun_filtre_tipi yoksa veya belirtilmemişse, sadece productId eşleşmesi yeterli
-          else if (!discount.urun_filtre_tipi) {
-            appliesToItem = true;
-          }
-        }
-        
-        if (appliesToItem) {
-          const itemTotal = item.price * item.quantity;
-          const itemDiscount = calculateDiscount(itemTotal, discount);
-          totalDiscount += itemDiscount;
-        }
-      }
-    });
     
     // Toplam indirim toplam fiyattan fazla olamaz
     return Math.min(totalDiscount, totalPrice);

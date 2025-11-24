@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -28,27 +30,48 @@ const NotificationsScreen = ({ onClose, onNavigateToLogin }) => {
   const { cachedNotifications } = useNotification();
   const { user } = useAppStore(); // Giriş kontrolü için
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Başlangıçta loading true
 
-  // Geri buton handler
+  // Geri buton handler - animasyonu beklemeden direkt kapat
   const handleGoBack = () => {
-    onClose();
+    // onClose'u immediate mod ile çağır (animasyon olmadan)
+    if (onClose) {
+      onClose(true); // immediate = true
+    }
   };
+
+  // Hardware back button handler - modal'ı kapat
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleGoBack();
+      return true; // Event'i handle ettik
+    });
+
+    return () => backHandler.remove();
+  }, [onClose]);
 
   // Context'teki cached bildirimleri kullan - sadece giriş yapılmışsa göster
   useEffect(() => {
-    if (user) {
-      // Giriş yapılmışsa bildirimleri göster
-      if (cachedNotifications && cachedNotifications.length > 0) {
-        setNotifications(cachedNotifications);
+    // Loading spinner göster
+    setLoading(true);
+    
+    // Kısa bir gecikme ile loading'i kapat (smooth transition için)
+    const timer = setTimeout(() => {
+      if (user) {
+        // Giriş yapılmışsa bildirimleri göster
+        if (cachedNotifications && cachedNotifications.length > 0) {
+          setNotifications(cachedNotifications);
+        } else {
+          setNotifications([]);
+        }
       } else {
+        // Giriş yapılmamışsa boş liste
         setNotifications([]);
       }
-    } else {
-      // Giriş yapılmamışsa boş liste
-      setNotifications([]);
-    }
-    setLoading(false);
+      setLoading(false);
+    }, 300); // 300ms loading göster
+    
+    return () => clearTimeout(timer);
   }, [cachedNotifications, user]);
 
   // Tarih formatla
@@ -153,7 +176,7 @@ const NotificationsScreen = ({ onClose, onNavigateToLogin }) => {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <Ionicons name="notifications" size={40} color="#8B4513" />
+            <ActivityIndicator size="large" color="#8B4513" />
             <Text style={styles.loadingText}>Bildirimler yükleniyor...</Text>
           </View>
         ) : !user ? (
@@ -249,12 +272,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
+    gap: 16,
   },
   loadingText: {
     fontSize: 16,
     color: '#8B4513',
     fontWeight: '500',
-    marginTop: 16,
     fontFamily: 'System',
   },
   emptyContainer: {

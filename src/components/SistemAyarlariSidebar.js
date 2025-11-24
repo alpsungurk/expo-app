@@ -188,11 +188,10 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
   };
 
   const handleProfilePress = () => {
-    // Sidebar'ı kapat, sonra ayarlar sayfasına git
+    // Navigasyonu hemen yap, sidebar arka planda kapanır
+    navigation.navigate('SettingsScreen');
+    // Sidebar'ı kapat (animasyon arka planda çalışır)
     handleClose();
-    setTimeout(() => {
-      navigation.navigate('SettingsScreen');
-    }, 300);
   };
 
   // Kullanıcı adını oluştur
@@ -410,11 +409,6 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                 {/* QR Kod ile Hızlı Sipariş */}
                 <View style={[
                   styles.featureItem,
-                  {
-                    padding: getResponsiveValue(14, 16, 18, 20),
-                    borderRadius: getResponsiveValue(12, 14, 16, 18),
-                    marginBottom: getResponsiveValue(12, 14, 16, 18),
-                  }
                 ]}>
                   <View style={[
                     styles.featureIconContainer,
@@ -449,11 +443,6 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                 {/* Geniş Ürün Yelpazesi */}
                 <View style={[
                   styles.featureItem,
-                  {
-                    padding: getResponsiveValue(14, 16, 18, 20),
-                    borderRadius: getResponsiveValue(12, 14, 16, 18),
-                    marginBottom: getResponsiveValue(12, 14, 16, 18),
-                  }
                 ]}>
                   <View style={[
                     styles.featureIconContainer,
@@ -489,9 +478,9 @@ const SistemAyarlariSidebar = ({ visible, onClose }) => {
                 <View style={[
                   styles.featureItem,
                   {
-                    padding: getResponsiveValue(14, 16, 18, 20),
-                    borderRadius: getResponsiveValue(12, 14, 16, 18),
-                    marginBottom: 0,
+                    borderBottomWidth: 0,
+                    paddingBottom: 0,
+                    paddingTop: getResponsiveValue(10, 12, 14, 16),
                   }
                 ]}>
                   <View style={[
@@ -896,13 +885,12 @@ const styles = StyleSheet.create({
   },
   featureItem: {
     flexDirection: 'row',
-    backgroundColor: 'white',
+    backgroundColor: 'transparent',
     alignItems: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    paddingBottom: getResponsiveValue(10, 12, 14, 16),
+    paddingTop: getResponsiveValue(10, 12, 14, 16),
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   featureItemLarge: {
     backgroundColor: 'white',

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
-import { Animated, Dimensions, Platform, Alert, AppState } from 'react-native';
+import { Animated, Dimensions, Platform, Alert, AppState, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -492,23 +492,12 @@ export const NotificationProvider = ({ children }) => {
 
   const showNotifications = () => {
     setNotificationsVisible(true);
-    // Bildirim modal'ı açılırken aşağıdan yukarıya animasyon
-    Animated.timing(notificationSlideAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    // Animasyon kaldırıldı - direkt göster
   };
 
-  const hideNotifications = () => {
-    // Bildirim modal'ı kapanırken yukarıdan aşağıya animasyon
-    Animated.timing(notificationSlideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setNotificationsVisible(false);
-    });
+  const hideNotifications = (immediate = false) => {
+    // Animasyon kaldırıldı - direkt kapat
+    setNotificationsVisible(false);
   };
 
   // Test bildirimi gönder (lokal, 2 saniye sonra)
@@ -629,27 +618,15 @@ export const NotificationProvider = ({ children }) => {
       
       {/* Global Notifications Modal */}
       {notificationsVisible && (
-        <Animated.View 
-          style={[
-            {
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 1000,
-            },
-            {
-              transform: [
-                {
-                  translateY: notificationSlideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [Dimensions.get('window').height, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
+        <View 
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1000,
+          }}
         >
           <NotificationsScreen 
             onClose={hideNotifications}
@@ -664,10 +641,10 @@ export const NotificationProvider = ({ children }) => {
                     })
                   );
                 }
-              }, 300);
+              }, 100);
             }}
           />
-        </Animated.View>
+        </View>
       )}
     </NotificationContext.Provider>
   );

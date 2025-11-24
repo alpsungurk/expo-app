@@ -84,6 +84,7 @@ export default function OrderStatusScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [loadingDiscounts, setLoadingDiscounts] = useState({}); // Her sipariş için indirim yükleme durumu { [orderId]: true/false }
 
   // Aktif sipariş sayısını hesapla (beklemede, hazırlanıyor, hazır)
   const getActiveOrdersCount = () => {
@@ -290,6 +291,56 @@ export default function OrderStatusScreen() {
       
       // Tüm siparişleri AppStore'a kaydet
       setAllOrders(ordersData || []);
+      
+      // Her sipariş için indirimleri yükle
+      if (ordersData && ordersData.length > 0) {
+        const orderIds = ordersData.map(o => o.id);
+        setLoadingDiscounts(prev => {
+          const newState = { ...prev };
+          orderIds.forEach(id => {
+            newState[id] = true;
+          });
+          return newState;
+        });
+        
+        // Tüm siparişler için indirimleri paralel yükle
+        const discountPromises = ordersData.map(async (order) => {
+          try {
+            const { data: discountUsages } = await supabase
+              .from('kullanici_indirim_kullanimlari')
+              .select(`
+                *,
+                indirimler (
+                  *,
+                  kampanyalar (
+                    id,
+                    ad,
+                    baslangic_tarihi,
+                    bitis_tarihi,
+                    aktif
+                  )
+                )
+              `)
+              .eq('siparis_id', order.id);
+            
+            return { orderId: order.id, discountUsages: discountUsages || [] };
+          } catch (error) {
+            console.error(`Sipariş ${order.id} için indirim yükleme hatası:`, error);
+            return { orderId: order.id, discountUsages: [] };
+          }
+        });
+        
+        const discountResults = await Promise.all(discountPromises);
+        
+        // Loading state'lerini güncelle
+        setLoadingDiscounts(prev => {
+          const newState = { ...prev };
+          discountResults.forEach(result => {
+            newState[result.orderId] = false;
+          });
+          return newState;
+        });
+      }
 
       // Aktif siparişi güncelle (beklemede, hazırlanıyor veya hazır olan ilk sipariş)
       const activeOrderData = ordersData?.find(o => 
@@ -465,7 +516,11 @@ export default function OrderStatusScreen() {
             {/* Fiyatlar - Sağda */}
             <View style={styles.orderCardPriceSection}>
               {/* İndirim bilgisini hesapla - sipariş detaylarından */}
-              {(() => {
+              {loadingDiscounts[order.id] ? (
+                <View style={styles.orderCardDiscountLoading}>
+                  <ActivityIndicator size="small" color="#8B4513" />
+                </View>
+              ) : (() => {
                 // Sipariş detaylarındaki toplam fiyatları topla (indirim öncesi)
                 const araToplamHesaplanan = order.siparis_detaylari?.reduce((sum, detail) => {
                   return sum + (parseFloat(detail.toplam_fiyat) || 0);
@@ -1101,6 +1156,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#059669',
     fontFamily: 'System',
+  },
+  orderCardDiscountLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
   },
   orderCardFooter: {
     flexDirection: 'row',
