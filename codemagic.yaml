@@ -28,8 +28,8 @@ workflows:
         script: |
           # Fix Kotlin version
           sed -i '' "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24')/g" android/build.gradle || sed -i "s/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')/classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24')/g" android/build.gradle
-          # Fix package name in Kotlin files
-          find android/app/src -name "*.kt" -type f -exec sed -i '' 's/package com\.ilkcoffee/package com.kahvedukkani.app/g' {} \; || find android/app/src -name "*.kt" -type f -exec sed -i 's/package com\.ilkcoffee/package com.kahvedukkani.app/g' {} \;
+          # Fix package name in Kotlin files (if needed)
+          # Package name is now com.ilkcoffee.app, no conversion needed
           # Disable minification for debugging (geçici olarak)
           sed -i '' 's/minifyEnabled enableMinifyInReleaseBuilds/minifyEnabled false/g' android/app/build.gradle || sed -i 's/minifyEnabled enableMinifyInReleaseBuilds/minifyEnabled false/g' android/app/build.gradle
       - name: Build Android APK

@@ -209,7 +209,7 @@ export default function LoginScreen() {
         }
         
         console.log('Google Sign-In yapılandırılıyor...');
-        console.log('Package Name / Application ID: com.kahvedukkani.app');
+        console.log('Package Name / Application ID: com.ilkcoffee.app');
         console.log('Web Client ID:', GOOGLE_WEB_CLIENT_ID);
         
         GoogleSignin.configure({
@@ -228,7 +228,7 @@ export default function LoginScreen() {
           configErrorMsg += 'Google Cloud Console\'da:\n';
           configErrorMsg += '1. APIs & Services > Credentials\n';
           configErrorMsg += '2. OAuth 2.0 Client ID (Web Application) oluşturun\n';
-          configErrorMsg += '3. Package name: com.kahvedukkani.app\n';
+          configErrorMsg += '3. Package name: com.ilkcoffee.app\n';
           configErrorMsg += '4. SHA-1 fingerprint ekleyin\n\n';
           configErrorMsg += 'Mevcut Client ID: ' + (GOOGLE_WEB_CLIENT_ID || 'Yok');
         } else {
@@ -774,15 +774,15 @@ export default function LoginScreen() {
         let errorMsg = '🔴 DEVELOPER_ERROR - Google OAuth Yapılandırma Hatası\n\n';
         errorMsg += 'Bu hata Google Cloud Console yapılandırmasından kaynaklanır.\n\n';
         errorMsg += '📋 ÖNEMLİ KONTROLLER:\n';
-        errorMsg += '✓ Package Name: com.kahvedukkani.app\n';
-        errorMsg += '✓ Application ID: com.kahvedukkani.app\n';
+        errorMsg += '✓ Package Name: com.ilkcoffee.app\n';
+        errorMsg += '✓ Application ID: com.ilkcoffee.app\n';
         errorMsg += '✓ Web Client ID tipinde olmalı (Android Client ID değil!)\n';
         errorMsg += '✓ Mevcut Client ID: ' + GOOGLE_WEB_CLIENT_ID + '\n\n';
         errorMsg += '🔧 ÇÖZÜM ADIMLARI:\n';
         errorMsg += '1. Google Cloud Console > APIs & Services > Credentials\n';
         errorMsg += '2. OAuth 2.0 Client ID (Web Application) oluşturun/kontrol edin\n';
         errorMsg += '   ⚠️ ÖNEMLİ: Android Client ID değil, Web Application olmalı!\n';
-        errorMsg += '3. Package name ekleyin: com.kahvedukkani.app\n';
+        errorMsg += '3. Package name ekleyin: com.ilkcoffee.app\n';
         errorMsg += '4. SHA-1 fingerprint ekleyin (HER İKİSİ DE GEREKLİ!):\n';
         errorMsg += '   📱 Debug (Emülatör için): 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25\n';
         errorMsg += '   📦 Release (APK için): 2B:AE:3E:2C:FF:EF:F8:2B:81:73:EF:71:31:A2:9A:F0:1C:41:60:A3\n';

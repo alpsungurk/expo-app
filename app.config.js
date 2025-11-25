@@ -6,7 +6,7 @@ export default {
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
-    scheme: 'com.kahvedukkani.app',
+    scheme: 'com.ilkcoffee.app',
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
@@ -15,7 +15,7 @@ export default {
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.kahvedukkani.app',
+      bundleIdentifier: 'com.ilkcoffee.app',
       buildNumber: '1',
       infoPlist: {
         NSCameraUsageDescription: 'Bu uygulama QR kod okumak için kamera erişimine ihtiyaç duyar.',
@@ -29,7 +29,7 @@ export default {
         backgroundColor: '#ffffff',
         monochromeImage: './assets/icon.png',
       },
-      package: 'com.kahvedukkani.app',
+      package: 'com.ilkcoffee.app',
       versionCode: 1,
       // Firebase için google-services.json dosyasının yolu
       // EAS Build sırasında bu dosya otomatik olarak yüklenir
