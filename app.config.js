@@ -62,6 +62,7 @@ export default {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || undefined,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || undefined,
       expoPushApiUrl: process.env.EXPO_PUBLIC_EXPO_PUSH_API_URL || undefined,
+      pushNotificationApiUrl: process.env.EXPO_PUBLIC_PUSH_NOTIFICATION_API_URL || undefined,
       s3StorageUrl: process.env.EXPO_PUBLIC_S3_STORAGE_URL || undefined,
       // Google OAuth Client ID (Web Application için - ID token almak için gerekli)
       // Hem googleClientIdWeb hem de googleWebClientId olarak ekleniyor (uyumluluk için)

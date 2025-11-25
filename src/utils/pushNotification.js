@@ -11,10 +11,15 @@ const ERROR_COOLDOWN = 10000; // 10 saniye içinde aynı hatayı tekrar gösterm
 
 // Environment variable'dan Push Notification API URL'ini al
 // Cloudflare Workers proxy API kullanılıyor (CORS sorununu çözmek için)
+// URL gizli tutulmalı ve environment variable olarak saklanmalıdır
 const PUSH_NOTIFICATION_API_URL = process.env.VITE_PUSH_NOTIFICATION_API_URL ||
                                   process.env.EXPO_PUBLIC_PUSH_NOTIFICATION_API_URL ||
-                                  Constants.expoConfig?.extra?.pushNotificationApiUrl ||
-                                  'https://push-notification.kilicalpsungur.workers.dev';
+                                  Constants.expoConfig?.extra?.pushNotificationApiUrl;
+
+if (!PUSH_NOTIFICATION_API_URL) {
+  console.error('PUSH_NOTIFICATION_API_URL environment variable tanımlı değil!');
+  console.error('Lütfen EXPO_PUBLIC_PUSH_NOTIFICATION_API_URL veya pushNotificationApiUrl (app.config.js) tanımlayın.');
+}
 
 /**
  * Tek bir kullanıcıya push notification gönder (Cloudflare Workers Proxy üzerinden)

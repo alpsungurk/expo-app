@@ -85,7 +85,8 @@ export const decodeMasaFromUrl = (url) => {
     }
 
     // URL'den masa parametresini çıkar
-    // Format: https://qr.kilicalpsungur.workers.dev/&masa=ENCRYPTED_STRING
+    // Format: https://qr.ilkyatirimgrupostim.workers.dev/&masa=ENCRYPTED_STRING veya ?masa=ENCRYPTED_STRING
+    // Not: URL hardcoded değil, QR kod'dan gelen herhangi bir URL'den masa parametresi çıkarılır
     const masaMatch = url.match(/[&?]masa=([^&]+)/i);
     
     if (!masaMatch || !masaMatch[1]) {
