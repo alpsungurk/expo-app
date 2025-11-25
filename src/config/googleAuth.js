@@ -4,8 +4,11 @@ import Constants from 'expo-constants';
 // Sadece Web Application Client ID kullanıyoruz (Android Client ID gerekmez)
 // Web Application Client ID (ID token almak için gerekli)
 // Production'da environment variable zorunludur
+// Hem EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB hem de EXPO_PUBLIC_GOOGLE_CLIENT_ID destekleniyor
 export const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || 
-                                    Constants.expoConfig?.extra?.googleClientIdWeb;
+                                    process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||
+                                    Constants.expoConfig?.extra?.googleClientIdWeb ||
+                                    Constants.expoConfig?.extra?.googleClientId;
 
 // Güvenlik kontrolü - Production'da environment variable zorunlu
 if (!__DEV__ && !GOOGLE_WEB_CLIENT_ID) {

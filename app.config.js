@@ -66,8 +66,10 @@ export default {
       // Google OAuth Client ID (Web Application için - ID token almak için gerekli)
       // Hem googleClientIdWeb hem de googleWebClientId olarak ekleniyor (uyumluluk için)
       // Google OAuth Client ID - Production'da environment variable zorunlu
-      googleClientIdWeb: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
-      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+      // Hem EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB hem de EXPO_PUBLIC_GOOGLE_CLIENT_ID destekleniyor
+      googleClientIdWeb: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+      googleClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
       // Expo Project ID - EAS project ID'si kullanılacak
       // Bu değer standalone build'lerde push token almak için kritik
       projectId: 'f2793cf7-6dcf-4754-8d0a-92d5b4859b33',

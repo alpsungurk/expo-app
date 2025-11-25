@@ -48,6 +48,11 @@ android/gradle.properties.local
 # Exception: google-services.json is required for EAS Build (both locations)
 !/android/app/google-services.json
 !/google-services.json
+# Exception: Android build configuration files (required for builds)
+!/android/app/build.gradle
+!/android/gradle.properties
+!/android/build.gradle
+!/android/settings.gradle
 
 # Android build outputs
 android/app/build/
