@@ -4,14 +4,19 @@ import { createClient, processLock } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
 // Environment variables'dan Supabase bağlantı bilgilerini al
+// Production'da hardcoded değer kullanılmaz - sadece environment variable
 export const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
-                   Constants.expoConfig?.extra?.supabaseUrl ||
-                   'https://hgxicutwejvfysjsmjcw.supabase.co';
+                   Constants.expoConfig?.extra?.supabaseUrl;
 
 export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY || 
                        process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
                        Constants.expoConfig?.extra?.supabaseAnonKey ||
                        Constants.expoConfig?.extra?.supabaseKey;
+
+// Güvenlik kontrolü - Production'da environment variable zorunlu
+if (!__DEV__ && (!supabaseUrl || !supabaseAnonKey)) {
+  throw new Error('Supabase yapılandırması eksik. Lütfen environment variable\'ları ayarlayın.');
+}
 
 // Supabase client oluştur
 export const supabase = createClient(

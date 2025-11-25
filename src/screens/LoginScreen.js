@@ -36,6 +36,8 @@ import {
 } from '../config/googleAuth';
 import { useAppStore } from '../store/appStore';
 import { showError, showSuccess, showInfo } from '../utils/toast';
+import { safeLog, safeError, safeWarn } from '../utils/logger';
+import { handleAPIError, logError } from '../utils/errorHandler';
 
 // WebBrowser'ın OAuth sonrası oturumu kapatması için
 WebBrowser.maybeCompleteAuthSession();
@@ -208,9 +210,9 @@ export default function LoginScreen() {
           console.warn('UYARI: Client ID Android tipinde görünüyor. Web Application Client ID kullanılmalı!');
         }
         
-        console.log('Google Sign-In yapılandırılıyor...');
-        console.log('Package Name / Application ID: com.ilkcoffee.app');
-        console.log('Web Client ID:', GOOGLE_WEB_CLIENT_ID);
+        safeLog('Google Sign-In yapılandırılıyor...');
+        safeLog('Package Name / Application ID: com.ilkcoffee.app');
+        // Web Client ID loglanmaz - sensitive data
         
         GoogleSignin.configure({
           webClientId: GOOGLE_WEB_CLIENT_ID, // Web Application Client ID - ID token almak için gerekli
@@ -315,7 +317,7 @@ export default function LoginScreen() {
       try {
         const tokens = await GoogleSignin.getTokens();
         idToken = tokens.idToken;
-        console.log('Google ID token alındı:', idToken ? 'Mevcut' : 'Yok');
+        safeLog('Google ID token alındı:', idToken ? 'Mevcut' : 'Yok');
         
         // ID token'dan kullanıcı bilgilerini çıkar (JWT decode)
         if (idToken) {
@@ -367,7 +369,7 @@ export default function LoginScreen() {
           }
         }
       } catch (tokenError) {
-        console.error('Google ID token alınamadı:', tokenError);
+        safeError(tokenError, 'Google ID token alma');
         // Alternatif: userInfo'dan direkt almayı dene
         idToken = userInfo.data?.idToken || userInfo.idToken;
       }
@@ -384,7 +386,7 @@ export default function LoginScreen() {
       
       // ID token zorunlu - Supabase Google Provider için gerekli
       if (!idToken) {
-        console.error('Google ID token bulunamadı. userInfo:', JSON.stringify(userInfo, null, 2));
+        safeError(new Error('Google ID token bulunamadı'), 'Google Sign-In');
         showError('Google ID token alınamadı. Lütfen tekrar deneyin.');
         setIsGoogleLoading(false);
         return;
@@ -789,7 +791,8 @@ export default function LoginScreen() {
         errorMsg += '   ⚠️ ÖNEMLİ: Her iki SHA-1\'i de Google Cloud Console\'a eklemelisiniz!\n';
         errorMsg += '5. OAuth consent screen yapılandırın\n';
         errorMsg += '6. Authorized redirect URIs:\n';
-        errorMsg += '   https://hgxicutwejvfysjsmjcw.supabase.co/auth/v1/callback\n\n';
+        errorMsg += '   [Supabase URL]/auth/v1/callback\n';
+        errorMsg += '   (Supabase projenizin URL\'sini kullanın)\n\n';
         errorMsg += '📚 Detaylı dokümantasyon:\n';
         errorMsg += 'https://react-native-google-signin.github.io/docs/troubleshooting\n\n';
         errorMsg += '💡 Configuration Doctor çalıştırın:\n';

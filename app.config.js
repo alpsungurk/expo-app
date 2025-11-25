@@ -65,8 +65,9 @@ export default {
       s3StorageUrl: process.env.EXPO_PUBLIC_S3_STORAGE_URL || undefined,
       // Google OAuth Client ID (Web Application için - ID token almak için gerekli)
       // Hem googleClientIdWeb hem de googleWebClientId olarak ekleniyor (uyumluluk için)
-      googleClientIdWeb: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || '567674269605-equcfcmnvkiidevl7hlo1v84ol5r168j.apps.googleusercontent.com',
-      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || '567674269605-equcfcmnvkiidevl7hlo1v84ol5r168j.apps.googleusercontent.com',
+      // Google OAuth Client ID - Production'da environment variable zorunlu
+      googleClientIdWeb: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
       // Expo Project ID - EAS project ID'si kullanılacak
       // Bu değer standalone build'lerde push token almak için kritik
       projectId: 'f2793cf7-6dcf-4754-8d0a-92d5b4859b33',
